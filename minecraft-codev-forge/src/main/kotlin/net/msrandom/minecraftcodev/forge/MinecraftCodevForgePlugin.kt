@@ -125,7 +125,7 @@ open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
                         do {
                             if (visitor.visitContent()) {
                                 for (classMapping in existingMappings.classes.toList()) {
-                                    visitor.visitClass(classMapping.getName(SRG_MAPPINGS_NAMESPACE))
+                                    visitor.visitClass(classMapping.srcName)
 
                                     if (visitor.visitElementContent(MappedElementKind.CLASS)) {
                                         if (fieldsMap.isNotEmpty()) {
@@ -133,7 +133,7 @@ open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
                                                 val name = field.getName(sourceNamespace)
                                                 val mapping = fieldsMap[name]
 
-                                                visitor.visitField(name, field.getDesc(sourceNamespace))
+                                                visitor.visitField(field.srcName, field.srcName)
 
                                                 if (mapping != null) {
                                                     visitor.visitDstName(MappedElementKind.FIELD, targetNamespace, mapping.name)
@@ -151,7 +151,7 @@ open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
                                                     val name = method.getName(sourceNamespace)
                                                     val mapping = methodsMap[name]
 
-                                                    visitor.visitMethod(name, method.getDesc(sourceNamespace))
+                                                    visitor.visitMethod(method.srcName, method.srcDesc)
 
                                                     if (mapping != null) {
                                                         visitor.visitDstName(MappedElementKind.METHOD, targetNamespace, mapping.name)
@@ -167,7 +167,7 @@ open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
                                                         val name = argument.getName(sourceNamespace)
                                                         val mapping = paramsMap[name]
 
-                                                        visitor.visitMethodArg(argument.argPosition, argument.lvIndex, name)
+                                                        visitor.visitMethodArg(argument.argPosition, argument.lvIndex, argument.srcName)
 
                                                         if (mapping != null) {
                                                             visitor.visitDstName(MappedElementKind.METHOD_ARG, targetNamespace, mapping.name)

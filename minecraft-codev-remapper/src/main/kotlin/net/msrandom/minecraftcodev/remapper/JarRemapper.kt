@@ -24,14 +24,19 @@ object JarRemapper {
             .withMappings {
                 for (classMapping in mappings.classes) {
                     val className = classMapping.getName(sourceNamespaceId)?.also { name ->
-                        it.acceptClass(name, classMapping.getName(targetNamespaceId))
+                        val targetName = classMapping.getName(targetNamespaceId)
+
+                        if (targetName != null) {
+                            it.acceptClass(name, targetName)
+                        }
                     } ?: classMapping.srcName
 
                     for (field in classMapping.fields) {
                         val sourceName = field.getName(sourceNamespaceId)
+                        val targetName = field.getName(targetNamespaceId)
 
-                        if (sourceName != null) {
-                            it.acceptField(IMappingProvider.Member(className, sourceName, field.getDesc(sourceNamespaceId)), field.getName(targetNamespaceId))
+                        if (sourceName != null && targetName != null) {
+                            it.acceptField(IMappingProvider.Member(className, sourceName, field.getDesc(sourceNamespaceId)), targetName)
                         }
                     }
 
@@ -42,7 +47,11 @@ object JarRemapper {
                             IMappingProvider.Member(className, method.srcName, method.getDesc(sourceNamespaceId))
                         } else {
                             IMappingProvider.Member(className, sourceName, method.getDesc(sourceNamespaceId)).also { member ->
-                                it.acceptMethod(member, method.getName(targetNamespaceId))
+                                val targetName = method.getName(targetNamespaceId)
+
+                                if (targetName != null) {
+                                    it.acceptMethod(member, targetName)
+                                }
                             }
                         }
 
@@ -51,7 +60,11 @@ object JarRemapper {
                         }
 
                         for (variable in method.vars) {
-                            it.acceptMethodVar(member, variable.lvIndex, variable.startOpIdx, variable.lvIndex, variable.getName(targetNamespaceId))
+                            val targetName = variable.getName(targetNamespaceId)
+
+                            if (targetName != null) {
+                                it.acceptMethodVar(member, variable.lvIndex, variable.startOpIdx, variable.lvIndex, targetName)
+                            }
                         }
                     }
                 }
