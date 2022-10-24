@@ -1,0 +1,28 @@
+package net.msrandom.minecraftcodev.remapper.resolve
+
+import org.gradle.api.internal.artifacts.metadata.ModuleComponentFileArtifactIdentifierSerializer
+import org.gradle.internal.component.external.model.ModuleComponentFileArtifactIdentifier
+import org.gradle.internal.hash.HashCode
+import org.gradle.internal.serialize.Decoder
+import org.gradle.internal.serialize.Encoder
+import org.gradle.internal.serialize.Serializer
+
+data class RemappedArtifactIdentifier(val id: ModuleComponentFileArtifactIdentifier, private val namespace: String, private val mappingsHash: HashCode, private val unmappedHash: HashCode) {
+    object ArtifactSerializer : Serializer<RemappedArtifactIdentifier> {
+        private val artifactSerializer = ModuleComponentFileArtifactIdentifierSerializer()
+
+        override fun read(decoder: Decoder) = RemappedArtifactIdentifier(
+            artifactSerializer.read(decoder),
+            decoder.readString(),
+            HashCode.fromBytes(decoder.readBinary()),
+            HashCode.fromBytes(decoder.readBinary())
+        )
+
+        override fun write(encoder: Encoder, value: RemappedArtifactIdentifier) {
+            artifactSerializer.write(encoder, value.id)
+            encoder.writeString(value.namespace)
+            encoder.writeBinary(value.mappingsHash.toByteArray())
+            encoder.writeBinary(value.unmappedHash.toByteArray())
+        }
+    }
+}
