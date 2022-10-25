@@ -14,7 +14,8 @@ import net.msrandom.minecraftcodev.remapper.RemapperExtension
 import org.gradle.api.Project
 import org.gradle.api.artifacts.component.ComponentIdentifier
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
-import org.gradle.api.attributes.Usage
+import org.gradle.api.attributes.Category
+import org.gradle.api.attributes.LibraryElements
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ComponentResolvers
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionSelector
@@ -147,8 +148,9 @@ open class RemappedComponentResolvers @Inject constructor(
 
                         for ((key, variant) in it) {
                             if (variant != null) {
-                                val usage = variant.attributes.findEntry(Usage.USAGE_ATTRIBUTE.name)
-                                if (usage.isPresent && (usage.get() as String == Usage.JAVA_API || usage.get() as String == Usage.JAVA_RUNTIME)) {
+                                val category = variant.attributes.findEntry(Category.CATEGORY_ATTRIBUTE.name)
+                                val libraryElements = variant.attributes.findEntry(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE.name)
+                                if (category.isPresent && libraryElements.isPresent && category.get() == Category.LIBRARY && libraryElements.get() == LibraryElements.JAR) {
                                     newVariants[key] = CodevGradleLinkageLoader.wrapConfigurationMetadata(
                                         variant,
                                         { oldName ->

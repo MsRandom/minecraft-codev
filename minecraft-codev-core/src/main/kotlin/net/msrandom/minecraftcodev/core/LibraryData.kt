@@ -9,8 +9,16 @@ class LibraryData(
     val common: Collection<ModuleLibraryIdentifier>,
 
     /**
-     * For runtime libraries specific to the client(this should not include anything in [common]).
+     * For libraries specific to the client(this should not include anything in [common]).
+     * Indexed by the OS they're needed on, or null if they don't have special rules.
+     */
+    val client: Multimap<MinecraftVersionMetadata.Rule.OperatingSystem?, ModuleLibraryIdentifier>,
+
+    /**
+     * Platform specific native libraries.
      * Indexed by the OS they're needed on.
      */
-    val client: Multimap<MinecraftVersionMetadata.Rule.OperatingSystem, ModuleLibraryIdentifier>,
-)
+    val natives: Multimap<MinecraftVersionMetadata.Rule.OperatingSystem, Native>,
+) {
+    data class Native(val library: ModuleLibraryIdentifier, val extractData: MinecraftVersionMetadata.Library.ExtractData?)
+}

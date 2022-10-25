@@ -140,6 +140,21 @@ open class PatchedSetupState @Inject constructor(
             }).singleFile
 
             zipFileSystem(patched).use { patchedZip ->
+                // Add missing non-patched files
+                zipFileSystem(input).use { inputZip ->
+                    inputZip.getPath("/").walk {
+                        for (path in filter(Path::isRegularFile)) {
+                            val output = patchedZip.getPath(path.toString())
+
+                            if (output.notExists()) {
+                                output.parent?.createDirectories()
+                                path.copyTo(output)
+                            }
+                        }
+                    }
+                }
+
+                // Add files from the universal Jar
                 zipFileSystem(universal.toPath()).use { universalZip ->
                     universalZip.getPath("/").walk {
                         for (path in filter(Path::isRegularFile)) {
@@ -151,6 +166,7 @@ open class PatchedSetupState @Inject constructor(
                     }
                 }
 
+                // Add userdev injects
                 userdevConfig.inject?.let { inject ->
                     zipFileSystem(userdevConfigFile.toPath()).use { userdevZip ->
                         if (userdevZip.getPath(inject).exists()) {

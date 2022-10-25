@@ -88,6 +88,12 @@ abstract class MinecraftCodevExtension @Inject constructor(
             it.attributes.attribute(MinecraftCodevPlugin.ACCESS_WIDENED_ATTRIBUTE, false)
         }
 
+        project.configurations.all { configuration ->
+            configuration.attributes {
+                it.attribute(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE, project.named(OperatingSystem.current().familyName))
+            }
+        }
+
 /*        project.dependencies.registerTransform(AccessWidenTransformAction::class.java) { spec ->
             spec.from.attribute(ARTIFACT_TYPE, ArtifactTypeDefinition.JAR_TYPE).attribute(MinecraftCodevPlugin.ACCESS_WIDENED_ATTRIBUTE, false)
             spec.to.attribute(ARTIFACT_TYPE, ArtifactTypeDefinition.JAR_TYPE).attribute(MinecraftCodevPlugin.ACCESS_WIDENED_ATTRIBUTE, true)

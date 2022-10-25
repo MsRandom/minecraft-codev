@@ -31,12 +31,12 @@ import org.gradle.api.internal.project.ProjectInternal
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.plugins.JavaPlugin
 import org.gradle.cache.scopes.GlobalScopedCache
-import org.gradle.configurationcache.extensions.capitalized
 import org.gradle.internal.component.external.model.DefaultModuleComponentArtifactMetadata
 import org.gradle.internal.component.external.model.DefaultModuleComponentSelector
 import org.gradle.internal.component.external.model.GradleDependencyMetadata
 import org.gradle.internal.component.external.model.ImmutableCapabilities
 import org.gradle.internal.component.model.ComponentOverrideMetadata
+import org.gradle.internal.component.model.ConfigurationMetadata
 import org.gradle.internal.component.model.DefaultIvyArtifactName
 import org.gradle.internal.component.model.DependencyMetadata
 import org.gradle.internal.hash.ChecksumService
@@ -109,7 +109,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
     fun resolveMetadata(
         repository: MinecraftRepositoryImpl.Resolver,
         extraLibraries: List<ModuleLibraryIdentifier>,
-        apiLibraryGroup: String,
+        apiLibraryPrefixes: Collection<String>,
         resourceAccessor: CacheAwareExternalResourceAccessor,
         moduleComponentIdentifier: ModuleComponentIdentifier,
         requestMetaData: ComponentOverrideMetadata,
@@ -148,10 +148,9 @@ open class MinecraftMetadataGenerator @Inject constructor(
 
                     val libraries = collectLibraries(manifest, extractionState.value.libraries)
 
-                    val extraApi = if (apiLibraryGroup.isEmpty()) emptyList() else extraLibraries.filter { it.group.startsWith(apiLibraryGroup) }
+                    val extraApi = if (apiLibraryPrefixes.isEmpty()) emptyList() else extraLibraries.filter { apiLibraryPrefixes.any(it.group::startsWith) }
 
-                    val api = libraries.common.filter { it.group == "com.mojang" } + extraApi
-
+                    val api = libraries.common + extraApi
                     val runtime = libraries.common + extraLibraries
 
                     val files = listOf(
@@ -231,10 +230,6 @@ open class MinecraftMetadataGenerator @Inject constructor(
                         manifest
                     )?.value
 
-                    val systems = manifest.libraries.flatMapTo(hashSetOf()) {
-                        it.rules.mapNotNull(MinecraftVersionMetadata.Rule::os) + it.natives.keys.map(MinecraftVersionMetadata.Rule::OperatingSystem)
-                    }
-
                     val commonDependency = extractionResult?.let {
                         dependencyFactory(
                             GradleDependencyMetadata(
@@ -269,35 +264,35 @@ open class MinecraftMetadataGenerator @Inject constructor(
                         )
                     )
 
-                    val variants = mutableListOf(
-                        CodevGradleLinkageLoader.ConfigurationMetadata(
-                            JavaPlugin.API_ELEMENTS_CONFIGURATION_NAME,
-                            moduleComponentIdentifier,
-                            listOfNotNull(commonDependency),
-                            artifacts,
-                            defaultAttributes(manifest, defaultAttributes).libraryAttributes().apiAttributes(),
-                            ImmutableCapabilities.EMPTY,
-                            setOf(JavaPlugin.API_ELEMENTS_CONFIGURATION_NAME),
-                            objectFactory
-                        )
-                    )
+                    val variants = mutableListOf<ConfigurationMetadata>()
 
-                    for (system in systems) {
+                    for ((system, platformLibraries) in libraries.client.asMap()) {
+                        val osAttributes: ImmutableAttributes
                         val name: String
-                        var osAttributes = ImmutableAttributes.EMPTY.addNamed(
-                            OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE,
-                            DefaultOperatingSystem(system.name).toFamilyName()
-                        )
+                        val dependencies: List<DependencyMetadata>
 
-                        if (system.version == null) {
-                            name = "${system.name}${JavaPlugin.RUNTIME_ELEMENTS_CONFIGURATION_NAME.capitalized()}"
+                        if (system == null) {
+                            osAttributes = ImmutableAttributes.EMPTY
+                            name = Dependency.DEFAULT_CONFIGURATION
+                            dependencies = listOfNotNull(commonDependency) + platformLibraries.map(::mapLibrary)
                         } else {
-                            val version = system.version.replace(Regex("[$^\\\\]"), "").replace('.', '-')
-                            name = "${system.name}-$version-${JavaPlugin.RUNTIME_ELEMENTS_CONFIGURATION_NAME}"
-                            osAttributes = osAttributes.addNamed(MinecraftCodevPlugin.OPERATING_SYSTEM_VERSION_PATTERN_ATTRIBUTE, system.version)
-                        }
+                            if (system.version == null) {
+                                osAttributes = ImmutableAttributes.EMPTY
+                                    .addNamed(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE, DefaultOperatingSystem(system.name).toFamilyName())
 
-                        val dependencies = listOfNotNull(commonDependency) + libraries.client[system].map(::mapLibrary)
+                                name = system.name.toString()
+                            } else {
+                                val version = system.version.replace(Regex("[$^\\\\]"), "").replace('.', '-')
+
+                                osAttributes = ImmutableAttributes.EMPTY
+                                    .addNamed(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE, DefaultOperatingSystem(system.name).toFamilyName())
+                                    .addNamed(MinecraftCodevPlugin.OPERATING_SYSTEM_VERSION_PATTERN_ATTRIBUTE, system.version)
+
+                                name = "${system.name}-${version}"
+                            }
+
+                            dependencies = listOfNotNull(commonDependency) + (libraries.client[null] + platformLibraries).map(::mapLibrary)
+                        }
 
                         variants.add(
                             CodevGradleLinkageLoader.ConfigurationMetadata(
@@ -306,11 +301,11 @@ open class MinecraftMetadataGenerator @Inject constructor(
                                 dependencies,
                                 artifacts,
                                 attributesFactory.concat(
-                                    defaultAttributes(manifest, defaultAttributes).libraryAttributes().runtimeAttributes(),
+                                    defaultAttributes(manifest, defaultAttributes).libraryAttributes(),
                                     osAttributes
                                 ),
                                 ImmutableCapabilities.EMPTY,
-                                setOf(name, JavaPlugin.API_ELEMENTS_CONFIGURATION_NAME),
+                                setOf(name),
                                 objectFactory
                             )
                         )
@@ -355,7 +350,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                     return
                 }
 
-                else -> if (extraLibraries.isEmpty() && apiLibraryGroup.isEmpty()) {
+                else -> if (extraLibraries.isEmpty() && apiLibraryPrefixes.isEmpty()) {
                     val fixedName = moduleComponentIdentifier.module.asMinecraftDownload()
 
                     if (fixedName != MinecraftComponentResolvers.SERVER_DOWNLOAD) {
@@ -455,56 +450,64 @@ open class MinecraftMetadataGenerator @Inject constructor(
         /**
          * @param manifest The version manifest for the version we're collecting libraries for
          * @param commonLibraries The libraries needed on the server, this information should be extracted from the server Jar.
-         * @return The libraries to be used for generating metadata for com.mojang:minecraft-common and com.mojang:minecraft-client
+         * @return The libraries to be used for generating metadata for the minecraft common and minecraft client dependencies
          */
         private fun collectLibraries(manifest: MinecraftVersionMetadata, commonLibraries: Collection<ModuleLibraryIdentifier>): LibraryData {
-            val clientLibraries = HashMultimap.create<MinecraftVersionMetadata.Rule.OperatingSystem, ModuleLibraryIdentifier>()
-
-            val systems = manifest.libraries.flatMapTo(hashSetOf()) {
-                it.rules.mapNotNull(MinecraftVersionMetadata.Rule::os) + it.natives.keys.map(MinecraftVersionMetadata.Rule::OperatingSystem)
-            }
+            val client = HashMultimap.create<MinecraftVersionMetadata.Rule.OperatingSystem?, ModuleLibraryIdentifier>()
+            val natives = HashMultimap.create<MinecraftVersionMetadata.Rule.OperatingSystem, LibraryData.Native>()
 
             for (library in manifest.libraries) {
                 if (library.name in commonLibraries) continue
 
-                if (library.rules.isEmpty() && library.natives.isEmpty()) {
-                    for (system in systems) {
-                        clientLibraries.put(system, library.name)
+                if (library.natives.isEmpty()) {
+                    if (library.rules.isEmpty()) {
+                        client.put(null, library.name)
+                    } else {
+                        for (rule in library.rules) {
+                            if (rule.action == MinecraftVersionMetadata.RuleAction.Allow) {
+                                client.put(rule.os, library.name)
+                            }
+                        }
                     }
 
                     continue
                 }
 
-                for (system in systems) {
-                    var allowed = true
-                    for (rule in library.rules) {
-                        if (rule.action == MinecraftVersionMetadata.RuleAction.Disallow) {
-                            if (rule.os == system) {
-                                allowed = false
-                            }
+                if (library.rules.isEmpty()) {
+                    for ((key, classifierName) in library.natives) {
+                        if (classifierName in library.downloads.classifiers) {
+                            natives.put(MinecraftVersionMetadata.Rule.OperatingSystem(key), LibraryData.Native(library.name.copy(classifier = classifierName), library.extract))
                         }
                     }
+                } else {
+                    val iterator = library.rules.iterator()
+                    while (iterator.hasNext()) {
+                        val rule = iterator.next()
+                        if (rule.action == MinecraftVersionMetadata.RuleAction.Allow) {
+                            if (rule.os == null) {
+                                require(iterator.hasNext())
 
-                    if (allowed) {
-                        var needsArtifact = true
-                        if (library.natives.isNotEmpty()) {
-                            val classifierName = library.natives[system.name] ?: continue
+                                val next = iterator.next()
 
-                            // You'd think they'd make sure this doesn't happen, and so we could crash if the classifier is not found, but apparently not :|
-                            library.downloads.classifiers[classifierName] ?: continue
+                                require(next.action == MinecraftVersionMetadata.RuleAction.Disallow && next.os != null)
 
-                            clientLibraries.put(system, library.name.copy(classifier = classifierName))
-                            needsArtifact = false
-                        }
-
-                        if (needsArtifact && library.downloads.artifact != null) {
-                            clientLibraries.put(system, library.name)
+                                for ((key, classifierName) in library.natives) {
+                                    if (next.os.name != key) {
+                                        natives.put(MinecraftVersionMetadata.Rule.OperatingSystem(key), LibraryData.Native(library.name.copy(classifier = classifierName), library.extract))
+                                    }
+                                }
+                            } else {
+                                val classifierName = library.natives[rule.os.name]
+                                if (classifierName in library.downloads.classifiers) {
+                                    natives.put(rule.os, LibraryData.Native(library.name.copy(classifier = classifierName), library.extract))
+                                }
+                            }
                         }
                     }
                 }
             }
 
-            return LibraryData(commonLibraries, clientLibraries)
+            return LibraryData(commonLibraries, client, natives)
         }
 
         private fun checkCached(

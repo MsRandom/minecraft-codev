@@ -19,7 +19,7 @@ import org.gradle.api.internal.artifacts.repositories.resolver.MetadataFetchingC
 import org.gradle.api.internal.artifacts.repositories.transport.RepositoryTransport
 import org.gradle.api.internal.artifacts.repositories.transport.RepositoryTransportFactory
 import org.gradle.api.internal.component.ArtifactType
-import org.gradle.api.internal.file.FileOperations
+import org.gradle.api.internal.file.FileResolver
 import org.gradle.api.model.ObjectFactory
 import org.gradle.internal.action.InstantiatingAction
 import org.gradle.internal.component.external.model.ModuleDependencyMetadata
@@ -53,14 +53,14 @@ interface MinecraftRepository : ArtifactRepository, UrlArtifactRepository, Metad
 
 open class MinecraftRepositoryImpl @Inject constructor(
     private val objectFactory: ObjectFactory,
-    private val fileOperations: FileOperations,
+    private val fileResolver: FileResolver,
     private val transportFactory: RepositoryTransportFactory,
     private val instantiatorFactory: InstantiatorFactory
 ) : AbstractArtifactRepository(objectFactory), MinecraftRepository, ResolutionAwareRepository {
     private var url: Any = MinecraftRepository.URL
     private var allowInsecureProtocol = false
 
-    override fun getUrl(): URI = fileOperations.uri(url)
+    override fun getUrl(): URI = fileResolver.resolveUri(url)
 
     override fun setUrl(url: URI) {
         this.url = url

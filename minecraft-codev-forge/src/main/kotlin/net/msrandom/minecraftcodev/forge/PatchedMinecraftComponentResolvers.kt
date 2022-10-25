@@ -160,7 +160,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
                     objectFactory.newInstance(MinecraftMetadataGenerator::class.java, minecraftCacheManager).resolveMetadata(
                         repository,
                         config.libraries,
-                        "net.minecraftforge",
+                        listOf("net.minecraftforge", "java"),
                         repository.transport.resourceAccessor,
                         identifier,
                         componentOverrideMetadata,

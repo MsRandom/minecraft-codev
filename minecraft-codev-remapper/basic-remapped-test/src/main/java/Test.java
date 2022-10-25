@@ -1,9 +1,7 @@
-import net.minecraft.server.MinecraftServer;
-import net.minecraftforge.forge.MinecraftForge;
+import net.minecraft.world.entity.Entity;
 
 public class Test {
     public static void test() {
-        System.out.println(MinecraftForge.EVENT_BUS);
-        MinecraftServer.main(new String[0]);
+        System.out.println(Entity.class);
     }
 }

@@ -133,7 +133,7 @@ open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
                                                 val name = field.getName(sourceNamespace)
                                                 val mapping = fieldsMap[name]
 
-                                                visitor.visitField(field.srcName, field.srcName)
+                                                visitor.visitField(field.srcName, field.srcDesc)
 
                                                 if (mapping != null) {
                                                     visitor.visitDstName(MappedElementKind.FIELD, targetNamespace, mapping.name)

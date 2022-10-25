@@ -84,7 +84,7 @@ open class MinecraftComponentResolvers @Inject constructor(
                 metadataGenerator.resolveMetadata(
                     repository,
                     emptyList(),
-                    "",
+                    emptyList(),
                     repository.transport.resourceAccessor,
                     identifier,
                     componentOverrideMetadata,
