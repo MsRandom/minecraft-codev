@@ -20,9 +20,6 @@ import kotlin.io.path.inputStream
 import kotlin.io.path.writeBytes
 
 abstract class ForgeJarTransformer : TransformAction<TransformParameters.None> {
-    abstract val logger: Logger
-        @Inject get
-
     abstract val input: Provider<FileSystemLocation>
         @InputArtifact get
 

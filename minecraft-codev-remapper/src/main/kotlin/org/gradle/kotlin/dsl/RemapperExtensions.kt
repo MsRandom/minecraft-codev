@@ -1,7 +1,7 @@
 package org.gradle.kotlin.dsl
 
 import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
-import net.msrandom.minecraftcodev.remapper.RemappedDependency
+import net.msrandom.minecraftcodev.remapper.dependency.RemappedDependency
 import org.gradle.api.Action
 import org.gradle.api.artifacts.FileCollectionDependency
 import org.gradle.api.artifacts.ModuleDependency
@@ -47,7 +47,6 @@ fun <T : ModuleDependency> T.getRemapped(
     configure?.execute(sourceDependency)
 }
 
-@Suppress("UNCHECKED_CAST")
 fun FileCollectionDependency.getRemapped(
     sourceNamespace: Any? = null,
     targetNamespace: Any = MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE,

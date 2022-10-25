@@ -10,7 +10,7 @@ import java.nio.file.Path
 import kotlin.io.path.deleteExisting
 
 object JarRemapper {
-    fun remap(mappings: MappingTreeView, sourceNamespace: String, targetNamespace: String, input: Path, classpath: Collection<Path>): Path {
+    fun remap(mappings: MappingTreeView, sourceNamespace: String, targetNamespace: String, input: Path): Path {
         val output = Files.createTempFile("remapped", ".tmp.jar")
         val sourceNamespaceId = mappings.getNamespaceId(sourceNamespace)
         val targetNamespaceId = mappings.getNamespaceId(targetNamespace)
@@ -76,9 +76,7 @@ object JarRemapper {
             OutputConsumerPath.Builder(output).build().use {
                 it.addNonClassFiles(input, NonClassCopyMode.FIX_META_INF, remapper)
 
-                remapper.readClassPath(*classpath.toTypedArray())
                 remapper.readInputs(input)
-
                 remapper.apply(it)
             }
         } finally {

@@ -1,12 +1,9 @@
 package net.msrandom.minecraftcodev.core.resolve
 
-import net.msrandom.minecraftcodev.core.MinecraftVersionMetadata
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
-import net.msrandom.minecraftcodev.core.repository.getClientJar
-import net.msrandom.minecraftcodev.core.repository.getCommonJar
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.asMinecraftDownload
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.hash
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy

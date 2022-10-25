@@ -1,6 +1,7 @@
 package net.msrandom.minecraftcodev.core
 
 import com.google.common.collect.Multimap
+import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
 
 class LibraryData(
     /**

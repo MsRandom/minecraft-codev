@@ -3,13 +3,12 @@ package net.msrandom.minecraftcodev.forge.runs
 import net.minecraftforge.srgutils.IMappingBuilder
 import net.minecraftforge.srgutils.IMappingFile
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
-import net.msrandom.minecraftcodev.core.MinecraftVersionMetadata
 import net.msrandom.minecraftcodev.core.minecraftCodev
-import net.msrandom.minecraftcodev.core.runs.MinecraftRunConfiguration
-import net.msrandom.minecraftcodev.core.runs.RunConfigurationDefaultsContainer
-import net.msrandom.minecraftcodev.forge.PatcherExtension
-import net.msrandom.minecraftcodev.forge.PatcherExtension.Companion.userdevConfig
+import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
+import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin
 import net.msrandom.minecraftcodev.forge.UserdevConfig
+import net.msrandom.minecraftcodev.runs.MinecraftRunConfiguration
+import net.msrandom.minecraftcodev.runs.RunConfigurationDefaultsContainer
 import org.gradle.api.Project
 import org.gradle.api.provider.SetProperty
 import org.gradle.api.tasks.SourceSet
@@ -18,9 +17,9 @@ import java.io.File
 
 class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefaultsContainer) {
     private fun getUserdevData(project: Project): UserdevConfig? {
-        for (file in project.configurations.getByName(PatcherExtension.PATCHES_CONFIGURATION)) {
+        for (file in project.configurations.getByName(MinecraftCodevForgePlugin.PATCHES_CONFIGURATION)) {
             var config: UserdevConfig? = null
-            val isUserdev = userdevConfig(file) {
+            val isUserdev = MinecraftCodevForgePlugin.userdevConfig(file) {
                 config = it
             }
 
@@ -30,7 +29,7 @@ class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefaultsC
         return null
     }
 
-    private fun fail(): Nothing = throw UnsupportedOperationException("Forge userdev not in ${PatcherExtension.PATCHES_CONFIGURATION}.")
+    private fun fail(): Nothing = throw UnsupportedOperationException("Forge userdev not in ${MinecraftCodevForgePlugin.PATCHES_CONFIGURATION}.")
 
     private fun MinecraftRunConfiguration.addArgs(manifest: MinecraftVersionMetadata, config: UserdevConfig, arguments: SetProperty<MinecraftRunConfiguration.Argument>, existing: List<String>) {
         arguments.addAll(
@@ -96,7 +95,7 @@ class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefaultsC
 /*                val mappings = project.minecraftCodev.remapper.mappings
                 val tree = mappings.tree
                 val sourceNamespace = tree.getNamespaceId(MappingNamespace.SRG)
-                val targetNamespace = tree.getNamespaceId(MappingNamespace.NAMED)
+                val targetNamespace = tree.getNamespaceId(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
                 for (type in tree.classes) {
                     val addedClass = srgMappings.addClass(type.getName(targetNamespace), type.getName(sourceNamespace))
 

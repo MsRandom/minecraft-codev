@@ -8,84 +8,80 @@ import net.fabricmc.mappingio.adapter.MappingNsCompleter
 import net.fabricmc.mappingio.format.ProGuardReader
 import net.fabricmc.mappingio.format.TsrgReader
 import net.fabricmc.mappingio.tree.MemoryMappingTree
+import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension.Companion.json
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
+import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.applyPlugin
+import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.createSourceSetConfigurations
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.unsafeResolveConfiguration
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.zipFileSystem
-import net.msrandom.minecraftcodev.remapper.MappingNamespace
+import net.msrandom.minecraftcodev.forge.dependency.PatchedMinecraftIvyDependencyDescriptorFactory
+import net.msrandom.minecraftcodev.forge.resolve.PatchedMinecraftComponentResolvers
 import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
 import net.msrandom.minecraftcodev.remapper.RemapperExtension
 import org.gradle.api.Plugin
-import org.gradle.api.Project
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
+import org.gradle.api.attributes.Attribute
 import org.gradle.api.invocation.Gradle
 import org.gradle.api.plugins.PluginAware
 import org.gradle.kotlin.dsl.MinecraftType
 import org.gradle.kotlin.dsl.minecraft
+import java.io.File
 import java.io.InputStream
+import java.nio.file.FileSystem
 import java.nio.file.Path
 import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 
 open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
-    private fun setupGradle(gradle: Gradle) {
+    private fun applyGradle(gradle: Gradle) {
         MinecraftCodevPlugin.registerCustomDependency("patched", gradle, PatchedMinecraftIvyDependencyDescriptorFactory::class.java, PatchedMinecraftComponentResolvers::class.java)
     }
 
     override fun apply(target: T) {
-        target.apply {
-            it.plugin(MinecraftCodevPlugin::class.java)
-        }
+        target.plugins.apply(MinecraftCodevPlugin::class.java)
 
-        if (target is Gradle) {
-            setupGradle(target)
-        } else if (target is Project) {
-            setupGradle(target.gradle)
+        applyPlugin(target, ::applyGradle) {
+            createSourceSetConfigurations(PATCHES_CONFIGURATION)
 
-            target.configurations.create(PatcherExtension.PATCHES_CONFIGURATION) {
-                it.isCanBeConsumed = false
-                it.isTransitive = false
+            dependencies.attributesSchema {
+                it.attribute(FORGE_TRANSFORMED_ATTRIBUTE)
             }
 
-            target.dependencies.attributesSchema { schema ->
-                schema.attribute(PatcherExtension.PATCHED_ATTRIBUTE)
-                schema.attribute(PatcherExtension.FORGE_TRANSFORMED_ATTRIBUTE)
+            dependencies.artifactTypes.getByName(ArtifactTypeDefinition.JAR_TYPE) {
+                it.attributes.attribute(FORGE_TRANSFORMED_ATTRIBUTE, false)
             }
 
-            target.dependencies.artifactTypes.getByName(ArtifactTypeDefinition.JAR_TYPE) {
-                it.attributes.attribute(PatcherExtension.FORGE_TRANSFORMED_ATTRIBUTE, false)
-            }
-
-            target.configurations.all { configuration ->
+            configurations.all { configuration ->
                 configuration.attributes {
-                    it.attribute(PatcherExtension.FORGE_TRANSFORMED_ATTRIBUTE, true)
+                    it.attribute(FORGE_TRANSFORMED_ATTRIBUTE, true)
                 }
             }
 
-            target.dependencies.registerTransform(ForgeJarTransformer::class.java) {
-                it.from.attribute(PatcherExtension.ARTIFACT_TYPE, ArtifactTypeDefinition.JAR_TYPE).attribute(PatcherExtension.FORGE_TRANSFORMED_ATTRIBUTE, false)
-                it.to.attribute(PatcherExtension.ARTIFACT_TYPE, ArtifactTypeDefinition.JAR_TYPE).attribute(PatcherExtension.FORGE_TRANSFORMED_ATTRIBUTE, true)
+            dependencies.registerTransform(ForgeJarTransformer::class.java) {
+                it.from.attribute(ARTIFACT_TYPE, ArtifactTypeDefinition.JAR_TYPE).attribute(FORGE_TRANSFORMED_ATTRIBUTE, false)
+                it.to.attribute(ARTIFACT_TYPE, ArtifactTypeDefinition.JAR_TYPE).attribute(FORGE_TRANSFORMED_ATTRIBUTE, true)
             }
 
-            target.plugins.withType(MinecraftCodevRemapperPlugin::class.java) {
-                val remapper = target.extensions.getByType(MinecraftCodevExtension::class.java).extensions.getByType(RemapperExtension::class.java)
+            plugins.withType(MinecraftCodevRemapperPlugin::class.java) {
+                val remapper = extensions.getByType(MinecraftCodevExtension::class.java).extensions.getByType(RemapperExtension::class.java)
 
                 remapper.zipMappingsResolution { visitor, decorate, _, _ ->
                     val configPath = getPath("config.json")
                     if (configPath.exists()) {
-                        val mcpDependency = target.dependencies.create(configPath.inputStream().use { json.decodeFromStream<UserdevConfig>(it) }.mcp.toString())
-                        val mcp = target.unsafeResolveConfiguration(target.configurations.detachedConfiguration(mcpDependency).setTransitive(false)).singleFile
+                        val mcpDependency = dependencies.create(configPath.inputStream().use { json.decodeFromStream<UserdevConfig>(it) }.mcp)
+                        val mcp = unsafeResolveConfiguration(configurations.detachedConfiguration(mcpDependency).setTransitive(false)).singleFile
 
                         zipFileSystem(mcp.toPath()).use { mcpFs ->
                             val config = mcpFs.getPath("config.json").inputStream().decorate().use { json.decodeFromStream<McpConfig>(it) }
                             val mappings = mcpFs.getPath(config.data.mappings)
 
-                            val namespaceCompleter = MappingNsCompleter(visitor, mapOf(MappingNamespace.NAMED to SRG_MAPPINGS_NAMESPACE), true)
+                            val namespaceCompleter = MappingNsCompleter(visitor, mapOf(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE to SRG_MAPPINGS_NAMESPACE), true)
 
                             val classFixer = if (config.official) {
-                                val clientMappingsDependency = target.dependencies.minecraft(MinecraftType.ClientMappings, config.version)
-                                val clientMappingsFile = target.unsafeResolveConfiguration(target.configurations.detachedConfiguration(clientMappingsDependency)).singleFile
+                                val clientMappingsDependency = dependencies.minecraft(MinecraftType.ClientMappings, config.version)
+                                val clientMappingsFile = unsafeResolveConfiguration(configurations.detachedConfiguration(clientMappingsDependency)).singleFile
                                 val clientMappings = MemoryMappingTree()
 
                                 clientMappingsFile.reader().use { ProGuardReader.read(it, clientMappings) }
@@ -96,7 +92,7 @@ open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
 
                             mappings.inputStream().reader().use {
                                 TsrgReader.read(
-                                    it, MappingNamespace.OBF, SRG_MAPPINGS_NAMESPACE, classFixer
+                                    it, MappingsNamespace.OBF, SRG_MAPPINGS_NAMESPACE, classFixer
                                 )
                             }
                         }
@@ -120,7 +116,7 @@ open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
                         val paramsMap = readMcp(params, "param", decorate)
 
                         val sourceNamespace = existingMappings.getNamespaceId(SRG_MAPPINGS_NAMESPACE)
-                        val targetNamespace = existingMappings.getNamespaceId(MappingNamespace.NAMED)
+                        val targetNamespace = existingMappings.getNamespaceId(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
 
                         do {
                             if (visitor.visitContent()) {
@@ -211,6 +207,21 @@ open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
 
     companion object {
         const val SRG_MAPPINGS_NAMESPACE = "srg"
+
+        val FORGE_TRANSFORMED_ATTRIBUTE: Attribute<Boolean> = Attribute.of("net.msrandom.minecraftcodev.transformed", Boolean::class.javaObjectType)
+        val ARTIFACT_TYPE: Attribute<String> = Attribute.of("artifactType", String::class.java)
+
+        const val PATCHES_CONFIGURATION = "patches"
+
+        internal fun userdevConfig(file: File, action: FileSystem.(config: UserdevConfig) -> Unit) = MinecraftCodevPlugin.zipFileSystem(file.toPath()).use { fs ->
+            val configPath = fs.getPath("config.json")
+            if (configPath.exists()) {
+                fs.action(configPath.inputStream().use(json::decodeFromStream))
+                true
+            } else {
+                false
+            }
+        }
     }
 
     private data class McpMapping(val name: String, val comment: String? = null)

@@ -5,8 +5,6 @@ import kotlinx.serialization.json.decodeFromStream
 import net.msrandom.minecraftcodev.core.*
 import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
-import net.msrandom.minecraftcodev.core.repository.ServerExtractionResult
-import net.msrandom.minecraftcodev.core.repository.getExtractionState
 import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.resolveMojangFile
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.asMinecraftDownload
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader

@@ -23,6 +23,7 @@ dependencies {
     implementation(group = "org.ow2.asm", name = "asm-tree", version = "9.3")
 
     implementation(api(group = "com.google.guava", name = "guava", version = "31.1-jre"))
+    implementation(group = "org.apache.commons", name = "commons-lang3", version = "3.12.0")
 
     implementation(api(projects.minecraftCodevGradleLinkage) {
         attributes {

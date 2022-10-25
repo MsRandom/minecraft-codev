@@ -1,9 +1,11 @@
 package net.msrandom.minecraftcodev.core
 
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
+import net.msrandom.minecraftcodev.core.dependency.ConfiguredDependencyMetadata
 import net.msrandom.minecraftcodev.core.dependency.MinecraftDependencyExtension
 import net.msrandom.minecraftcodev.core.dependency.MinecraftIvyDependencyDescriptorFactory
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
+import org.apache.commons.lang3.StringUtils
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
@@ -34,12 +36,11 @@ import org.gradle.api.internal.model.NamedObjectInstantiator
 import org.gradle.api.internal.provider.PropertyFactory
 import org.gradle.api.invocation.Gradle
 import org.gradle.api.model.ObjectFactory
-import org.gradle.api.plugins.ApplicationPlugin
 import org.gradle.api.plugins.JavaPlugin
 import org.gradle.api.plugins.PluginAware
-import org.gradle.api.tasks.JavaExec
+import org.gradle.api.tasks.SourceSet
+import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.util.PatternSet
-import org.gradle.configurationcache.extensions.capitalized
 import org.gradle.configurationcache.extensions.serviceOf
 import org.gradle.internal.Factory
 import org.gradle.internal.instantiation.InstantiatorFactory
@@ -59,42 +60,11 @@ open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(private val
         registerCustomDependency("minecraft", gradle, MinecraftIvyDependencyDescriptorFactory::class.java, MinecraftComponentResolvers::class.java)
     }
 
-    override fun apply(target: T) {
-        when (target) {
-            is Gradle -> {
-                applyGradle(target)
+    override fun apply(target: T) = applyPlugin(target, ::applyGradle) {
+        plugins.apply(JavaPlugin::class.java)
 
-                target.allprojects { project ->
-                    project.plugins.apply(MinecraftCodevPlugin::class.java)
-                }
-            }
-
-            is Settings -> target.gradle.plugins.apply(MinecraftCodevPlugin::class.java)
-            is Project -> {
-                applyGradle(target.gradle)
-
-                target.plugins.apply(JavaPlugin::class.java)
-
-                val minecraft = target.extensions.create("minecraft", MinecraftCodevExtension::class.java, target)
-                target.dependencies.extensions.create("minecraftDependencyHandling", MinecraftDependencyExtension::class.java, attributesFactory)
-
-                minecraft.runs.all { builder ->
-                    target.tasks.register("${ApplicationPlugin.TASK_RUN_NAME}${builder.name.capitalized()}", JavaExec::class.java) { javaExec ->
-                        val configuration = builder.build(target)
-
-                        javaExec.args(configuration.arguments.get().map { it.parts.joinToString("") })
-                        javaExec.jvmArgs(configuration.jvmArguments.get().map { it.parts.joinToString("") })
-                        javaExec.environment(configuration.environment.get().mapValues { it.value.parts.joinToString("") })
-                        javaExec.classpath = configuration.sourceSet.get().runtimeClasspath
-                        javaExec.workingDir(configuration.workingDirectory)
-                        javaExec.mainClass.set(configuration.mainClass)
-                        javaExec.dependsOn(*configuration.beforeRunTasks.get().toTypedArray())
-
-                        javaExec.group = ApplicationPlugin.APPLICATION_GROUP
-                    }
-                }
-            }
-        }
+        val minecraft = extensions.create("minecraft", MinecraftCodevExtension::class.java, target)
+        dependencies.extensions.create("minecraftDependencyHandling", MinecraftDependencyExtension::class.java, attributesFactory)
     }
 
     companion object {
@@ -222,6 +192,63 @@ open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(private val
 
         fun <T> Path.walk(action: Sequence<Path>.() -> T) = Files.walk(this).use {
             it.asSequence().action()
+        }
+
+        fun Project.getSourceSetConfigurationName(dependency: ConfiguredDependencyMetadata, defaultConfiguration: String) = dependency.relatedConfiguration ?: run {
+            val moduleConfiguration = dependency.getModuleConfiguration()
+            if (moduleConfiguration == null) {
+                defaultConfiguration
+            } else {
+                var owningSourceSet: SourceSet? = null
+                for (sourceSet in project.extensions.getByType(SourceSetContainer::class.java)) {
+                    if (moduleConfiguration.startsWith(sourceSet.name)) {
+                        owningSourceSet = sourceSet
+                        break
+                    }
+                }
+
+                owningSourceSet?.let { "${it.name}${StringUtils.capitalize(defaultConfiguration)}" } ?: defaultConfiguration
+            }
+        }
+
+        fun Project.createSourceSetConfigurations(name: String) {
+            configurations.create(name) {
+                it.isCanBeConsumed = false
+                it.isTransitive = false
+            }
+
+            extensions.getByType(SourceSetContainer::class.java).all { sourceSet ->
+                @Suppress("UnstableApiUsage")
+                if (!SourceSet.isMain(sourceSet)) {
+                    configurations.create("${sourceSet.name}${StringUtils.capitalize(name)}") {
+                        it.isCanBeConsumed = false
+                        it.isTransitive = false
+                    }
+                }
+            }
+        }
+
+        fun <T : PluginAware> Plugin<T>.applyPlugin(target: T, action: Project.() -> Unit) = applyPlugin(target, {}, action)
+
+        fun <T : PluginAware> Plugin<T>.applyPlugin(target: T, gradleSetup: (Gradle) -> Unit, action: Project.() -> Unit) = when (target) {
+            is Gradle -> {
+                gradleSetup(target)
+
+                target.allprojects {
+                    target.plugins.apply(javaClass)
+                }
+            }
+
+            is Settings -> target.gradle.apply {
+                it.plugin(javaClass)
+            }
+
+            is Project -> {
+                gradleSetup(target.gradle)
+                target.action()
+            }
+
+            else -> Unit
         }
     }
 }

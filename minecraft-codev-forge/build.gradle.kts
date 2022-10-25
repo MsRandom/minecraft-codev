@@ -19,6 +19,7 @@ dependencies {
     implementation(group = "de.siegmar", name = "fastcsv", version = "2.2.0")
 
     implementation(projects.minecraftCodevRemapper)
+    implementation(projects.minecraftCodevRuns)
 }
 
 tasks.test {

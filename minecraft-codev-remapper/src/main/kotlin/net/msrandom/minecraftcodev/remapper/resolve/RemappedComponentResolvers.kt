@@ -2,15 +2,17 @@ package net.msrandom.minecraftcodev.remapper.resolve
 
 import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
+import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.getSourceSetConfigurationName
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.unsafeResolveConfiguration
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.hash
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader
 import net.msrandom.minecraftcodev.remapper.JarRemapper
-import net.msrandom.minecraftcodev.remapper.RemappedDependencyMetadata
-import net.msrandom.minecraftcodev.remapper.RemappedDependencyMetadataWrapper
+import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
 import net.msrandom.minecraftcodev.remapper.RemapperExtension
+import net.msrandom.minecraftcodev.remapper.dependency.RemappedDependencyMetadata
+import net.msrandom.minecraftcodev.remapper.dependency.RemappedDependencyMetadataWrapper
 import org.gradle.api.Project
 import org.gradle.api.artifacts.component.ComponentIdentifier
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
@@ -27,9 +29,6 @@ import org.gradle.api.internal.artifacts.type.ArtifactTypeRegistry
 import org.gradle.api.internal.attributes.ImmutableAttributes
 import org.gradle.api.internal.component.ArtifactType
 import org.gradle.api.model.ObjectFactory
-import org.gradle.api.tasks.SourceSet
-import org.gradle.api.tasks.SourceSetContainer
-import org.gradle.configurationcache.extensions.capitalized
 import org.gradle.internal.DisplayName
 import org.gradle.internal.component.external.model.DefaultModuleComponentIdentifier
 import org.gradle.internal.component.external.model.MetadataSourcedComponentArtifacts
@@ -83,24 +82,7 @@ open class RemappedComponentResolvers @Inject constructor(
             if (result.hasResult()) {
                 if (result.failure == null) {
                     val metadata = result.metadata
-                    val mappingsConfiguration = dependency.mappingsConfiguration ?: run {
-                        val moduleConfiguration = dependency.getModuleConfiguration()
-
-                        if (moduleConfiguration == null) {
-                            RemapperExtension.MAPPINGS_CONFIGURATION
-                        } else {
-                            var owningSourceSet: SourceSet? = null
-                            for (sourceSet in project.extensions.getByType(SourceSetContainer::class.java)) {
-                                if (moduleConfiguration.startsWith(sourceSet.name)) {
-                                    owningSourceSet = sourceSet
-                                    break
-                                }
-                            }
-
-                            // FIXME don't use .capitalized
-                            owningSourceSet?.let { "${it.name}${RemapperExtension.MAPPINGS_CONFIGURATION.capitalized()}" } ?: RemapperExtension.MAPPINGS_CONFIGURATION
-                        }
-                    }
+                    val mappingsConfiguration = project.getSourceSetConfigurationName(dependency, MinecraftCodevRemapperPlugin.MAPPINGS_CONFIGURATION)
 
                     if (result.id is ModuleComponentIdentifier) {
                         if (metadata == null) {
@@ -254,7 +236,7 @@ open class RemappedComponentResolvers @Inject constructor(
                         artifact.hash() == cached.descriptorHash
                     ).isMustCheck
                 ) {
-                    val file = JarRemapper.remap(mappings.tree, id.sourceNamespace?.name ?: MappingsNamespace.OBF, id.targetNamespace.name, newResult.result.toPath(), emptyList())
+                    val file = JarRemapper.remap(mappings.tree, id.sourceNamespace?.name ?: MappingsNamespace.OBF, id.targetNamespace.name, newResult.result.toPath())
 
                     val output = cacheManager.fileStoreDirectory
                         .resolve(mappings.hash.toString())
