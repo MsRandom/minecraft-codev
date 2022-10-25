@@ -18,6 +18,8 @@ dependencies {
 
     implementation(group = "de.siegmar", name = "fastcsv", version = "2.2.0")
 
+    compileOnly(projects.minecraftCodevGradleLinkage)
+
     implementation(projects.minecraftCodevRemapper)
     implementation(projects.minecraftCodevRuns)
 }

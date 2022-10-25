@@ -3,6 +3,7 @@ package net.msrandom.minecraftcodev.core.resolve
 import com.google.common.collect.HashMultimap
 import kotlinx.serialization.json.decodeFromStream
 import net.msrandom.minecraftcodev.core.*
+import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
 import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
 import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.resolveMojangFile
@@ -515,7 +516,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
             cachePolicy: CachePolicy
         ): MinecraftVersionList? {
             val list = versionManifest.inputStream().use {
-                MinecraftCodevExtension.json.decodeFromStream<MinecraftVersionManifest>(it)
+                json.decodeFromStream<MinecraftVersionManifest>(it)
             }
 
             val age = Duration.between(versionManifest.getLastModifiedTime().toInstant(), Instant.now())
@@ -556,7 +557,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                 file.toPath().copyTo(versionManifest)
 
                 file.inputStream().use {
-                    MinecraftVersionList(MinecraftCodevExtension.json.decodeFromStream(it))
+                    MinecraftVersionList(json.decodeFromStream(it))
                 }
             }
         }
@@ -623,7 +624,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                         override fun computeKey() = location.toString()
                     },
                     null
-                )?.file?.inputStream()?.use(MinecraftCodevExtension.json::decodeFromStream)
+                )?.file?.inputStream()?.use(json::decodeFromStream)
             }
         }
     }

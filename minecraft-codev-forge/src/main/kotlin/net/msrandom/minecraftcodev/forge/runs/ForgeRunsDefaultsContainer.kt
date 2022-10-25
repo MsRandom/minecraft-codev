@@ -3,7 +3,6 @@ package net.msrandom.minecraftcodev.forge.runs
 import net.minecraftforge.srgutils.IMappingBuilder
 import net.minecraftforge.srgutils.IMappingFile
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
-import net.msrandom.minecraftcodev.core.minecraftCodev
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
 import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin
 import net.msrandom.minecraftcodev.forge.UserdevConfig
@@ -46,7 +45,7 @@ class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefaultsC
     private fun MinecraftRunConfiguration.resolveTemplate(manifest: MinecraftVersionMetadata, config: UserdevConfig, template: String): Any {
         return when (template) {
             "asset_index" -> manifest.assets
-            "assets_root" -> project.minecraftCodev.assets
+            "assets_root" -> project.plugins.getPlugin(MinecraftCodevPlugin::class.java).assets
             "modules" -> config.modules.flatMapTo(mutableSetOf()) {
                 project.configurations.detachedConfiguration(project.dependencies.create(it)).setTransitive(false)
             }.joinToString(File.pathSeparator)

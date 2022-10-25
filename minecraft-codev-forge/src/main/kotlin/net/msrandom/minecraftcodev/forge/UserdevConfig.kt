@@ -2,7 +2,7 @@ package net.msrandom.minecraftcodev.forge
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.decodeFromStream
-import net.msrandom.minecraftcodev.core.MinecraftCodevExtension.Companion.json
+import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.zipFileSystem
 import net.msrandom.minecraftcodev.core.ModuleLibraryIdentifier
 import java.io.File

@@ -8,20 +8,23 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import net.msrandom.minecraftcodev.core.AssetsIndex
-import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
+import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
-import net.msrandom.minecraftcodev.core.minecraftCodev
 import org.gradle.api.DefaultTask
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.TaskAction
+import java.io.IOException
+import java.io.InputStream
 import java.net.URL
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.text.DecimalFormat
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
+import kotlin.io.path.inputStream
 import com.google.common.io.Files as GuavaFiles
 
 abstract class DownloadAssets : DefaultTask() {
@@ -48,11 +51,31 @@ abstract class DownloadAssets : DefaultTask() {
         return decimalFormat.format(formattedSize) + (sizeCategories.getOrNull(sizeCategory) ?: throw UnsupportedOperationException("Invalid size: $size"))
     }
 
+    private fun downloadToFile(path: Path, url: () -> URL): InputStream {
+        val input = if (path.exists()) {
+            path.inputStream()
+        } else {
+            val stream = url().openStream().buffered()
+            try {
+                stream.mark(Int.MAX_VALUE)
+                path.parent.createDirectories()
+                Files.copy(stream, path)
+                stream.reset()
+            } catch (exception: IOException) {
+                stream.close()
+                throw exception
+            }
+            stream
+        }
+
+        return input
+    }
+
     @TaskAction
     fun download() {
-        val extension = project.minecraftCodev
-        val assetsDirectory = extension.assets
-        val resourcesDirectory = extension.resources
+        val codev = project.plugins.getPlugin(MinecraftCodevPlugin::class.java)
+        val assetsDirectory = codev.assets
+        val resourcesDirectory = codev.resources
         val indexesDirectory = assetsDirectory.resolve("indexes")
         val objectsDirectory = assetsDirectory.resolve("objects")
         val toDownload = assetIndex.totalSize.toDouble()
@@ -63,7 +86,7 @@ abstract class DownloadAssets : DefaultTask() {
 
         logger.debug("Testing assets for asset index ${assetIndex.id}")
 
-        val assetIndexJson = MinecraftCodevExtension.downloadToFile(indexesDirectory.resolve("${assetIndex.id}.json")) {
+        val assetIndexJson = downloadToFile(indexesDirectory.resolve("${assetIndex.id}.json")) {
             assetIndex.url.toURL()
         }
 

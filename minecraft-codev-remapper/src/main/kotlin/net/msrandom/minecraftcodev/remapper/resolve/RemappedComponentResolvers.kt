@@ -126,14 +126,12 @@ open class RemappedComponentResolvers @Inject constructor(
                     existingMetadata,
                     identifier,
                     {
-                        val newVariants = mutableMapOf<String, ConfigurationMetadata>()
-
-                        for ((key, variant) in it) {
+                        it.mapValues { (_, variant) ->
                             if (variant != null) {
                                 val category = variant.attributes.findEntry(Category.CATEGORY_ATTRIBUTE.name)
                                 val libraryElements = variant.attributes.findEntry(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE.name)
                                 if (category.isPresent && libraryElements.isPresent && category.get() == Category.LIBRARY && libraryElements.get() == LibraryElements.JAR) {
-                                    newVariants[key] = CodevGradleLinkageLoader.wrapConfigurationMetadata(
+                                    CodevGradleLinkageLoader.wrapConfigurationMetadata(
                                         variant,
                                         { oldName ->
                                             object : DisplayName {
@@ -160,11 +158,13 @@ open class RemappedComponentResolvers @Inject constructor(
                                         { artifact -> RemappedComponentArtifactMetadata(artifact, identifier) },
                                         objects
                                     )
+                                } else {
+                                    variant
                                 }
+                            } else {
+                                null
                             }
                         }
-
-                        it + newVariants
                     },
                     objects
                 )

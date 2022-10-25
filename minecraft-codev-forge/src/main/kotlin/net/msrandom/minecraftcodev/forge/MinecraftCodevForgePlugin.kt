@@ -10,10 +10,10 @@ import net.fabricmc.mappingio.format.TsrgReader
 import net.fabricmc.mappingio.tree.MemoryMappingTree
 import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
-import net.msrandom.minecraftcodev.core.MinecraftCodevExtension.Companion.json
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.applyPlugin
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.createSourceSetConfigurations
+import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.unsafeResolveConfiguration
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.zipFileSystem
 import net.msrandom.minecraftcodev.forge.dependency.PatchedMinecraftIvyDependencyDescriptorFactory
@@ -213,7 +213,7 @@ open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
 
         const val PATCHES_CONFIGURATION = "patches"
 
-        internal fun userdevConfig(file: File, action: FileSystem.(config: UserdevConfig) -> Unit) = MinecraftCodevPlugin.zipFileSystem(file.toPath()).use { fs ->
+        internal fun userdevConfig(file: File, action: FileSystem.(config: UserdevConfig) -> Unit) = zipFileSystem(file.toPath()).use { fs ->
             val configPath = fs.getPath("config.json")
             if (configPath.exists()) {
                 fs.action(configPath.inputStream().use(json::decodeFromStream))

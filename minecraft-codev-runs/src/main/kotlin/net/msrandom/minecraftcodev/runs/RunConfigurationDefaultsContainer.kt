@@ -1,6 +1,6 @@
 package net.msrandom.minecraftcodev.runs
 
-import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
+import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.osVersion
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
 import org.gradle.api.Project
 import org.gradle.api.plugins.ExtensionAware
@@ -12,7 +12,7 @@ abstract class RunConfigurationDefaultsContainer(val project: Project, val build
 
     private fun ruleMatches(os: MinecraftVersionMetadata.Rule.OperatingSystem): Boolean {
         if (os.name != null && OperatingSystem.forName(os.name) != OperatingSystem.current()) return false
-        if (os.version != null && MinecraftCodevExtension.osVersion() matches Regex(os.version!!)) return false
+        if (os.version != null && osVersion() matches Regex(os.version!!)) return false
         if (os.arch != null && os.arch != SystemUtils.OS_ARCH) return false
 
         return true

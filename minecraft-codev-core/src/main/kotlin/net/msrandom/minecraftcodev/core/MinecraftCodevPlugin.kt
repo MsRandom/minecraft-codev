@@ -1,11 +1,15 @@
 package net.msrandom.minecraftcodev.core
 
+import kotlinx.serialization.json.Json
+import net.msrandom.minecraftcodev.core.attributes.OperatingSystemDisambiguationRule
+import net.msrandom.minecraftcodev.core.attributes.VersionPatternCompatibilityRule
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.dependency.ConfiguredDependencyMetadata
 import net.msrandom.minecraftcodev.core.dependency.MinecraftDependencyExtension
 import net.msrandom.minecraftcodev.core.dependency.MinecraftIvyDependencyDescriptorFactory
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
 import org.apache.commons.lang3.StringUtils
+import org.gradle.api.Named
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
@@ -36,17 +40,22 @@ import org.gradle.api.internal.model.NamedObjectInstantiator
 import org.gradle.api.internal.provider.PropertyFactory
 import org.gradle.api.invocation.Gradle
 import org.gradle.api.model.ObjectFactory
+import org.gradle.api.plugins.ExtensionAware
 import org.gradle.api.plugins.JavaPlugin
 import org.gradle.api.plugins.PluginAware
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.util.PatternSet
 import org.gradle.configurationcache.extensions.serviceOf
+import org.gradle.initialization.layout.GlobalCacheDir
 import org.gradle.internal.Factory
+import org.gradle.internal.impldep.org.apache.commons.lang.SystemUtils
 import org.gradle.internal.instantiation.InstantiatorFactory
 import org.gradle.internal.model.CalculatedValueContainerFactory
+import org.gradle.internal.os.OperatingSystem
 import org.gradle.internal.service.DefaultServiceRegistry
 import org.gradle.internal.work.WorkerLeaseService
+import org.gradle.nativeplatform.OperatingSystemFamily
 import java.net.URI
 import java.nio.file.FileSystem
 import java.nio.file.FileSystems
@@ -55,7 +64,15 @@ import java.nio.file.Path
 import javax.inject.Inject
 import kotlin.streams.asSequence
 
-open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(private val attributesFactory: ImmutableAttributesFactory) : Plugin<T> {
+open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(private val attributesFactory: ImmutableAttributesFactory, cacheDir: GlobalCacheDir) : Plugin<T> {
+    val cache: Path = cacheDir.dir.toPath().resolve("minecraft-codev")
+
+    // Asset indexes and objects
+    val assets: Path = cache.resolve("assets")
+
+    // Legacy assets
+    val resources: Path = cache.resolve("resources")
+
     private fun applyGradle(gradle: Gradle) {
         registerCustomDependency("minecraft", gradle, MinecraftIvyDependencyDescriptorFactory::class.java, MinecraftComponentResolvers::class.java)
     }
@@ -63,20 +80,35 @@ open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(private val
     override fun apply(target: T) = applyPlugin(target, ::applyGradle) {
         plugins.apply(JavaPlugin::class.java)
 
-        val minecraft = extensions.create("minecraft", MinecraftCodevExtension::class.java, target)
+        extensions.create("minecraft", MinecraftCodevExtension::class.java)
         dependencies.extensions.create("minecraftDependencyHandling", MinecraftDependencyExtension::class.java, attributesFactory)
+
+        project.dependencies.attributesSchema { schema ->
+            schema.attribute(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE) {
+                it.disambiguationRules.add(OperatingSystemDisambiguationRule::class.java)
+            }
+
+            schema.attribute(OPERATING_SYSTEM_VERSION_PATTERN_ATTRIBUTE) {
+                it.compatibilityRules.add(VersionPatternCompatibilityRule::class.java)
+            }
+        }
+
+        project.configurations.all { configuration ->
+            configuration.attributes {
+                it.attribute(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE, project.objects.named(OperatingSystem.current().familyName))
+            }
+        }
     }
 
     companion object {
-        const val ACCESS_WIDENERS = "accessWideners"
-
         const val DOWNLOAD_ASSETS = "downloadAssets"
 
         @JvmField
         val OPERATING_SYSTEM_VERSION_PATTERN_ATTRIBUTE: Attribute<String> = Attribute.of("net.msrandom.minecraftcodev.operatingSystemVersionPattern", String::class.java)
 
-        @JvmField
-        val ACCESS_WIDENED_ATTRIBUTE: Attribute<Boolean> = Attribute.of("net.msrandom.minecraftcodev.accessWidened", Boolean::class.javaObjectType)
+        val json = Json {
+            ignoreUnknownKeys = true
+        }
 
         internal lateinit var cacheProvider: CodevCacheProvider
 
@@ -175,6 +207,7 @@ open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(private val
                         newServices.add(CodevCacheProvider::class.java, cacheProvider)
 
                         newServices.addProvider(object {
+                            @Suppress("unused")
                             fun createResolvers(artifactTypeRegistry: ArtifactTypeRegistry, calculatedValueContainerFactory: CalculatedValueContainerFactory) =
                                 ComponentResolversChain(resolvers as List<ComponentResolvers>, artifactTypeRegistry, calculatedValueContainerFactory)
                         })
@@ -185,6 +218,12 @@ open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(private val
 
                 dependencies.add(name)
             }
+        }
+
+        fun osVersion(): String {
+            val version = SystemUtils.OS_VERSION
+            val versionEnd = version.indexOf('-')
+            return if (versionEnd < 0) version else version.substring(0, versionEnd)
         }
 
         fun zipFileSystem(file: Path, create: Boolean = false): FileSystem =
@@ -252,3 +291,10 @@ open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(private val
         }
     }
 }
+
+inline fun <reified T : Named> ObjectFactory.named(name: String): T = named(T::class.java, name)
+
+/**
+ * Mostly functions as a holder for other modules' extensions.
+ */
+abstract class MinecraftCodevExtension : ExtensionAware

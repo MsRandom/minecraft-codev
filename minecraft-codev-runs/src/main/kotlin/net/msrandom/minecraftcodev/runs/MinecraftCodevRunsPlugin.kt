@@ -8,10 +8,14 @@ import org.gradle.api.plugins.ApplicationPlugin
 import org.gradle.api.plugins.PluginAware
 import org.gradle.api.tasks.JavaExec
 import org.gradle.configurationcache.extensions.capitalized
+import java.nio.file.Path
 
 class MinecraftCodevRunsPlugin<T : PluginAware> : Plugin<T> {
     override fun apply(target: T) {
-        target.plugins.apply(MinecraftCodevPlugin::class.java)
+        val codev = target.plugins.apply(MinecraftCodevPlugin::class.java)
+
+        // Log4j configs
+        val logging: Path =codev.cache.resolve("logging")
 
         applyPlugin(target) {
             val runs = project.container(MinecraftRunConfigurationBuilder::class.java)

@@ -14,8 +14,9 @@ dependencies {
     api(group = "net.fabricmc", name = "mapping-io", version = "0.3.0")
     api(group = "net.fabricmc", name = "tiny-remapper", version = "0.8.4")
 
-    implementation(projects.minecraftCodevCore)
-    api(projects.minecraftCodevCore)
+    compileOnly(projects.minecraftCodevGradleLinkage)
+
+    implementation(api(projects.minecraftCodevCore)!!)
 }
 
 tasks.test {

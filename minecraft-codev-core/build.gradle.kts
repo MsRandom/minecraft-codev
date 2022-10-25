@@ -25,11 +25,13 @@ dependencies {
     implementation(api(group = "com.google.guava", name = "guava", version = "31.1-jre"))
     implementation(group = "org.apache.commons", name = "commons-lang3", version = "3.12.0")
 
-    implementation(api(projects.minecraftCodevGradleLinkage) {
+    compileOnly(projects.minecraftCodevGradleLinkage)
+
+    runtimeOnly(projects.minecraftCodevGradleLinkage) {
         attributes {
             attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling.SHADOWED))
         }
-    })
+    }
 }
 
 tasks.test {

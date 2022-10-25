@@ -1,8 +1,12 @@
 package net.msrandom.minecraftcodev.accesswidener.resolve
 
+import net.fabricmc.accesswidener.AccessWidener
+import net.fabricmc.accesswidener.AccessWidenerReader
 import net.msrandom.minecraftcodev.accesswidener.AccessWidenedDependencyMetadata
+import net.msrandom.minecraftcodev.accesswidener.JarAccessWidener
 import net.msrandom.minecraftcodev.accesswidener.MinecraftCodevAccessWidenerPlugin
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.getSourceSetConfigurationName
+import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.unsafeResolveConfiguration
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.hash
@@ -10,6 +14,8 @@ import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader
 import org.gradle.api.Project
 import org.gradle.api.artifacts.component.ComponentIdentifier
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.attributes.Category
+import org.gradle.api.attributes.LibraryElements
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ComponentResolvers
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionSelector
@@ -21,12 +27,14 @@ import org.gradle.api.internal.artifacts.type.ArtifactTypeRegistry
 import org.gradle.api.internal.attributes.ImmutableAttributes
 import org.gradle.api.internal.component.ArtifactType
 import org.gradle.api.model.ObjectFactory
+import org.gradle.internal.DisplayName
 import org.gradle.internal.component.external.model.DefaultModuleComponentIdentifier
 import org.gradle.internal.component.external.model.MetadataSourcedComponentArtifacts
 import org.gradle.internal.component.external.model.ModuleComponentArtifactMetadata
 import org.gradle.internal.component.external.model.ModuleComponentFileArtifactIdentifier
 import org.gradle.internal.component.model.*
 import org.gradle.internal.hash.ChecksumService
+import org.gradle.internal.hash.HashCode
 import org.gradle.internal.model.CalculatedValueContainerFactory
 import org.gradle.internal.resolve.resolver.ArtifactResolver
 import org.gradle.internal.resolve.resolver.ComponentMetaDataResolver
@@ -35,6 +43,8 @@ import org.gradle.internal.resolve.resolver.OriginArtifactSelector
 import org.gradle.internal.resolve.result.*
 import org.gradle.internal.serialize.MapSerializer
 import org.gradle.util.internal.BuildCommencedTimeProvider
+import java.security.DigestInputStream
+import java.security.MessageDigest
 import java.time.Duration
 import java.time.Instant
 import javax.inject.Inject
@@ -112,7 +122,32 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                 val metadata = CodevGradleLinkageLoader.wrapComponentMetadata(
                     existingMetadata,
                     identifier,
-                    { it },
+                    {
+                        it.mapValues { (_, variant) ->
+                            if (variant != null) {
+                                val category = variant.attributes.findEntry(Category.CATEGORY_ATTRIBUTE.name)
+                                val libraryElements = variant.attributes.findEntry(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE.name)
+                                if (category.isPresent && libraryElements.isPresent && category.get() == Category.LIBRARY && libraryElements.get() == LibraryElements.JAR) {
+                                    CodevGradleLinkageLoader.wrapConfigurationMetadata(
+                                        variant,
+                                        { oldName ->
+                                            object : DisplayName {
+                                                override fun getDisplayName() = "access widened ${oldName.displayName}"
+                                                override fun getCapitalizedDisplayName() = "Access Widened ${oldName.capitalizedDisplayName}"
+                                            }
+                                        },
+                                        { dependencies -> dependencies },
+                                        { artifact -> AccessWidenedComponentArtifactMetadata(artifact, identifier) },
+                                        objects
+                                    )
+                                } else {
+                                    variant
+                                }
+                            } else {
+                                null
+                            }
+                        }
+                    },
                     objects
                 )
 
@@ -130,6 +165,8 @@ open class AccessWidenedComponentResolvers @Inject constructor(
         exclusions: ExcludeSpec,
         overriddenAttributes: ImmutableAttributes
     ) = if (component.id is AccessWidenedComponentIdentifier) {
+        project.unsafeResolveConfiguration(project.configurations.getByName((component.id as AccessWidenedComponentIdentifier).accessWidenersConfiguration))
+
         MetadataSourcedComponentArtifacts().getArtifactsFor(
             component, configuration, artifactResolver, hashMapOf(), artifactTypeRegistry, exclusions, overriddenAttributes, calculatedValueContainerFactory
         )
@@ -145,35 +182,49 @@ open class AccessWidenedComponentResolvers @Inject constructor(
     }
 
     override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactResolveResult) {
-        val id = artifact.componentId
-        if (id is AccessWidenedComponentIdentifier) {
+        if (artifact is AccessWidenedComponentArtifactMetadata) {
+            val id = artifact.componentId
             val newResult = DefaultBuildableArtifactResolveResult()
-            resolvers.artifactResolver.resolveArtifact(artifact, moduleSources, newResult)
+            resolvers.artifactResolver.resolveArtifact(artifact.delegate, moduleSources, newResult)
 
             if (newResult.isSuccessful) {
+                val accessWideners = project.configurations.getByName(id.accessWidenersConfiguration)
+                val messageDigest = MessageDigest.getInstance("SHA1")
+
+                val accessWidener = AccessWidener().also {
+                    val reader = AccessWidenerReader(it)
+                    for (accessWidener in accessWideners) {
+                        DigestInputStream(accessWidener.inputStream(), messageDigest).bufferedReader()
+
+                        // TODO Pass namespace here
+                        accessWidener.bufferedReader().use(reader::read)
+                    }
+                }
+
+                val hash = HashCode.fromBytes(messageDigest.digest())
+
                 val cachedValues = artifactCache.value
 
                 val urlId = AccessWidenedArtifactIdentifier(
                     ModuleComponentFileArtifactIdentifier(DefaultModuleComponentIdentifier.newId(id.moduleIdentifier, id.version), newResult.result.name),
-                    TODO(),
+                    hash,
                     checksumService.sha1(newResult.result)
                 )
 
                 val cached = cachedValues[urlId]
 
                 if (cached == null || cachePolicy.artifactExpiry(
-                        (artifact as ModuleComponentArtifactMetadata).toArtifactIdentifier(),
+                        (artifact.delegate as ModuleComponentArtifactMetadata).toArtifactIdentifier(),
                         if (cached.isMissing) null else cached.cachedFile,
                         Duration.ofMillis(timeProvider.currentTime - cached.cachedAt),
                         false,
                         artifact.hash() == cached.descriptorHash
                     ).isMustCheck
                 ) {
-                    // TODO actually access widen lol
-                    val file = newResult.result.toPath()
+                    val file = JarAccessWidener.accessWiden(accessWidener, newResult.result.toPath())
 
                     val output = cacheManager.fileStoreDirectory
-                        .resolve(TODO().toString())
+                        .resolve(hash.toString())
                         .resolve(id.group)
                         .resolve(id.module)
                         .resolve(id.version)

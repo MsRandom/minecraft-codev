@@ -1,6 +1,6 @@
 package net.msrandom.minecraftcodev.runs.task
 
-import net.msrandom.minecraftcodev.core.minecraftCodev
+import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.runs.MinecraftRunConfiguration
 import net.msrandom.minecraftcodev.runs.MinecraftRunConfigurationBuilder
 import org.gradle.api.DefaultTask
@@ -16,7 +16,9 @@ abstract class GenerateRuns : DefaultTask() {
 
     @TaskAction
     fun generate() {
-        generateRuns(project.minecraftCodev
+        generateRuns(project
+            .extensions
+            .getByType(MinecraftCodevExtension::class.java)
             .extensions
             .getByType(object : TypeOf<NamedDomainObjectContainer<MinecraftRunConfigurationBuilder>>() {})
             .map { it.name to it.build(project) }

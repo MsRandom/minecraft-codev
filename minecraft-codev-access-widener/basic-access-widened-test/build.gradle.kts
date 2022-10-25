@@ -1,5 +1,5 @@
 plugins {
-    id("minecraft-codev-remapper")
+    id("minecraft-codev-access-widener")
 }
 
 repositories {
@@ -20,8 +20,6 @@ java {
 }
 
 dependencies {
-    val version = "1.18.2"
-
-    mappings(minecraft(MinecraftType.ServerMappings, version))
-    implementation(minecraft(MinecraftType.Client, version).remapped)
+    accessWideners(files("test.accessWidener"))
+    implementation(minecraft(MinecraftType.Common, "1.18.2").accessWidened)
 }
