@@ -26,10 +26,7 @@ import org.gradle.api.internal.ProcessOperations
 import org.gradle.api.model.ObjectFactory
 import org.gradle.internal.hash.ChecksumService
 import org.gradle.internal.hash.HashCode
-import org.gradle.internal.operations.BuildOperationContext
-import org.gradle.internal.operations.BuildOperationDescriptor
-import org.gradle.internal.operations.BuildOperationExecutor
-import org.gradle.internal.operations.CallableBuildOperation
+import org.gradle.internal.operations.*
 import java.io.File
 import java.io.PrintStream
 import java.nio.file.Files
@@ -93,7 +90,7 @@ open class PatchedSetupState @Inject constructor(
         override fun description() = BuildOperationDescriptor
             .displayName("Merging ${clientJar.toPath()} and ${extractionState.value.result}")
             .progressDisplayName("Merging to $merged")
-            .details(JarMergeOperationDetails(clientJar.toPath(), extractionState.value.result, merged))
+            .metadata(BuildOperationCategory.TASK)
 
         override fun call(context: BuildOperationContext): Path {
             executeMcp(
@@ -118,7 +115,6 @@ open class PatchedSetupState @Inject constructor(
         override fun description() = BuildOperationDescriptor
             .displayName("Patching $input")
             .progressDisplayName("Applying binary patches")
-            .details(JarPatchOperationDetails(input, patched, patchesPath))
 
         override fun call(context: BuildOperationContext): Path {
             // Extract patches
@@ -197,9 +193,9 @@ open class PatchedSetupState @Inject constructor(
         val fixedMappingsPath = Files.createTempFile("mappings-", ".tmp.tsrg")
 
         override fun description() = BuildOperationDescriptor
-            .displayName("Renaming $input from ${MappingsNamespace.OBF} to ${MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE}")
-            .progressDisplayName("Renaming to $renamed")
-            .details(JarRenameOperationDetails(input, renamed, fixedMappingsPath))
+            .displayName("Remapping $input from ${MappingsNamespace.OBF} to ${MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE}")
+            .progressDisplayName("Remapping to $renamed")
+            .metadata(BuildOperationCategory.TASK)
 
         override fun call(context: BuildOperationContext): Path {
             val mappings = mappings
@@ -245,7 +241,7 @@ open class PatchedSetupState @Inject constructor(
         override fun description() = BuildOperationDescriptor
             .displayName("Injecting into $input")
             .progressDisplayName("Apply Minecraft Injections as $injected")
-            .details(JarInjectOperationDetails(input, injected, userdevConfigFile.toPath()))
+            .metadata(BuildOperationCategory.TASK)
 
         override fun call(context: BuildOperationContext): Path {
             val access = Files.createTempFile("access-", ".tmp.txt")
@@ -293,7 +289,7 @@ open class PatchedSetupState @Inject constructor(
         override fun description() = BuildOperationDescriptor
             .displayName("Access Transforming $input")
             .progressDisplayName("Making access transformed $accessTransformed")
-            .details(JarAccessTransformOperationDetails(input, accessTransformed, atFiles))
+            .metadata(BuildOperationCategory.TASK)
 
         @Suppress("UnstableApiUsage")
         override fun call(context: BuildOperationContext): Path {
@@ -331,7 +327,7 @@ open class PatchedSetupState @Inject constructor(
             override fun description() = BuildOperationDescriptor
                 .displayName("Splitting $accessTransformed")
                 .progressDisplayName("Common: $common, Client: $client")
-                .details(MergedJarSplitOperationDetails(accessTransformed, common, client))
+                .metadata(BuildOperationCategory.TASK)
 
             override fun call(context: BuildOperationContext): JarSplittingResult {
                 common.deleteExisting()

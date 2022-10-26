@@ -148,7 +148,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
         return null
     }
 
-    override fun resolve(dependency: DependencyMetadata, acceptor: VersionSelector, rejector: VersionSelector?, result: BuildableComponentIdResolveResult) {
+    override fun resolve(dependency: DependencyMetadata, acceptor: VersionSelector?, rejector: VersionSelector?, result: BuildableComponentIdResolveResult) {
         if (dependency is PatchedMinecraftDependencyMetadata) {
             componentIdResolver.resolveVersion(dependency, acceptor, rejector, result) { module, version ->
                 PatchedComponentIdentifier(

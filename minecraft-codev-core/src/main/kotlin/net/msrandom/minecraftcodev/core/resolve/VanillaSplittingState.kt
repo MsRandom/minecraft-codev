@@ -4,10 +4,7 @@ import net.msrandom.minecraftcodev.core.resolve.bundled.BundledClientJarSplitter
 import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter
 import org.gradle.internal.component.external.model.ModuleComponentArtifactIdentifier
 import org.gradle.internal.hash.ChecksumService
-import org.gradle.internal.operations.BuildOperationContext
-import org.gradle.internal.operations.BuildOperationDescriptor
-import org.gradle.internal.operations.BuildOperationExecutor
-import org.gradle.internal.operations.CallableBuildOperation
+import org.gradle.internal.operations.*
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -77,7 +74,7 @@ private fun getBundledClientJarState(
             override fun description() = BuildOperationDescriptor
                 .displayName("Making split client from $clientJar and $serverJar")
                 .progressDisplayName("Output: $result")
-                .details(BundledClientSplitOperationDetails(clientJar, serverJar, result))
+                .metadata(BuildOperationCategory.TASK)
 
             override fun call(context: BuildOperationContext) = BundledClientJarSplitter.split(checksumService, pathFunction, manifest.id, result, clientJar, serverJar)
         })
@@ -100,7 +97,7 @@ private fun getLegacySplitJarsState(
             override fun description() = BuildOperationDescriptor
                 .displayName("Splitting $clientJar and $serverJar")
                 .progressDisplayName("Common: $common, Client: $client")
-                .details(LegacyJarsSplitOperationDetails(clientJar, serverJar, common, client))
+                .metadata(BuildOperationCategory.TASK)
 
             override fun call(context: BuildOperationContext) = LegacyJarSplitter.split(checksumService, pathFunction, manifest.id, common, client, clientJar, serverJar)
         })

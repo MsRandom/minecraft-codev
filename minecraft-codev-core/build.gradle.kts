@@ -26,6 +26,7 @@ dependencies {
     implementation(group = "org.apache.commons", name = "commons-lang3", version = "3.12.0")
 
     implementation(group = "org.jetbrains.kotlin", name = "kotlin-gradle-plugin", version = "1.6.21")
+    implementation(group = "org.jetbrains.kotlin", name = "kotlin-klib-commonizer-api", version = "1.6.21")
 
     compileOnly(projects.minecraftCodevGradleLinkage)
 

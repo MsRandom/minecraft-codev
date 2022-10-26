@@ -6,6 +6,7 @@ import net.msrandom.minecraftcodev.core.attributes.VersionPatternCompatibilityRu
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.dependency.ConfiguredDependencyMetadata
 import net.msrandom.minecraftcodev.core.dependency.MinecraftIvyDependencyDescriptorFactory
+import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
 import org.apache.commons.lang3.StringUtils
 import org.gradle.api.Named
@@ -28,7 +29,6 @@ import org.gradle.api.internal.artifacts.ivyservice.moduleconverter.dependencies
 import org.gradle.api.internal.artifacts.ivyservice.moduleconverter.dependencies.IvyDependencyDescriptorFactory
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.ComponentResolversChain
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.DefaultArtifactDependencyResolver
-import org.gradle.api.internal.artifacts.type.ArtifactTypeRegistry
 import org.gradle.api.internal.attributes.ImmutableAttributesFactory
 import org.gradle.api.internal.collections.DomainObjectCollectionFactory
 import org.gradle.api.internal.file.FileCollectionFactory
@@ -49,7 +49,6 @@ import org.gradle.initialization.layout.GlobalCacheDir
 import org.gradle.internal.Factory
 import org.gradle.internal.impldep.org.apache.commons.lang.SystemUtils
 import org.gradle.internal.instantiation.InstantiatorFactory
-import org.gradle.internal.model.CalculatedValueContainerFactory
 import org.gradle.internal.os.OperatingSystem
 import org.gradle.internal.service.DefaultServiceRegistry
 import org.gradle.internal.work.WorkerLeaseService
@@ -205,10 +204,8 @@ open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(private val
                         newServices.add(ObjectFactory::class.java, projectObjectFactory)
                         newServices.add(CodevCacheProvider::class.java, cacheProvider)
 
-                        newServices.addProvider(object {
-                            @Suppress("unused")
-                            fun createResolvers(artifactTypeRegistry: ArtifactTypeRegistry, calculatedValueContainerFactory: CalculatedValueContainerFactory) =
-                                ComponentResolversChain(resolvers as List<ComponentResolvers>, artifactTypeRegistry, calculatedValueContainerFactory)
+                        newServices.add(ComponentResolversChainProvider::class.java, ComponentResolversChainProvider {
+                            ComponentResolversChain(resolvers as List<ComponentResolvers>, project.serviceOf(), project.serviceOf())
                         })
 
                         resolvers.add(projectObjectFactory.newInstance(componentResolvers))
@@ -281,6 +278,25 @@ open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(private val
                         isTransitive = false
                     }
                 }
+/*
+                project.afterEvaluate {
+                    kotlin.targets.all { target ->
+                        target.compilations.all { compilation ->
+                            val start = target.disambiguationClassifier
+                            val middle = compilation.name.takeIf { it != KotlinCompilation.MAIN_COMPILATION_NAME }?.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+                            val end = name.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+                            val configurationName =
+                            val configuration = configurations.getByName(compilation.compileOnlyConfigurationName)
+                            val defaultSourceSet = compilation.defaultSourceSet
+                            val allSourceSets = compilation.kotlinSourceSets + compilation.kotlinSourceSets.flatMapTo(mutableSetOf()) {
+                                transitiveClosure(defaultSourceSet) { dependsOn }
+                            }
+
+                            for (allSourceSet in allSourceSets) {
+                            }
+                        }
+                    }
+                }*/
             }
         }
 

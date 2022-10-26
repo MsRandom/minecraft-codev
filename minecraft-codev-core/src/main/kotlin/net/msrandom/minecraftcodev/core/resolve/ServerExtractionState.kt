@@ -4,10 +4,7 @@ import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.zipFileSy
 import net.msrandom.minecraftcodev.core.ModuleLibraryIdentifier
 import net.msrandom.minecraftcodev.core.resolve.bundled.ServerExtractor
 import net.msrandom.minecraftcodev.core.resolve.legacy.ServerFixer
-import org.gradle.internal.operations.BuildOperationContext
-import org.gradle.internal.operations.BuildOperationDescriptor
-import org.gradle.internal.operations.BuildOperationExecutor
-import org.gradle.internal.operations.CallableBuildOperation
+import org.gradle.internal.operations.*
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -25,7 +22,7 @@ fun getExtractionState(buildOperationExecutor: BuildOperationExecutor, manifest:
                 override fun description() = BuildOperationDescriptor
                     .displayName("Extracting $serverJar")
                     .progressDisplayName(extractedJar.toString())
-                    .details(ServerJarExtractionOperationDetails(serverJar.toPath(), extractedJar))
+                    .metadata(BuildOperationCategory.TASK)
 
                 override fun call(context: BuildOperationContext): ServerExtractionResult {
                     val commonLibraries: Collection<ModuleLibraryIdentifier>

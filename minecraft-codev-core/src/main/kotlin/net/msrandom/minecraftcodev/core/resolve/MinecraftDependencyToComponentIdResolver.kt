@@ -43,17 +43,23 @@ open class MinecraftDependencyToComponentIdResolver @Inject constructor(
     private val globalScopedCache: GlobalScopedCache,
     private val attributesFactory: ImmutableAttributesFactory
 ) : DependencyToComponentIdResolver {
-    override fun resolve(dependency: DependencyMetadata, acceptor: VersionSelector, rejector: VersionSelector?, result: BuildableComponentIdResolveResult) {
+    override fun resolve(dependency: DependencyMetadata, acceptor: VersionSelector?, rejector: VersionSelector?, result: BuildableComponentIdResolveResult) {
         if (dependency is MinecraftDependencyMetadata) {
             resolveVersion(dependency, acceptor, rejector, result, ::MinecraftComponentIdentifier)
         }
     }
 
-    fun resolveVersion(dependency: DependencyMetadata, acceptor: VersionSelector, rejector: VersionSelector?, result: BuildableComponentIdResolveResult, identifierFactory: (String, String) -> ModuleComponentIdentifier) {
+    fun resolveVersion(
+        dependency: DependencyMetadata,
+        acceptor: VersionSelector?,
+        rejector: VersionSelector?,
+        result: BuildableComponentIdResolveResult,
+        identifierFactory: (String, String) -> ModuleComponentIdentifier
+    ) {
         val componentSelector = dependency.selector
         if (componentSelector is ModuleComponentSelector) {
             if (componentSelector.group == MinecraftComponentResolvers.GROUP) {
-                if (acceptor.isDynamic) {
+                if (acceptor?.isDynamic != false) {
                     val attributesSchema = project.dependencies.attributesSchema as AttributesSchemaInternal
 
                     for (repository in repositories) {
@@ -82,7 +88,9 @@ open class MinecraftDependencyToComponentIdResolver @Inject constructor(
                                     override fun getStatusScheme() = scheme
                                 }
 
-                                val accepted = if (acceptor is VersionRangeSelector) {
+                                val accepted = if (acceptor == null) {
+                                    true
+                                } else if (acceptor is VersionRangeSelector) {
                                     VersionRangeSelector(acceptor.selector, { x, y -> compareVersions(x.source, y.source) }, versionParser).accept(id)
                                 } else if (acceptor.requiresMetadata()) {
                                     acceptor.accept(metadata)

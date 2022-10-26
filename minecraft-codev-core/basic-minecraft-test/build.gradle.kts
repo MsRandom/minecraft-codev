@@ -38,11 +38,11 @@ java {
 }
 
 dependencies {
-    common12.implementationConfigurationName(minecraft(COMMON, "1.12+"))
-    common16.implementationConfigurationName(minecraft(COMMON, "1.16+"))
-    common18.implementationConfigurationName(minecraft(COMMON, "1.18+"))
+    common12.implementationConfigurationName(minecraft(MinecraftType.Common, "1.12+"))
+    common16.implementationConfigurationName(minecraft(MinecraftType.Common, "1.16+"))
+    common18.implementationConfigurationName(minecraft(MinecraftType.Common, "1.18+"))
 
-    client12.implementationConfigurationName(minecraft(CLIENT, "1.12+"))
-    client16.implementationConfigurationName(minecraft(CLIENT, "1.16+"))
-    client18.implementationConfigurationName(minecraft(CLIENT, "1.18+"))
+    client12.implementationConfigurationName(minecraft(MinecraftType.Client, "1.12+"))
+    client16.implementationConfigurationName(minecraft(MinecraftType.Client, "1.16+"))
+    client18.implementationConfigurationName(minecraft(MinecraftType.Client, "1.18+"))
 }

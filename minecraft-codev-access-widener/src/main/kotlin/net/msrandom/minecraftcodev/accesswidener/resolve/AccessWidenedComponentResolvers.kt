@@ -9,8 +9,9 @@ import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.getSource
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.unsafeResolveConfiguration
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
+import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.hash
-import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader
+import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.copy
 import org.gradle.api.Project
 import org.gradle.api.artifacts.component.ComponentIdentifier
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
@@ -21,7 +22,6 @@ import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ComponentResolver
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionSelector
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.artifacts.CachedArtifact
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.artifacts.DefaultCachedArtifact
-import org.gradle.api.internal.artifacts.ivyservice.resolveengine.ComponentResolversChain
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.excludes.specs.ExcludeSpec
 import org.gradle.api.internal.artifacts.type.ArtifactTypeRegistry
 import org.gradle.api.internal.attributes.ImmutableAttributes
@@ -36,6 +36,7 @@ import org.gradle.internal.component.model.*
 import org.gradle.internal.hash.ChecksumService
 import org.gradle.internal.hash.HashCode
 import org.gradle.internal.model.CalculatedValueContainerFactory
+import org.gradle.internal.operations.*
 import org.gradle.internal.resolve.resolver.ArtifactResolver
 import org.gradle.internal.resolve.resolver.ComponentMetaDataResolver
 import org.gradle.internal.resolve.resolver.DependencyToComponentIdResolver
@@ -43,6 +44,7 @@ import org.gradle.internal.resolve.resolver.OriginArtifactSelector
 import org.gradle.internal.resolve.result.*
 import org.gradle.internal.serialize.MapSerializer
 import org.gradle.util.internal.BuildCommencedTimeProvider
+import java.nio.file.Path
 import java.security.DigestInputStream
 import java.security.MessageDigest
 import java.time.Duration
@@ -53,13 +55,14 @@ import kotlin.io.path.copyTo
 import kotlin.io.path.createDirectories
 
 open class AccessWidenedComponentResolvers @Inject constructor(
-    private val resolvers: ComponentResolversChain,
+    private val resolvers: ComponentResolversChainProvider,
     private val project: Project,
     private val objects: ObjectFactory,
     private val cachePolicy: CachePolicy,
     private val checksumService: ChecksumService,
     private val timeProvider: BuildCommencedTimeProvider,
     private val calculatedValueContainerFactory: CalculatedValueContainerFactory,
+    private val buildOperationExecutor: BuildOperationExecutor,
 
     cacheProvider: CodevCacheProvider
 ) : ComponentResolvers, DependencyToComponentIdResolver, ComponentMetaDataResolver, OriginArtifactSelector, ArtifactResolver {
@@ -76,9 +79,9 @@ open class AccessWidenedComponentResolvers @Inject constructor(
     override fun getArtifactSelector() = this
     override fun getArtifactResolver() = this
 
-    override fun resolve(dependency: DependencyMetadata, acceptor: VersionSelector, rejector: VersionSelector?, result: BuildableComponentIdResolveResult) {
+    override fun resolve(dependency: DependencyMetadata, acceptor: VersionSelector?, rejector: VersionSelector?, result: BuildableComponentIdResolveResult) {
         if (dependency is AccessWidenedDependencyMetadata) {
-            resolvers.componentIdResolver.resolve(dependency.delegate, acceptor, rejector, result)
+            resolvers.get().componentIdResolver.resolve(dependency.delegate, acceptor, rejector, result)
 
             if (result.hasResult()) {
                 if (result.failure == null) {
@@ -114,38 +117,30 @@ open class AccessWidenedComponentResolvers @Inject constructor(
     override fun resolve(identifier: ComponentIdentifier, componentOverrideMetadata: ComponentOverrideMetadata, result: BuildableComponentResolveResult) {
         if (identifier is AccessWidenedComponentIdentifier) {
             val newResult = DefaultBuildableComponentResolveResult()
-            resolvers.componentResolver.resolve(identifier.original, componentOverrideMetadata, newResult)
+            resolvers.get().componentResolver.resolve(identifier.original, componentOverrideMetadata, newResult)
 
             if (newResult.hasResult() && newResult.failure == null) {
                 val existingMetadata = newResult.metadata
 
-                val metadata = CodevGradleLinkageLoader.wrapComponentMetadata(
-                    existingMetadata,
+                val metadata = existingMetadata.copy(
                     identifier,
                     {
-                        it.mapValues { (_, variant) ->
-                            if (variant != null) {
-                                val category = variant.attributes.findEntry(Category.CATEGORY_ATTRIBUTE.name)
-                                val libraryElements = variant.attributes.findEntry(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE.name)
-                                if (category.isPresent && libraryElements.isPresent && category.get() == Category.LIBRARY && libraryElements.get() == LibraryElements.JAR) {
-                                    CodevGradleLinkageLoader.wrapConfigurationMetadata(
-                                        variant,
-                                        { oldName ->
-                                            object : DisplayName {
-                                                override fun getDisplayName() = "access widened ${oldName.displayName}"
-                                                override fun getCapitalizedDisplayName() = "Access Widened ${oldName.capitalizedDisplayName}"
-                                            }
-                                        },
-                                        { dependencies -> dependencies },
-                                        { artifact -> AccessWidenedComponentArtifactMetadata(artifact, identifier) },
-                                        objects
-                                    )
-                                } else {
-                                    variant
-                                }
-                            } else {
-                                null
-                            }
+                        val category = attributes.findEntry(Category.CATEGORY_ATTRIBUTE.name)
+                        val libraryElements = attributes.findEntry(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE.name)
+                        if (category.isPresent && libraryElements.isPresent && category.get() == Category.LIBRARY && libraryElements.get() == LibraryElements.JAR) {
+                            copy(
+                                { oldName ->
+                                    object : DisplayName {
+                                        override fun getDisplayName() = "access widened ${oldName.displayName}"
+                                        override fun getCapitalizedDisplayName() = "Access Widened ${oldName.capitalizedDisplayName}"
+                                    }
+                                },
+                                { dependencies -> dependencies },
+                                { artifact -> AccessWidenedComponentArtifactMetadata(artifact as ModuleComponentArtifactMetadata, identifier) },
+                                objects
+                            )
+                        } else {
+                            this
                         }
                     },
                     objects
@@ -156,7 +151,7 @@ open class AccessWidenedComponentResolvers @Inject constructor(
         }
     }
 
-    override fun isFetchingMetadataCheap(identifier: ComponentIdentifier) = identifier is AccessWidenedComponentIdentifier && resolvers.componentResolver.isFetchingMetadataCheap(identifier)
+    override fun isFetchingMetadataCheap(identifier: ComponentIdentifier) = identifier is AccessWidenedComponentIdentifier && resolvers.get().componentResolver.isFetchingMetadataCheap(identifier)
 
     override fun resolveArtifacts(
         component: ComponentResolveMetadata,
@@ -177,7 +172,7 @@ open class AccessWidenedComponentResolvers @Inject constructor(
 
     override fun resolveArtifactsWithType(component: ComponentResolveMetadata, artifactType: ArtifactType, result: BuildableArtifactSetResolveResult) {
         if (component.id is AccessWidenedComponentIdentifier) {
-            resolvers.artifactResolver.resolveArtifactsWithType(component, artifactType, result)
+            resolvers.get().artifactResolver.resolveArtifactsWithType(component, artifactType, result)
         }
     }
 
@@ -185,7 +180,7 @@ open class AccessWidenedComponentResolvers @Inject constructor(
         if (artifact is AccessWidenedComponentArtifactMetadata) {
             val id = artifact.componentId
             val newResult = DefaultBuildableArtifactResolveResult()
-            resolvers.artifactResolver.resolveArtifact(artifact.delegate, moduleSources, newResult)
+            resolvers.get().artifactResolver.resolveArtifact(artifact.delegate, moduleSources, newResult)
 
             if (newResult.isSuccessful) {
                 val accessWideners = project.configurations.getByName(id.accessWidenersConfiguration)
@@ -214,14 +209,22 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                 val cached = cachedValues[urlId]
 
                 if (cached == null || cachePolicy.artifactExpiry(
-                        (artifact.delegate as ModuleComponentArtifactMetadata).toArtifactIdentifier(),
+                        artifact.delegate.toArtifactIdentifier(),
                         if (cached.isMissing) null else cached.cachedFile,
                         Duration.ofMillis(timeProvider.currentTime - cached.cachedAt),
                         false,
                         artifact.hash() == cached.descriptorHash
                     ).isMustCheck
                 ) {
-                    val file = JarAccessWidener.accessWiden(accessWidener, newResult.result.toPath())
+                    val file = buildOperationExecutor.call(object : CallableBuildOperation<Path> {
+                        override fun description() = BuildOperationDescriptor
+                            .displayName("Access Widening ${newResult.result}")
+                            .progressDisplayName("Access Wideners Hash: $hash")
+                            .metadata(BuildOperationCategory.TASK)
+
+                        override fun call(context: BuildOperationContext) =
+                            JarAccessWidener.accessWiden(accessWidener, newResult.result.toPath())
+                    })
 
                     val output = cacheManager.fileStoreDirectory
                         .resolve(hash.toString())

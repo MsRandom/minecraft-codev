@@ -22,6 +22,8 @@ java {
 }
 
 dependencies {
-    patches(group = "net.minecraftforge", name = "forge", version = "1.12.2-14.23.5.2860", classifier = "userdev3")
-    implementation(minecraft(CLIENT, "1.12+").patched)
+    val minecraftVersion = "1.12.2"
+
+    patches(group = "net.minecraftforge", name = "forge", version = "$minecraftVersion-14.23.5.2860", classifier = "userdev3")
+    implementation(minecraft(MinecraftType.Client, minecraftVersion).patched)
 }

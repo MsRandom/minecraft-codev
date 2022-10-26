@@ -39,14 +39,13 @@ object CodevGradleLinkageLoader {
         status: String,
         statusScheme: List<String>,
         objects: ObjectFactory
-    ) = objects.newInstance(customComponentResolveMetadata, attributes, id, moduleVersionId, variants, isChanging, status, statusScheme, ImmutableModuleSources.of())
+    ): ComponentResolveMetadata = objects.newInstance(customComponentResolveMetadata, attributes, id, moduleVersionId, variants, isChanging, status, statusScheme, ImmutableModuleSources.of())
 
-    fun wrapComponentMetadata(
-        delegate: ComponentResolveMetadata,
+    fun ComponentResolveMetadata.copy(
         id: ComponentIdentifier,
-        variants: (Map<String, ConfigurationMetadata?>) -> Map<String, ConfigurationMetadata?>,
+        configuration: ConfigurationMetadata.() -> ConfigurationMetadata,
         objects: ObjectFactory
-    ) = objects.newInstance(delegatingComponentResolveMetadata, delegate, id, variants)
+    ): ComponentResolveMetadata = objects.newInstance(delegatingComponentResolveMetadata, this, id, configuration)
 
     fun ConfigurationMetadata(
         name: String,
@@ -57,15 +56,14 @@ object CodevGradleLinkageLoader {
         capabilities: CapabilitiesMetadata,
         hierarchy: Set<String>,
         objects: ObjectFactory
-    ) = objects.newInstance(customConfigurationMetadata, name, componentId, dependencies, artifacts, attributes, capabilities, hierarchy)
+    ): ConfigurationMetadata = objects.newInstance(customConfigurationMetadata, name, componentId, dependencies, artifacts, attributes, capabilities, hierarchy)
 
-    fun wrapConfigurationMetadata(
-        delegate: ConfigurationMetadata,
+    fun ConfigurationMetadata.copy(
         describable: (DisplayName) -> DisplayName,
         dependencies: (List<DependencyMetadata>) -> List<DependencyMetadata>,
         artifact: (ComponentArtifactMetadata) -> ComponentArtifactMetadata,
         objects: ObjectFactory
-    ) = objects.newInstance(delegatingConfigurationMetadata, delegate, describable, dependencies, artifact)
+    ): ConfigurationMetadata = objects.newInstance(delegatingConfigurationMetadata, this, describable, dependencies, artifact)
 
     fun getDelegate(metadata: ComponentResolveMetadata) = metadata
         .takeIf(delegatingComponentResolveMetadata::isInstance)
