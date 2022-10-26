@@ -5,7 +5,6 @@ import net.msrandom.minecraftcodev.core.attributes.OperatingSystemDisambiguation
 import net.msrandom.minecraftcodev.core.attributes.VersionPatternCompatibilityRule
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.dependency.ConfiguredDependencyMetadata
-import net.msrandom.minecraftcodev.core.dependency.MinecraftDependencyExtension
 import net.msrandom.minecraftcodev.core.dependency.MinecraftIvyDependencyDescriptorFactory
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
 import org.apache.commons.lang3.StringUtils
@@ -40,7 +39,6 @@ import org.gradle.api.internal.model.NamedObjectInstantiator
 import org.gradle.api.internal.provider.PropertyFactory
 import org.gradle.api.invocation.Gradle
 import org.gradle.api.model.ObjectFactory
-import org.gradle.api.plugins.ExtensionAware
 import org.gradle.api.plugins.JavaPlugin
 import org.gradle.api.plugins.PluginAware
 import org.gradle.api.tasks.SourceSet
@@ -56,6 +54,8 @@ import org.gradle.internal.os.OperatingSystem
 import org.gradle.internal.service.DefaultServiceRegistry
 import org.gradle.internal.work.WorkerLeaseService
 import org.gradle.nativeplatform.OperatingSystemFamily
+import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
+import org.jetbrains.kotlin.gradle.plugin.KotlinMultiplatformPluginWrapper
 import java.net.URI
 import java.nio.file.FileSystem
 import java.nio.file.FileSystems
@@ -81,7 +81,6 @@ open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(private val
         plugins.apply(JavaPlugin::class.java)
 
         extensions.create("minecraft", MinecraftCodevExtension::class.java)
-        dependencies.extensions.create("minecraftDependencyHandling", MinecraftDependencyExtension::class.java, attributesFactory)
 
         project.dependencies.attributesSchema { schema ->
             schema.attribute(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE) {
@@ -238,30 +237,48 @@ open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(private val
             if (moduleConfiguration == null) {
                 defaultConfiguration
             } else {
-                var owningSourceSet: SourceSet? = null
-                for (sourceSet in project.extensions.getByType(SourceSetContainer::class.java)) {
-                    if (moduleConfiguration.startsWith(sourceSet.name)) {
-                        owningSourceSet = sourceSet
-                        break
-                    }
+                var owningSourceSetName = extensions
+                    .getByType(SourceSetContainer::class.java)
+                    .firstOrNull { moduleConfiguration.startsWith(it.name) }
+                    ?.name
+
+                if (owningSourceSetName == null) {
+                    owningSourceSetName = extensions
+                        .findByType(KotlinMultiplatformExtension::class.java)
+                        ?.sourceSets
+                        ?.firstOrNull { moduleConfiguration in it.relatedConfigurationNames }
+                        ?.name
                 }
 
-                owningSourceSet?.let { "${it.name}${StringUtils.capitalize(defaultConfiguration)}" } ?: defaultConfiguration
+                owningSourceSetName?.let { "$it${StringUtils.capitalize(defaultConfiguration)}" } ?: defaultConfiguration
             }
         }
 
         fun Project.createSourceSetConfigurations(name: String) {
-            configurations.create(name) {
-                it.isCanBeConsumed = false
-                it.isTransitive = false
+            configurations.maybeCreate(name).apply {
+                isCanBeConsumed = false
+                isTransitive = false
             }
+
+            val capitalized = StringUtils.capitalize(name)
 
             extensions.getByType(SourceSetContainer::class.java).all { sourceSet ->
                 @Suppress("UnstableApiUsage")
                 if (!SourceSet.isMain(sourceSet)) {
-                    configurations.create("${sourceSet.name}${StringUtils.capitalize(name)}") {
-                        it.isCanBeConsumed = false
-                        it.isTransitive = false
+                    configurations.maybeCreate("${sourceSet.name}$capitalized").apply {
+                        isCanBeConsumed = false
+                        isTransitive = false
+                    }
+                }
+            }
+
+            plugins.withType(KotlinMultiplatformPluginWrapper::class.java) {
+                val kotlin = extensions.getByType(KotlinMultiplatformExtension::class.java)
+
+                kotlin.sourceSets.all { sourceSet ->
+                    configurations.maybeCreate("${sourceSet.name}$capitalized").apply {
+                        isCanBeConsumed = false
+                        isTransitive = false
                     }
                 }
             }
@@ -293,8 +310,3 @@ open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(private val
 }
 
 inline fun <reified T : Named> ObjectFactory.named(name: String): T = named(T::class.java, name)
-
-/**
- * Mostly functions as a holder for other modules' extensions.
- */
-abstract class MinecraftCodevExtension : ExtensionAware

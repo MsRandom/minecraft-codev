@@ -25,6 +25,8 @@ dependencies {
     implementation(api(group = "com.google.guava", name = "guava", version = "31.1-jre"))
     implementation(group = "org.apache.commons", name = "commons-lang3", version = "3.12.0")
 
+    implementation(group = "org.jetbrains.kotlin", name = "kotlin-gradle-plugin", version = "1.6.21")
+
     compileOnly(projects.minecraftCodevGradleLinkage)
 
     runtimeOnly(projects.minecraftCodevGradleLinkage) {

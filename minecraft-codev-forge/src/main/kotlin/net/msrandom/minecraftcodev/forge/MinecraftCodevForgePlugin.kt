@@ -16,6 +16,7 @@ import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.createSou
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.unsafeResolveConfiguration
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.zipFileSystem
+import net.msrandom.minecraftcodev.core.MinecraftType
 import net.msrandom.minecraftcodev.forge.dependency.PatchedMinecraftIvyDependencyDescriptorFactory
 import net.msrandom.minecraftcodev.forge.resolve.PatchedMinecraftComponentResolvers
 import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
@@ -25,8 +26,6 @@ import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.attributes.Attribute
 import org.gradle.api.invocation.Gradle
 import org.gradle.api.plugins.PluginAware
-import org.gradle.kotlin.dsl.MinecraftType
-import org.gradle.kotlin.dsl.minecraft
 import java.io.File
 import java.io.InputStream
 import java.nio.file.FileSystem
@@ -80,7 +79,7 @@ open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
                             val namespaceCompleter = MappingNsCompleter(visitor, mapOf(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE to SRG_MAPPINGS_NAMESPACE), true)
 
                             val classFixer = if (config.official) {
-                                val clientMappingsDependency = dependencies.minecraft(MinecraftType.ClientMappings, config.version)
+                                val clientMappingsDependency = extensions.getByType(MinecraftCodevExtension::class.java)(MinecraftType.ClientMappings, config.version)
                                 val clientMappingsFile = unsafeResolveConfiguration(configurations.detachedConfiguration(clientMappingsDependency)).singleFile
                                 val clientMappings = MemoryMappingTree()
 
