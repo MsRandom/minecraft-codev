@@ -1,5 +1,6 @@
 package net.msrandom.minecraftcodev.core.resolve
 
+import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.callWithStatus
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.zipFileSystem
 import net.msrandom.minecraftcodev.core.ModuleLibraryIdentifier
 import net.msrandom.minecraftcodev.core.resolve.bundled.ServerExtractor
@@ -24,7 +25,7 @@ fun getExtractionState(buildOperationExecutor: BuildOperationExecutor, manifest:
                     .progressDisplayName(extractedJar.toString())
                     .metadata(BuildOperationCategory.TASK)
 
-                override fun call(context: BuildOperationContext): ServerExtractionResult {
+                override fun call(context: BuildOperationContext) = context.callWithStatus {
                     val commonLibraries: Collection<ModuleLibraryIdentifier>
                     val isBundled: Boolean
 
@@ -42,7 +43,7 @@ fun getExtractionState(buildOperationExecutor: BuildOperationExecutor, manifest:
                         }
                     }
 
-                    return ServerExtractionResult(extractedJar, isBundled, commonLibraries)
+                    ServerExtractionResult(extractedJar, isBundled, commonLibraries)
                 }
             })
         }

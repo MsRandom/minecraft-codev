@@ -6,6 +6,7 @@ import net.minecraftforge.accesstransformer.TransformerProcessor
 import net.minecraftforge.srgutils.IMappingFile
 import net.minecraftforge.srgutils.INamedMappingFile
 import net.msrandom.minecraftcodev.core.MappingsNamespace
+import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.callWithStatus
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.unsafeResolveConfiguration
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.walk
@@ -92,7 +93,7 @@ open class PatchedSetupState @Inject constructor(
             .progressDisplayName("Merging to $merged")
             .metadata(BuildOperationCategory.TASK)
 
-        override fun call(context: BuildOperationContext): Path {
+        override fun call(context: BuildOperationContext) = context.callWithStatus {
             executeMcp(
                 mcpConfig.functions.getValue("merge"),
                 mapOf(
@@ -103,7 +104,7 @@ open class PatchedSetupState @Inject constructor(
                 )
             )
 
-            return merged
+            merged
         }
     })
 
@@ -116,7 +117,7 @@ open class PatchedSetupState @Inject constructor(
             .displayName("Patching $input")
             .progressDisplayName("Applying binary patches")
 
-        override fun call(context: BuildOperationContext): Path {
+        override fun call(context: BuildOperationContext) = context.callWithStatus {
             // Extract patches
             val userdevConfig = userdevConfig
             zipFileSystem(userdevConfigFile.toPath()).use {
@@ -182,7 +183,7 @@ open class PatchedSetupState @Inject constructor(
                 }
             }
 
-            return patched
+            patched
         }
     })
 
@@ -197,7 +198,7 @@ open class PatchedSetupState @Inject constructor(
             .progressDisplayName("Remapping to $renamed")
             .metadata(BuildOperationCategory.TASK)
 
-        override fun call(context: BuildOperationContext): Path {
+        override fun call(context: BuildOperationContext) = context.callWithStatus {
             val mappings = mappings
             zipFileSystem(mcpConfigFile).use {
                 val mappingsPath = it.getPath(mcpConfig.data.mappings)
@@ -230,7 +231,7 @@ open class PatchedSetupState @Inject constructor(
                 )
             )
 
-            return renamed
+            renamed
         }
     })
 
@@ -243,7 +244,7 @@ open class PatchedSetupState @Inject constructor(
             .progressDisplayName("Apply Minecraft Injections as $injected")
             .metadata(BuildOperationCategory.TASK)
 
-        override fun call(context: BuildOperationContext): Path {
+        override fun call(context: BuildOperationContext) = context.callWithStatus {
             val access = Files.createTempFile("access-", ".tmp.txt")
             val constructors = Files.createTempFile("constructors-", ".tmp.txt")
             val exceptions = Files.createTempFile("exceptions-", ".tmp.txt")
@@ -267,7 +268,7 @@ open class PatchedSetupState @Inject constructor(
                 )
             )
 
-            return injected
+            injected
         }
     })
 
@@ -292,7 +293,7 @@ open class PatchedSetupState @Inject constructor(
             .metadata(BuildOperationCategory.TASK)
 
         @Suppress("UnstableApiUsage")
-        override fun call(context: BuildOperationContext): Path {
+        override fun call(context: BuildOperationContext) = context.callWithStatus {
             val out = System.out
             val err = System.err
 
@@ -314,7 +315,7 @@ open class PatchedSetupState @Inject constructor(
                 System.setErr(err)
             }
 
-            return accessTransformed
+            accessTransformed
         }
     })
 
@@ -329,7 +330,7 @@ open class PatchedSetupState @Inject constructor(
                 .progressDisplayName("Common: $common, Client: $client")
                 .metadata(BuildOperationCategory.TASK)
 
-            override fun call(context: BuildOperationContext): JarSplittingResult {
+            override fun call(context: BuildOperationContext) = context.callWithStatus {
                 common.deleteExisting()
                 client.deleteExisting()
 
@@ -370,7 +371,7 @@ open class PatchedSetupState @Inject constructor(
                 common.copyTo(commonPath)
                 client.copyTo(clientPath)
 
-                return JarSplittingResult(commonPath, clientPath)
+                JarSplittingResult(commonPath, clientPath)
             }
         })
     }

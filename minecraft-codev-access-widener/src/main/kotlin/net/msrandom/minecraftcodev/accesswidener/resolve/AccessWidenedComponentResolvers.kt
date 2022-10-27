@@ -5,6 +5,7 @@ import net.fabricmc.accesswidener.AccessWidenerReader
 import net.msrandom.minecraftcodev.accesswidener.AccessWidenedDependencyMetadata
 import net.msrandom.minecraftcodev.accesswidener.JarAccessWidener
 import net.msrandom.minecraftcodev.accesswidener.MinecraftCodevAccessWidenerPlugin
+import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.callWithStatus
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.getSourceSetConfigurationName
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.unsafeResolveConfiguration
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
@@ -20,7 +21,6 @@ import org.gradle.api.attributes.LibraryElements
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ComponentResolvers
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionSelector
-import org.gradle.api.internal.artifacts.ivyservice.modulecache.artifacts.CachedArtifact
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.artifacts.DefaultCachedArtifact
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.excludes.specs.ExcludeSpec
 import org.gradle.api.internal.artifacts.type.ArtifactTypeRegistry
@@ -42,14 +42,17 @@ import org.gradle.internal.resolve.resolver.ComponentMetaDataResolver
 import org.gradle.internal.resolve.resolver.DependencyToComponentIdResolver
 import org.gradle.internal.resolve.resolver.OriginArtifactSelector
 import org.gradle.internal.resolve.result.*
-import org.gradle.internal.serialize.MapSerializer
 import org.gradle.util.internal.BuildCommencedTimeProvider
 import java.nio.file.Path
 import java.security.DigestInputStream
 import java.security.MessageDigest
 import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.locks.Lock
+import java.util.concurrent.locks.ReentrantLock
 import javax.inject.Inject
+import kotlin.concurrent.withLock
 import kotlin.io.path.Path
 import kotlin.io.path.copyTo
 import kotlin.io.path.createDirectories
@@ -69,8 +72,8 @@ open class AccessWidenedComponentResolvers @Inject constructor(
     private val cacheManager = cacheProvider.manager("access-widened")
 
     private val artifactCache by lazy {
-        cacheManager.getMetadataCache(Path("module-artifact"), emptyMap<AccessWidenedArtifactIdentifier, CachedArtifact>()) {
-            MapSerializer(AccessWidenedArtifactIdentifier.ArtifactSerializer, CachedArtifactSerializer(cacheManager.fileStoreDirectory))
+        cacheManager.getMetadataCache(Path("module-artifact"), { AccessWidenedArtifactIdentifier.ArtifactSerializer }) {
+            CachedArtifactSerializer(cacheManager.fileStoreDirectory)
         }.asFile
     }
 
@@ -198,61 +201,60 @@ open class AccessWidenedComponentResolvers @Inject constructor(
 
                 val hash = HashCode.fromBytes(messageDigest.digest())
 
-                val cachedValues = artifactCache.value
-
                 val urlId = AccessWidenedArtifactIdentifier(
                     ModuleComponentFileArtifactIdentifier(DefaultModuleComponentIdentifier.newId(id.moduleIdentifier, id.version), newResult.result.name),
                     hash,
                     checksumService.sha1(newResult.result)
                 )
 
-                val cached = cachedValues[urlId]
+                locks.computeIfAbsent(urlId) { ReentrantLock() }.withLock {
+                    val cached = artifactCache[urlId]
 
-                if (cached == null || cachePolicy.artifactExpiry(
-                        artifact.delegate.toArtifactIdentifier(),
-                        if (cached.isMissing) null else cached.cachedFile,
-                        Duration.ofMillis(timeProvider.currentTime - cached.cachedAt),
-                        false,
-                        artifact.hash() == cached.descriptorHash
-                    ).isMustCheck
-                ) {
-                    val file = buildOperationExecutor.call(object : CallableBuildOperation<Path> {
-                        override fun description() = BuildOperationDescriptor
-                            .displayName("Access Widening ${newResult.result}")
-                            .progressDisplayName("Access Wideners Hash: $hash")
-                            .metadata(BuildOperationCategory.TASK)
+                    if (cached == null || cachePolicy.artifactExpiry(
+                            artifact.delegate.toArtifactIdentifier(),
+                            if (cached.isMissing) null else cached.cachedFile,
+                            Duration.ofMillis(timeProvider.currentTime - cached.cachedAt),
+                            false,
+                            artifact.hash() == cached.descriptorHash
+                        ).isMustCheck
+                    ) {
+                        val file = buildOperationExecutor.call(object : CallableBuildOperation<Path> {
+                            override fun description() = BuildOperationDescriptor
+                                .displayName("Access Widening ${newResult.result}")
+                                .progressDisplayName("Access Wideners Hash: $hash")
+                                .metadata(BuildOperationCategory.TASK)
 
-                        override fun call(context: BuildOperationContext) =
-                            JarAccessWidener.accessWiden(accessWidener, newResult.result.toPath())
-                    })
+                            override fun call(context: BuildOperationContext) = context.callWithStatus {
+                                JarAccessWidener.accessWiden(accessWidener, newResult.result.toPath())
+                            }
+                        })
 
-                    val output = cacheManager.fileStoreDirectory
-                        .resolve(hash.toString())
-                        .resolve(id.group)
-                        .resolve(id.module)
-                        .resolve(id.version)
-                        .resolve(checksumService.sha1(file.toFile()).toString())
-                        .resolve("${newResult.result.nameWithoutExtension}-access-widened.${newResult.result.extension}")
+                        val output = cacheManager.fileStoreDirectory
+                            .resolve(hash.toString())
+                            .resolve(id.group)
+                            .resolve(id.module)
+                            .resolve(id.version)
+                            .resolve(checksumService.sha1(file.toFile()).toString())
+                            .resolve("${newResult.result.nameWithoutExtension}-access-widened.${newResult.result.extension}")
 
-                    output.parent.createDirectories()
-                    file.copyTo(output)
+                        output.parent.createDirectories()
+                        file.copyTo(output)
 
-                    val outputFile = output.toFile()
+                        val outputFile = output.toFile()
 
-                    result.resolved(outputFile)
+                        result.resolved(outputFile)
 
-                    artifactCache.update(
-                        cachedValues + (urlId to DefaultCachedArtifact(
-                            outputFile,
-                            Instant.now().toEpochMilli(),
-                            artifact.hash()
-                        ))
-                    )
-                } else if (!cached.isMissing) {
-                    result.resolved(cached.cachedFile)
+                        artifactCache[urlId] = DefaultCachedArtifact(outputFile, Instant.now().toEpochMilli(), artifact.hash())
+                    } else if (!cached.isMissing) {
+                        result.resolved(cached.cachedFile)
+                    }
                 }
             }
         }
+    }
+
+    companion object {
+        private val locks = ConcurrentHashMap<AccessWidenedArtifactIdentifier, Lock>()
     }
 }
 

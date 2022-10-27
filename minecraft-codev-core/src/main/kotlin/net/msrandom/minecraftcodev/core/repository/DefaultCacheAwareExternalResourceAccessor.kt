@@ -1,6 +1,5 @@
 package net.msrandom.minecraftcodev.core.repository
 
-import com.google.common.io.Files
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.StartParameterResolutionOverride
 import org.gradle.api.internal.artifacts.ivyservice.resolutionstrategy.DefaultExternalResourceCachePolicy
@@ -14,7 +13,6 @@ import org.gradle.internal.impldep.org.apache.commons.lang.StringUtils
 import org.gradle.internal.resource.ExternalResource
 import org.gradle.internal.resource.ExternalResourceName
 import org.gradle.internal.resource.ExternalResourceRepository
-import org.gradle.internal.resource.cached.CachedExternalResource
 import org.gradle.internal.resource.cached.DefaultCachedExternalResource
 import org.gradle.internal.resource.local.FileResourceRepository
 import org.gradle.internal.resource.local.LocallyAvailableExternalResource
@@ -23,7 +21,6 @@ import org.gradle.internal.resource.local.LocallyAvailableResourceCandidates
 import org.gradle.internal.resource.metadata.ExternalResourceMetaData
 import org.gradle.internal.resource.metadata.ExternalResourceMetaDataCompare
 import org.gradle.internal.serialize.BaseSerializerFactory
-import org.gradle.internal.serialize.MapSerializer
 import org.gradle.util.internal.BuildCommencedTimeProvider
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -31,6 +28,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.UncheckedIOException
 import java.nio.charset.StandardCharsets
+import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.time.Duration
@@ -39,7 +37,9 @@ import javax.inject.Inject
 import kotlin.io.path.Path
 import kotlin.io.path.copyTo
 import kotlin.io.path.createDirectories
+import com.google.common.io.Files as GuavaFiles
 
+// Basically copied from Gradle, not finished
 open class DefaultCacheAwareExternalResourceAccessor @Inject constructor(
     private val repository: ExternalResourceRepository,
     cacheProvider: CodevCacheProvider,
@@ -54,11 +54,8 @@ open class DefaultCacheAwareExternalResourceAccessor @Inject constructor(
 
     private val cachedExternalResourceIndex = run {
         val cacheManager = cacheProvider.manager("minecraft")
-        cacheManager.getMetadataCache(Path("resource-at-url"), emptyMap<String, CachedExternalResource>()) {
-            MapSerializer(
-                BaseSerializerFactory.STRING_SERIALIZER,
-                CachedExternalResourceSerializer(cacheManager.rootPath)
-            )
+        cacheManager.getMetadataCache(Path("resource-at-url"), { BaseSerializerFactory.STRING_SERIALIZER }) {
+            CachedExternalResourceSerializer(cacheManager.rootPath)
         }.asFile
     }
 
@@ -71,16 +68,18 @@ open class DefaultCacheAwareExternalResourceAccessor @Inject constructor(
     ): LocallyAvailableExternalResource? {
         return producerGuard.guardByKey(location) {
             LOGGER.debug("Constructing external resource: {}", location)
-            val index: Map<String, CachedExternalResource> = cachedExternalResourceIndex.value
-            val cached = index[location.toString()]
+            val cached = cachedExternalResourceIndex[location.toString()]
 
             // If we have no caching options, just get the thing directly
             if (cached == null && (additionalCandidates == null || additionalCandidates.isNone)) {
-                return@guardByKey copyToCache(location, destination, repository.withProgressLogging().resource(location), index)
+                return@guardByKey copyToCache(location, destination, repository.withProgressLogging().resource(location))
             }
 
             // We might be able to use a cached/locally available version
-            if (cached != null && (!shouldRefresh(cached.cachedFile!!, Duration.ofMillis(timeProvider.currentTime - cached.cachedAt)) || !externalResourceCachePolicy.mustRefreshExternalResource(getAgeMillis(timeProvider, cached)))) {
+            if (cached != null && (!shouldRefresh(cached.cachedFile!!, Duration.ofMillis(timeProvider.currentTime - cached.cachedAt)) || !externalResourceCachePolicy.mustRefreshExternalResource(
+                    timeProvider.currentTime - cached.cachedAt
+                ))
+            ) {
                 return@guardByKey fileResourceRepository.resource(cached.cachedFile, location.uri, cached.externalResourceMetaData)
             }
 
@@ -93,7 +92,7 @@ open class DefaultCacheAwareExternalResourceAccessor @Inject constructor(
                 if (isUnchanged) {
                     LOGGER.info("Cached resource {} is up-to-date (lastModified: {}).", location, cached.externalLastModified)
                     // Update the cache entry in the index: this resets the age of the cached entry to zero
-                    cachedExternalResourceIndex.update(index + (location.toString() to DefaultCachedExternalResource(cached.cachedFile, Instant.now().toEpochMilli(), cached.externalResourceMetaData)))
+                    cachedExternalResourceIndex[location.toString()] = DefaultCachedExternalResource(cached.cachedFile, Instant.now().toEpochMilli(), cached.externalResourceMetaData)
                     return@guardByKey fileResourceRepository.resource(cached.cachedFile, location.uri, cached.externalResourceMetaData)
                 }
             }
@@ -107,9 +106,8 @@ open class DefaultCacheAwareExternalResourceAccessor @Inject constructor(
                     val local = additionalCandidates.findByHashValue(remoteChecksum)
                     if (local != null) {
                         LOGGER.info("Found locally available resource with matching checksum: [{}, {}]", location, local.file)
-                        // TODO - should iterate over each candidate until we successfully copy into the cache
                         val resource = try {
-                            copyCandidateToCache(location, destination, remoteMetaData, remoteChecksum, local, index)
+                            copyCandidateToCache(location, destination, remoteMetaData, remoteChecksum, local)
                         } catch (e: IOException) {
                             throw UncheckedIOException(e)
                         }
@@ -119,7 +117,7 @@ open class DefaultCacheAwareExternalResourceAccessor @Inject constructor(
                     }
                 }
             }
-            copyToCache(location, destination, repository.withProgressLogging().resource(location, true), index)
+            copyToCache(location, destination, repository.withProgressLogging().resource(location, true))
         }
     }
 
@@ -146,64 +144,57 @@ open class DefaultCacheAwareExternalResourceAccessor @Inject constructor(
         destination: Path,
         remoteMetaData: ExternalResourceMetaData,
         remoteChecksum: HashCode,
-        local: LocallyAvailableResource,
-        index: Map<String, CachedExternalResource>
+        local: LocallyAvailableResource
     ): LocallyAvailableExternalResource? {
         val temp = temporaryFileProvider.createTemporaryFile("gradle_download", "bin")
         return try {
-            Files.copy(local.file, temp)
+            GuavaFiles.copy(local.file, temp)
             val localChecksum = checksumService.sha1(temp)
             if (localChecksum != remoteChecksum) {
                 null
-            } else moveIntoCache(source, temp, destination, remoteMetaData, index)
+            } else moveIntoCache(source, temp, destination, remoteMetaData)
         } finally {
             temp.delete()
         }
     }
 
-    private fun copyToCache(source: ExternalResourceName, destination: Path, resource: ExternalResource, index: Map<String, CachedExternalResource>): LocallyAvailableExternalResource? {
+    private fun copyToCache(source: ExternalResourceName, destination: Path, resource: ExternalResource): LocallyAvailableExternalResource? {
         // Download to temporary location
         val downloadAction = DownloadAction(source)
         resource.withContentIfPresent(downloadAction)
         return if (downloadAction.metaData == null) {
             null
         } else try {
-            moveIntoCache(source, downloadAction.destination, destination, downloadAction.metaData, index)
+            moveIntoCache(source, downloadAction.destination, destination, downloadAction.metaData)
         } finally {
             downloadAction.destination.delete()
         }
-
-        // Move into cache
     }
 
     private fun moveIntoCache(
         source: ExternalResourceName,
         destination: File?,
         output: Path,
-        metaData: ExternalResourceMetaData?,
-        index: Map<String, CachedExternalResource>
+        metaData: ExternalResourceMetaData?
     ): LocallyAvailableExternalResource {
         val fileInFileStore = output.toFile()
         output.parent?.createDirectories()
         destination?.toPath()?.copyTo(output, StandardCopyOption.REPLACE_EXISTING)
-        cachedExternalResourceIndex.update(index + (source.toString() to DefaultCachedExternalResource(fileInFileStore, Instant.now().toEpochMilli(), metaData)))
+        cachedExternalResourceIndex[source.toString()] = DefaultCachedExternalResource(fileInFileStore, Instant.now().toEpochMilli(), metaData)
         return fileResourceRepository.resource(fileInFileStore, source.uri, metaData)
     }
 
-    private fun getAgeMillis(timeProvider: BuildCommencedTimeProvider, cached: CachedExternalResource): Long {
-        return timeProvider.currentTime - cached.cachedAt
-    }
-
-    private inner class DownloadAction internal constructor(private val source: ExternalResourceName) : ExternalResource.ContentAndMetadataAction<Any?> {
+    private inner class DownloadAction(private val source: ExternalResourceName) : ExternalResource.ContentAndMetadataAction<Any?> {
         lateinit var destination: File
         var metaData: ExternalResourceMetaData? = null
+
         @Throws(IOException::class)
         override fun execute(inputStream: InputStream, metaData: ExternalResourceMetaData): Any? {
             destination = temporaryFileProvider.createTemporaryFile("gradle_download", "bin")
             this.metaData = metaData
             LOGGER.info("Downloading {} to {}", source, destination)
             destination.toPath().parent?.createDirectories()
-            java.nio.file.Files.copy(inputStream, destination.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            Files.copy(inputStream, destination.toPath(), StandardCopyOption.REPLACE_EXISTING)
             return null
         }
     }

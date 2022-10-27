@@ -1,5 +1,6 @@
 package net.msrandom.minecraftcodev.core.resolve
 
+import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.callWithStatus
 import net.msrandom.minecraftcodev.core.resolve.bundled.BundledClientJarSplitter
 import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter
 import org.gradle.internal.component.external.model.ModuleComponentArtifactIdentifier
@@ -76,7 +77,9 @@ private fun getBundledClientJarState(
                 .progressDisplayName("Output: $result")
                 .metadata(BuildOperationCategory.TASK)
 
-            override fun call(context: BuildOperationContext) = BundledClientJarSplitter.split(checksumService, pathFunction, manifest.id, result, clientJar, serverJar)
+            override fun call(context: BuildOperationContext) = context.callWithStatus {
+                BundledClientJarSplitter.split(checksumService, pathFunction, manifest.id, result, clientJar, serverJar)
+            }
         })
     }
 }
@@ -99,7 +102,9 @@ private fun getLegacySplitJarsState(
                 .progressDisplayName("Common: $common, Client: $client")
                 .metadata(BuildOperationCategory.TASK)
 
-            override fun call(context: BuildOperationContext) = LegacyJarSplitter.split(checksumService, pathFunction, manifest.id, common, client, clientJar, serverJar)
+            override fun call(context: BuildOperationContext) = context.callWithStatus {
+                LegacyJarSplitter.split(checksumService, pathFunction, manifest.id, common, client, clientJar, serverJar)
+            }
         })
     }
 }

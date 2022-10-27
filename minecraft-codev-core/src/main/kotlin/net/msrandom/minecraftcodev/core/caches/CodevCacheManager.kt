@@ -12,10 +12,9 @@ import org.gradle.internal.serialize.Serializer
 import java.io.File
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.nio.file.StandardOpenOption
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.locks.Lock
 import java.util.concurrent.locks.ReentrantLock
-import java.util.function.Supplier
 import javax.annotation.concurrent.ThreadSafe
 import javax.inject.Inject
 import kotlin.concurrent.withLock
@@ -27,7 +26,7 @@ open class CodevCacheManager @Inject constructor(val rootPath: Path, fileAccessT
     val fileStoreDirectory: Path = rootPath.resolve(CacheLayout.FILE_STORE.key)
     val metaDataDirectory: Path = rootPath.resolve(CacheLayout.META_DATA.key)
 
-    private val memoryCache = ConcurrentHashMap<Path, CachedPath<*>>()
+    private val memoryCache = ConcurrentHashMap<Path, CachedPath<*, *>>()
 
     private val gcProperties = rootPath.resolve("gc.properties")
     private val lock = rootPath.resolve("${rootPath.name}.lock")
@@ -55,9 +54,9 @@ open class CodevCacheManager @Inject constructor(val rootPath: Path, fileAccessT
     }
 
     @Suppress("UNCHECKED_CAST")
-    fun <T> getMetadataCache(path: Path, defaultValue: T, serializer: () -> Serializer<T>) = memoryCache.computeIfAbsent(path) {
-        CachedPath(serializer(), defaultValue, rootPath.resolve(CacheLayout.META_DATA.key).resolve(it))
-    } as CachedPath<T>
+    fun <K, V> getMetadataCache(path: Path, keySerializer: () -> Serializer<K>, valueSerializer: () -> Serializer<V>) = memoryCache.computeIfAbsent(path) {
+        CachedPath(keySerializer(), valueSerializer(), rootPath.resolve(CacheLayout.META_DATA.key).resolve(it))
+    } as CachedPath<K, V>
 
     override fun getDisplayName() = "Minecraft Codev Caches $rootPath"
     override fun getBaseDir(): File = rootPath.toFile()
@@ -70,7 +69,7 @@ open class CodevCacheManager @Inject constructor(val rootPath: Path, fileAccessT
     }
 
     @ThreadSafe
-    inner class CachedPath<T>(private val serializer: Serializer<T>, private val defaultValue: T, private val path: Path) {
+    inner class CachedPath<K, V>(private val keySerializer: Serializer<K>, private val valueSerializer: Serializer<V>, private val path: Path) {
         private val lock = ReentrantLock()
         private val fileCache = ConcurrentHashMap<Path, CachedFile>()
 
@@ -88,38 +87,45 @@ open class CodevCacheManager @Inject constructor(val rootPath: Path, fileAccessT
         inner class CachedFile(file: Path) {
             private val file = Paths.get("$file.bin")
 
-            private val _value = ValidatedLazy<T> {
+            private val memoryCache by lazy {
                 lock.withLock {
                     if (this.file.exists()) {
-                        InputStreamBackedDecoder(this.file.inputStream()).use(serializer::read)
+                        val input = this.file.inputStream()
+                        val decoder = InputStreamBackedDecoder(input)
+                        val map = ConcurrentHashMap<K, V>()
+
+                        while (input.available() > 0) {
+                            map[keySerializer.read(decoder)] = valueSerializer.read(decoder)
+                        }
+
+                        map
                     } else {
-                        defaultValue
+                        ConcurrentHashMap()
                     }
                 }
             }
 
-            val value get() = lock.withLock(_value::get)
+            operator fun get(key: K) = memoryCache[key]
 
-            fun update(value: T) = lock.withLock {
-                _value.invalidate()
-                file.parent?.createDirectories()
-                OutputStreamBackedEncoder(file.outputStream()).use { serializer.write(it, value) }
+            operator fun set(key: K, value: V) = lock.withLock {
+                if (memoryCache.containsKey(key)) {
+                    throw UnsupportedOperationException("$file: Modifying existing cache elements is not yet supported.")
+                }
+
+                val append = if (memoryCache.isEmpty()) {
+                    file.parent?.createDirectories()
+                    emptyArray()
+                } else {
+                    arrayOf(StandardOpenOption.APPEND)
+                }
+
+                OutputStreamBackedEncoder(file.outputStream(*append)).use {
+                    keySerializer.write(it, key)
+                    valueSerializer.write(it, value)
+                }
+
+                memoryCache[key] = value
             }
-        }
-    }
-
-    private class ValidatedLazy<T>(private val factory: () -> T) : () -> T, Supplier<T> {
-        private var value: T? = null
-        private var initialized = false
-
-        override fun invoke() = get()
-
-        @Suppress("UNCHECKED_CAST")
-        override fun get() = if (initialized) value as T else factory().also { value = it }
-
-        fun invalidate() {
-            value = null
-            initialized = false
         }
     }
 }

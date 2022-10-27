@@ -49,6 +49,7 @@ import org.gradle.initialization.layout.GlobalCacheDir
 import org.gradle.internal.Factory
 import org.gradle.internal.impldep.org.apache.commons.lang.SystemUtils
 import org.gradle.internal.instantiation.InstantiatorFactory
+import org.gradle.internal.operations.BuildOperationContext
 import org.gradle.internal.os.OperatingSystem
 import org.gradle.internal.service.DefaultServiceRegistry
 import org.gradle.internal.work.WorkerLeaseService
@@ -220,6 +221,22 @@ open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(private val
             val version = SystemUtils.OS_VERSION
             val versionEnd = version.indexOf('-')
             return if (versionEnd < 0) version else version.substring(0, versionEnd)
+        }
+
+        fun <R> BuildOperationContext.callWithStatus(action: () -> R): R {
+            setStatus("STARTED")
+
+            val result = try {
+                action()
+            } catch (failure: Throwable) {
+                setStatus("FAILED")
+                failed(failure)
+                throw failure
+            }
+
+            setStatus("FINISHED")
+
+            return result
         }
 
         fun zipFileSystem(file: Path, create: Boolean = false): FileSystem =

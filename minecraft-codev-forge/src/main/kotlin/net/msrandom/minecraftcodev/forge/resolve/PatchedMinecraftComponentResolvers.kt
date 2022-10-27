@@ -30,7 +30,6 @@ import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ComponentResolver
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ResolveIvyFactory
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionSelector
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.FileStoreAndIndexProvider
-import org.gradle.api.internal.artifacts.ivyservice.modulecache.artifacts.CachedArtifact
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.artifacts.DefaultCachedArtifact
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.dynamicversions.DefaultResolvedModuleVersion
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.excludes.specs.ExcludeSpec
@@ -55,7 +54,6 @@ import org.gradle.internal.resolve.result.BuildableArtifactResolveResult
 import org.gradle.internal.resolve.result.BuildableArtifactSetResolveResult
 import org.gradle.internal.resolve.result.BuildableComponentIdResolveResult
 import org.gradle.internal.resolve.result.BuildableComponentResolveResult
-import org.gradle.internal.serialize.MapSerializer
 import org.gradle.util.internal.BuildCommencedTimeProvider
 import java.io.File
 import java.time.Duration
@@ -85,8 +83,8 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
     private val patchedCacheManager = cacheProvider.manager("patched")
 
     private val artifactCache by lazy {
-        patchedCacheManager.getMetadataCache(Path("module-artifact"), emptyMap<PatchedArtifactIdentifier, CachedArtifact>()) {
-            MapSerializer(PatchedArtifactIdentifier.ArtifactSerializer, CachedArtifactSerializer(patchedCacheManager.fileStoreDirectory))
+        patchedCacheManager.getMetadataCache(Path("module-artifact"), { PatchedArtifactIdentifier.ArtifactSerializer }) {
+            CachedArtifactSerializer(patchedCacheManager.fileStoreDirectory)
         }.asFile
     }
 
@@ -170,7 +168,6 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
                     objectFactory.newInstance(MinecraftMetadataGenerator::class.java, minecraftCacheManager).resolveMetadata(
                         repository,
                         config.libraries,
-                        listOf("net.minecraftforge", "java"),
                         repository.transport.resourceAccessor,
                         identifier,
                         componentOverrideMetadata,
@@ -237,7 +234,6 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
             val moduleComponentIdentifier = artifact.componentId as PatchedComponentIdentifier
             val patches = project.configurations.getByName(moduleComponentIdentifier.patches)
 
-            val cachedValues = artifactCache.value
             val id = artifact.id as ModuleComponentArtifactIdentifier
 
             val patchesHash = hash(patches)
@@ -249,7 +245,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
                 ), patchesHash
             )
 
-            val cached = cachedValues[urlId]
+            val cached = artifactCache[urlId]
 
             if (cached == null || cachePolicy.artifactExpiry(
                     (artifact as ModuleComponentArtifactMetadata).toArtifactIdentifier(),
@@ -276,13 +272,8 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
                         getPatchState(moduleComponentIdentifier, patches.first(), patchesHash, shouldRefresh)?.split?.common?.let {
                             val file = it.toFile()
                             result.resolved(file)
-                            artifactCache.update(
-                                cachedValues + (urlId to DefaultCachedArtifact(
-                                    file,
-                                    Instant.now().toEpochMilli(),
-                                    artifact.hash()
-                                ))
-                            )
+
+                            artifactCache[urlId] = DefaultCachedArtifact(file, Instant.now().toEpochMilli(), artifact.hash())
                         }
                     }
 
@@ -290,13 +281,8 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
                         getPatchState(moduleComponentIdentifier, patches.first(), patchesHash, shouldRefresh)?.split?.client?.let {
                             val file = it.toFile()
                             result.resolved(file)
-                            artifactCache.update(
-                                cachedValues + (urlId to DefaultCachedArtifact(
-                                    file,
-                                    Instant.now().toEpochMilli(),
-                                    artifact.hash()
-                                ))
-                            )
+
+                            artifactCache[urlId] = DefaultCachedArtifact(file, Instant.now().toEpochMilli(), artifact.hash())
                         }
                     }
                 }

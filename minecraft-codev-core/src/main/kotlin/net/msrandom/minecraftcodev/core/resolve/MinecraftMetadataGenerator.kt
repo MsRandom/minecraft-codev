@@ -108,7 +108,6 @@ open class MinecraftMetadataGenerator @Inject constructor(
     fun resolveMetadata(
         repository: MinecraftRepositoryImpl.Resolver,
         extraLibraries: List<ModuleLibraryIdentifier>,
-        apiLibraryPrefixes: Collection<String>,
         resourceAccessor: CacheAwareExternalResourceAccessor,
         moduleComponentIdentifier: ModuleComponentIdentifier,
         requestMetaData: ComponentOverrideMetadata,
@@ -145,13 +144,6 @@ open class MinecraftMetadataGenerator @Inject constructor(
                         manifest
                     ) ?: return
 
-                    val libraries = collectLibraries(manifest, extractionState.value.libraries)
-
-                    val extraApi = if (apiLibraryPrefixes.isEmpty()) emptyList() else extraLibraries.filter { apiLibraryPrefixes.any(it.group::startsWith) }
-
-                    val api = libraries.common + extraApi
-                    val runtime = libraries.common + extraLibraries
-
                     val files = listOf(
                         DefaultModuleComponentArtifactMetadata(
                             moduleComponentIdentifier,
@@ -164,32 +156,21 @@ open class MinecraftMetadataGenerator @Inject constructor(
                         )
                     )
 
-                    val apiElements = CodevGradleLinkageLoader.ConfigurationMetadata(
-                        JavaPlugin.API_ELEMENTS_CONFIGURATION_NAME,
+                    val library = CodevGradleLinkageLoader.ConfigurationMetadata(
+                        Dependency.DEFAULT_CONFIGURATION,
                         moduleComponentIdentifier,
-                        api.map(::mapLibrary),
-                        files,
-                        defaultAttributes(manifest, defaultAttributes).libraryAttributes().apiAttributes(),
-                        ImmutableCapabilities.EMPTY,
-                        setOf(JavaPlugin.API_ELEMENTS_CONFIGURATION_NAME),
-                        objectFactory
-                    )
-
-                    val runtimeElements = CodevGradleLinkageLoader.ConfigurationMetadata(
-                        JavaPlugin.RUNTIME_ELEMENTS_CONFIGURATION_NAME,
-                        moduleComponentIdentifier,
-                        runtime.map(::mapLibrary),
+                        (collectLibraries(manifest, extractionState.value.libraries).common + extraLibraries).map(::mapLibrary),
                         files,
                         defaultAttributes(manifest, defaultAttributes).libraryAttributes().runtimeAttributes(),
                         ImmutableCapabilities.EMPTY,
-                        setOf(JavaPlugin.RUNTIME_ELEMENTS_CONFIGURATION_NAME, JavaPlugin.API_ELEMENTS_CONFIGURATION_NAME),
+                        setOf(Dependency.DEFAULT_CONFIGURATION),
                         objectFactory
                     )
 
                     val sourcesElements = CodevGradleLinkageLoader.ConfigurationMetadata(
                         JavaPlugin.SOURCES_ELEMENTS_CONFIGURATION_NAME,
                         moduleComponentIdentifier,
-                        runtime.map(::mapLibrary),
+                        emptyList(),
                         listOf(
                             DefaultModuleComponentArtifactMetadata(
                                 moduleComponentIdentifier,
@@ -212,7 +193,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                             attributesFactory.of(ProjectInternal.STATUS_ATTRIBUTE, manifest.type),
                             moduleComponentIdentifier,
                             DefaultModuleVersionIdentifier.newId(moduleComponentIdentifier.moduleIdentifier, moduleComponentIdentifier.version),
-                            listOf(apiElements, runtimeElements, sourcesElements),
+                            listOf(library, sourcesElements),
                             requestMetaData.isChanging,
                             manifest.type,
                             versionList.latest.keys.reversed(),
@@ -349,7 +330,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                     return
                 }
 
-                else -> if (extraLibraries.isEmpty() && apiLibraryPrefixes.isEmpty()) {
+                else -> if (extraLibraries.isEmpty()) {
                     val fixedName = moduleComponentIdentifier.module.asMinecraftDownload()
 
                     if (fixedName != MinecraftComponentResolvers.SERVER_DOWNLOAD) {

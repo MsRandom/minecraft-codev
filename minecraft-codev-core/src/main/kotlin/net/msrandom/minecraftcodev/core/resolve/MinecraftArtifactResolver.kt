@@ -8,7 +8,6 @@ import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Comp
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.hash
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.FileStoreAndIndexProvider
-import org.gradle.api.internal.artifacts.ivyservice.modulecache.artifacts.CachedArtifact
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.artifacts.DefaultCachedArtifact
 import org.gradle.api.internal.artifacts.metadata.ModuleComponentFileArtifactIdentifierSerializer
 import org.gradle.api.internal.component.ArtifactType
@@ -27,7 +26,6 @@ import org.gradle.internal.resolve.result.BuildableArtifactResolveResult
 import org.gradle.internal.resolve.result.BuildableArtifactSetResolveResult
 import org.gradle.internal.resource.ExternalResourceName
 import org.gradle.internal.resource.local.LazyLocallyAvailableResourceCandidates
-import org.gradle.internal.serialize.MapSerializer
 import org.gradle.util.internal.BuildCommencedTimeProvider
 import java.io.File
 import java.nio.file.Path
@@ -51,9 +49,9 @@ open class MinecraftArtifactResolver @Inject constructor(
     private val cacheManager = cacheProvider.manager("minecraft")
 
     private val artifactCache by lazy {
-        cacheManager.getMetadataCache(Path("module-artifact"), emptyMap<ModuleComponentFileArtifactIdentifier, CachedArtifact>()) {
-            // TODO make this more space efficient by removing the group
-            MapSerializer(ModuleComponentFileArtifactIdentifierSerializer(), CachedArtifactSerializer(cacheManager.fileStoreDirectory))
+        // TODO make this more space efficient by removing the group
+        cacheManager.getMetadataCache(Path("module-artifact"), { ModuleComponentFileArtifactIdentifierSerializer() }) {
+            CachedArtifactSerializer(cacheManager.fileStoreDirectory)
         }.asFile
     }
 
@@ -64,10 +62,9 @@ open class MinecraftArtifactResolver @Inject constructor(
     override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactResolveResult) {
         val componentIdentifier = artifact.componentId
         if (componentIdentifier is MinecraftComponentIdentifier) {
-            val cachedValues = artifactCache.value
             val id = artifact.id as ModuleComponentArtifactIdentifier
             val urlId = ModuleComponentFileArtifactIdentifier(DefaultModuleComponentIdentifier.newId(componentIdentifier.moduleIdentifier, componentIdentifier.version), id.fileName)
-            val cached = cachedValues[urlId]
+            val cached = artifactCache[urlId]
 
             if (cached == null || cachePolicy.artifactExpiry(
                     (artifact as ModuleComponentArtifactMetadata).toArtifactIdentifier(),
@@ -102,13 +99,8 @@ open class MinecraftArtifactResolver @Inject constructor(
                                     }
 
                                     result.resolved(splitCommonJar.toFile())
-                                    artifactCache.update(
-                                        cachedValues + (urlId to DefaultCachedArtifact(
-                                            splitCommonJar.toFile(),
-                                            Instant.now().toEpochMilli(),
-                                            artifact.hash()
-                                        ))
-                                    )
+
+                                    artifactCache[urlId] = DefaultCachedArtifact(splitCommonJar.toFile(), Instant.now().toEpochMilli(), artifact.hash())
                                     return
                                 }
                             }
@@ -130,13 +122,8 @@ open class MinecraftArtifactResolver @Inject constructor(
 
                                     client?.let {
                                         result.resolved(it)
-                                        artifactCache.update(
-                                            cachedValues + (urlId to DefaultCachedArtifact(
-                                                it,
-                                                Instant.now().toEpochMilli(),
-                                                artifact.hash()
-                                            ))
-                                        )
+
+                                        artifactCache[urlId] = DefaultCachedArtifact(it, Instant.now().toEpochMilli(), artifact.hash())
                                         return
                                     }
                                 }
@@ -166,13 +153,8 @@ open class MinecraftArtifactResolver @Inject constructor(
 
                                         if (resource != null) {
                                             result.resolved(resource.file)
-                                            artifactCache.update(
-                                                cachedValues + (urlId to DefaultCachedArtifact(
-                                                    resource.file,
-                                                    Instant.now().toEpochMilli(),
-                                                    artifact.hash()
-                                                ))
-                                            )
+
+                                            artifactCache[urlId] = DefaultCachedArtifact(resource.file, Instant.now().toEpochMilli(), artifact.hash())
                                             return
                                         }
                                     }
