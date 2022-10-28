@@ -7,8 +7,8 @@ import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.getSource
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.unsafeResolveConfiguration
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
-import net.msrandom.minecraftcodev.core.named
 import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
+import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.addNamed
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.hash
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.copy
 import net.msrandom.minecraftcodev.remapper.JarRemapper
@@ -19,6 +19,7 @@ import net.msrandom.minecraftcodev.remapper.dependency.RemappedDependencyMetadat
 import org.gradle.api.Project
 import org.gradle.api.artifacts.component.ComponentIdentifier
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.component.ModuleComponentSelector
 import org.gradle.api.attributes.Category
 import org.gradle.api.attributes.LibraryElements
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
@@ -27,15 +28,15 @@ import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionS
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.artifacts.DefaultCachedArtifact
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.excludes.specs.ExcludeSpec
 import org.gradle.api.internal.artifacts.type.ArtifactTypeRegistry
+import org.gradle.api.internal.attributes.AttributeContainerInternal
 import org.gradle.api.internal.attributes.AttributeValue
 import org.gradle.api.internal.attributes.ImmutableAttributes
+import org.gradle.api.internal.attributes.ImmutableAttributesFactory
 import org.gradle.api.internal.component.ArtifactType
+import org.gradle.api.internal.model.NamedObjectInstantiator
 import org.gradle.api.model.ObjectFactory
 import org.gradle.internal.DisplayName
-import org.gradle.internal.component.external.model.DefaultModuleComponentIdentifier
-import org.gradle.internal.component.external.model.MetadataSourcedComponentArtifacts
-import org.gradle.internal.component.external.model.ModuleComponentArtifactMetadata
-import org.gradle.internal.component.external.model.ModuleComponentFileArtifactIdentifier
+import org.gradle.internal.component.external.model.*
 import org.gradle.internal.component.model.*
 import org.gradle.internal.hash.ChecksumService
 import org.gradle.internal.model.CalculatedValueContainerFactory
@@ -67,6 +68,8 @@ open class RemappedComponentResolvers @Inject constructor(
     private val timeProvider: BuildCommencedTimeProvider,
     private val calculatedValueContainerFactory: CalculatedValueContainerFactory,
     private val buildOperationExecutor: BuildOperationExecutor,
+    private val attributesFactory: ImmutableAttributesFactory,
+    private val instantiator: NamedObjectInstantiator,
 
     cacheProvider: CodevCacheProvider
 ) : ComponentResolvers, DependencyToComponentIdResolver, ComponentMetaDataResolver, OriginArtifactSelector, ArtifactResolver {
@@ -83,6 +86,55 @@ open class RemappedComponentResolvers @Inject constructor(
     override fun getArtifactSelector() = this
     override fun getArtifactResolver() = this
 
+    private fun wrapMetadata(metadata: ComponentResolveMetadata, identifier: RemappedComponentIdentifier) = metadata.copy(
+        identifier,
+        {
+            val sourceNamespace = attributes.findEntry(MappingsNamespace.attribute.name).takeIf(AttributeValue<*>::isPresent)?.get() as? String
+
+            val category = attributes.findEntry(Category.CATEGORY_ATTRIBUTE.name)
+            val libraryElements = attributes.findEntry(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE.name)
+            if (category.isPresent && libraryElements.isPresent && category.get() == Category.LIBRARY && libraryElements.get() == LibraryElements.JAR) {
+                copy(
+                    { oldName ->
+                        object : DisplayName {
+                            override fun getDisplayName() = "remapped ${oldName.displayName}"
+                            override fun getCapitalizedDisplayName() = "Remapped ${oldName.capitalizedDisplayName}"
+                        }
+                    },
+                    attributes.addNamed(attributesFactory, instantiator, MappingsNamespace.attribute, identifier.targetNamespace.name),
+                    { dependency ->
+                        val namespace = dependency.selector.attributes.getAttribute(MappingsNamespace.attribute)
+                        if (namespace != null) {
+                            val selector = DefaultModuleComponentSelector.withAttributes(
+                                dependency.selector as ModuleComponentSelector, // Unsafe assumption, should be changed if we want things to be more generic.
+                                attributesFactory.concat(
+                                    (dependency.selector.attributes as AttributeContainerInternal).asImmutable(),
+                                    attributesFactory.of(MappingsNamespace.attribute, identifier.targetNamespace)
+                                )
+                            )
+
+                            RemappedDependencyMetadataWrapper(
+                                dependency,
+                                selector,
+                                identifier.sourceNamespace ?: namespace,
+                                identifier.targetNamespace,
+                                identifier.mappingsConfiguration,
+                                identifier.moduleConfiguration
+                            )
+                        } else {
+                            dependency
+                        }
+                    },
+                    { artifact -> RemappedComponentArtifactMetadata(artifact as ModuleComponentArtifactMetadata, identifier, sourceNamespace) },
+                    objects
+                )
+            } else {
+                this
+            }
+        },
+        objects
+    )
+
     override fun resolve(dependency: DependencyMetadata, acceptor: VersionSelector?, rejector: VersionSelector?, result: BuildableComponentIdResolveResult) {
         if (dependency is RemappedDependencyMetadata) {
             resolvers.get().componentIdResolver.resolve(dependency.delegate, acceptor, rejector, result)
@@ -93,28 +145,18 @@ open class RemappedComponentResolvers @Inject constructor(
                     val mappingsConfiguration = project.getSourceSetConfigurationName(dependency, MinecraftCodevRemapperPlugin.MAPPINGS_CONFIGURATION)
 
                     if (result.id is ModuleComponentIdentifier) {
+                        val id = RemappedComponentIdentifier(
+                            result.id as ModuleComponentIdentifier,
+                            dependency.sourceNamespace,
+                            dependency.targetNamespace,
+                            mappingsConfiguration,
+                            dependency.getModuleConfiguration()
+                        )
+
                         if (metadata == null) {
-                            result.resolved(
-                                RemappedComponentIdentifier(
-                                    result.id as ModuleComponentIdentifier,
-                                    dependency.sourceNamespace,
-                                    dependency.targetNamespace,
-                                    mappingsConfiguration,
-                                    dependency.getModuleConfiguration()
-                                ),
-                                result.moduleVersionId
-                            )
+                            result.resolved(id, result.moduleVersionId)
                         } else {
-                            // FIXME
-                            result.resolved(object : ComponentResolveMetadata by metadata {
-                                override fun getId() = RemappedComponentIdentifier(
-                                    result.id as ModuleComponentIdentifier,
-                                    dependency.sourceNamespace,
-                                    dependency.targetNamespace,
-                                    mappingsConfiguration,
-                                    dependency.getModuleConfiguration()
-                                )
-                            })
+                            result.resolved(wrapMetadata(metadata, id))
                         }
                     }
                 }
@@ -128,58 +170,7 @@ open class RemappedComponentResolvers @Inject constructor(
             resolvers.get().componentResolver.resolve(identifier.original, componentOverrideMetadata, newResult)
 
             if (newResult.hasResult() && newResult.failure == null) {
-                val existingMetadata = newResult.metadata
-
-                val metadata = existingMetadata.copy(
-                    identifier,
-                    {
-                        val newIdentifier = attributes.findEntry(MappingsNamespace.attribute.name).takeIf(AttributeValue<*>::isPresent)?.let {
-                            RemappedComponentIdentifier(
-                                identifier.original,
-                                identifier.sourceNamespace ?: objects.named(it.get() as String),
-                                identifier.targetNamespace,
-                                identifier.mappingsConfiguration,
-                                identifier.moduleConfiguration
-                            )
-                        } ?: identifier
-
-                        val category = attributes.findEntry(Category.CATEGORY_ATTRIBUTE.name)
-                        val libraryElements = attributes.findEntry(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE.name)
-                        if (category.isPresent && libraryElements.isPresent && category.get() == Category.LIBRARY && libraryElements.get() == LibraryElements.JAR) {
-                            copy(
-                                { oldName ->
-                                    object : DisplayName {
-                                        override fun getDisplayName() = "remapped ${oldName.displayName}"
-                                        override fun getCapitalizedDisplayName() = "Remapped ${oldName.capitalizedDisplayName}"
-                                    }
-                                },
-                                { dependencies ->
-                                    dependencies.map { dependency ->
-                                        val namespace = dependency.selector.attributes.getAttribute(MappingsNamespace.attribute)
-                                        if (namespace != null) {
-                                            RemappedDependencyMetadataWrapper(
-                                                dependency,
-                                                identifier.sourceNamespace ?: namespace,
-                                                identifier.targetNamespace,
-                                                identifier.mappingsConfiguration,
-                                                identifier.moduleConfiguration
-                                            )
-                                        } else {
-                                            dependency
-                                        }
-                                    }
-                                },
-                                { artifact -> RemappedComponentArtifactMetadata(artifact as ModuleComponentArtifactMetadata, newIdentifier) },
-                                objects
-                            )
-                        } else {
-                            this
-                        }
-                    },
-                    objects
-                )
-
-                result.resolved(metadata)
+                result.resolved(wrapMetadata(newResult.metadata, identifier))
             }
         }
     }
@@ -217,14 +208,18 @@ open class RemappedComponentResolvers @Inject constructor(
         if (artifact is RemappedComponentArtifactMetadata) {
             val id = artifact.componentId
 
+            val mappingFiles = project.unsafeResolveConfiguration(project.configurations.getByName(id.mappingsConfiguration))
+
             val mappings = project.extensions
                 .getByType(MinecraftCodevExtension::class.java)
                 .extensions
                 .getByType(RemapperExtension::class.java)
-                .loadMappings(project.unsafeResolveConfiguration(project.configurations.getByName(id.mappingsConfiguration)))
+                .loadMappings(mappingFiles)
 
             val newResult = DefaultBuildableArtifactResolveResult()
             resolvers.get().artifactResolver.resolveArtifact(artifact.delegate, moduleSources, newResult)
+
+            val sourceNamespace = id.sourceNamespace?.name ?: artifact.namespace ?: MappingsNamespace.OBF
 
             if (newResult.isSuccessful) {
                 val urlId = RemappedArtifactIdentifier(
@@ -247,12 +242,12 @@ open class RemappedComponentResolvers @Inject constructor(
                     ) {
                         val file = buildOperationExecutor.call(object : CallableBuildOperation<Path> {
                             override fun description() = BuildOperationDescriptor
-                                .displayName("Remapping ${newResult.result} from ${id.sourceNamespace?.name ?: MappingsNamespace.OBF} to ${id.targetNamespace}")
-                                .progressDisplayName("Mappings Hash: ${mappings.hash}")
+                                .displayName("Remapping ${newResult.result} from $sourceNamespace to ${id.targetNamespace}")
+                                .progressDisplayName("Mappings: ${mappingFiles.joinToString()}")
                                 .metadata(BuildOperationCategory.TASK)
 
                             override fun call(context: BuildOperationContext) = context.callWithStatus {
-                                JarRemapper.remap(mappings.tree, id.sourceNamespace?.name ?: MappingsNamespace.OBF, id.targetNamespace.name, newResult.result.toPath())
+                                JarRemapper.remap(mappings.tree, sourceNamespace, id.targetNamespace.name, newResult.result.toPath())
                             }
                         })
 

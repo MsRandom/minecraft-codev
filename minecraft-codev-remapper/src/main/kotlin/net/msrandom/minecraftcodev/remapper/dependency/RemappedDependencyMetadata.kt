@@ -17,11 +17,13 @@ sealed interface RemappedDependencyMetadata : ConfiguredDependencyMetadata {
 
 class RemappedDependencyMetadataWrapper(
     override val delegate: DependencyMetadata,
+    private val selector: ComponentSelector,
     override val sourceNamespace: MappingsNamespace?,
     override val targetNamespace: MappingsNamespace,
     override val relatedConfiguration: String?,
     private val moduleConfiguration: String?
 ) : RemappedDependencyMetadata, DependencyMetadata by delegate {
+    override fun getSelector() = selector
     override fun getModuleConfiguration() = moduleConfiguration
 }
 

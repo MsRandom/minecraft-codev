@@ -30,6 +30,7 @@ import org.gradle.internal.component.model.ModuleSources
 import org.gradle.internal.deprecation.Documentation
 import org.gradle.internal.instantiation.InstantiatorFactory
 import org.gradle.internal.reflect.Instantiator
+import org.gradle.internal.resolve.ModuleVersionResolveException
 import org.gradle.internal.resolve.caching.ImplicitInputRecorder
 import org.gradle.internal.resolve.caching.ImplicitInputsCapturingInstantiator
 import org.gradle.internal.resolve.caching.ImplicitInputsProvidingService
@@ -153,13 +154,14 @@ open class MinecraftRepositoryImpl @Inject constructor(
         override fun getComponentMetadataInstantiator() = injector
 
         class NoOpAccess : ModuleComponentRepositoryAccess {
-            override fun listModuleVersions(dependency: ModuleDependencyMetadata, result: BuildableModuleVersionListingResolveResult) = Unit
+            override fun listModuleVersions(dependency: ModuleDependencyMetadata, result: BuildableModuleVersionListingResolveResult) =
+                result.failed(ModuleVersionResolveException(dependency.selector) { "Minecraft Repository does not provide version listings." })
 
             override fun resolveComponentMetaData(
                 moduleComponentIdentifier: ModuleComponentIdentifier,
                 requestMetaData: ComponentOverrideMetadata,
                 result: BuildableModuleComponentMetaDataResolveResult
-            ) = Unit
+            ) = result.failed(ModuleVersionResolveException(moduleComponentIdentifier) { "Minecraft Repository does not provide Metadata." })
 
             override fun resolveArtifactsWithType(component: ComponentResolveMetadata, artifactType: ArtifactType, result: BuildableArtifactSetResolveResult) = Unit
             override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactResolveResult) = Unit

@@ -125,6 +125,7 @@ open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(private val
             isAccessible = true
         }
 
+        // FIXME This can cause deadlocks, should probably figure out a way around all of this.
         fun Project.unsafeResolveConfiguration(configuration: Configuration): Configuration {
             // Create new thread that can acquire a new binary store
             val thread = Thread {
@@ -224,7 +225,7 @@ open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(private val
         }
 
         fun <R> BuildOperationContext.callWithStatus(action: () -> R): R {
-            setStatus("STARTED")
+            progress("STARTING")
 
             val result = try {
                 action()
@@ -234,7 +235,7 @@ open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(private val
                 throw failure
             }
 
-            setStatus("FINISHED")
+            setStatus("DONE")
 
             return result
         }

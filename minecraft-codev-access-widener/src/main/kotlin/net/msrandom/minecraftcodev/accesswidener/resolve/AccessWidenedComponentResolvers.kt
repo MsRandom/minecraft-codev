@@ -3,8 +3,10 @@ package net.msrandom.minecraftcodev.accesswidener.resolve
 import net.fabricmc.accesswidener.AccessWidener
 import net.fabricmc.accesswidener.AccessWidenerReader
 import net.msrandom.minecraftcodev.accesswidener.AccessWidenedDependencyMetadata
+import net.msrandom.minecraftcodev.accesswidener.AccessWidenedDependencyMetadataWrapper
 import net.msrandom.minecraftcodev.accesswidener.JarAccessWidener
 import net.msrandom.minecraftcodev.accesswidener.MinecraftCodevAccessWidenerPlugin
+import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.callWithStatus
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.getSourceSetConfigurationName
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.unsafeResolveConfiguration
@@ -24,6 +26,7 @@ import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionS
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.artifacts.DefaultCachedArtifact
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.excludes.specs.ExcludeSpec
 import org.gradle.api.internal.artifacts.type.ArtifactTypeRegistry
+import org.gradle.api.internal.attributes.AttributeValue
 import org.gradle.api.internal.attributes.ImmutableAttributes
 import org.gradle.api.internal.component.ArtifactType
 import org.gradle.api.model.ObjectFactory
@@ -82,6 +85,43 @@ open class AccessWidenedComponentResolvers @Inject constructor(
     override fun getArtifactSelector() = this
     override fun getArtifactResolver() = this
 
+    private fun wrapMetadata(metadata: ComponentResolveMetadata, identifier: AccessWidenedComponentIdentifier) = metadata.copy(
+        identifier,
+        {
+            val namespace = attributes.findEntry(MappingsNamespace.attribute.name).takeIf(AttributeValue<*>::isPresent)?.get() as? String
+            val category = attributes.findEntry(Category.CATEGORY_ATTRIBUTE.name)
+            val libraryElements = attributes.findEntry(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE.name)
+            if (category.isPresent && libraryElements.isPresent && category.get() == Category.LIBRARY && libraryElements.get() == LibraryElements.JAR) {
+                copy(
+                    { oldName ->
+                        object : DisplayName {
+                            override fun getDisplayName() = "access widened ${oldName.displayName}"
+                            override fun getCapitalizedDisplayName() = "Access Widened ${oldName.capitalizedDisplayName}"
+                        }
+                    },
+                    attributes,
+                    { dependency ->
+                        if (dependency.selector.attributes.getAttribute(MappingsNamespace.attribute) != null) {
+                            // Maybe pass the namespace to use instead of the metadata one?
+                            AccessWidenedDependencyMetadataWrapper(
+                                dependency,
+                                identifier.accessWidenersConfiguration,
+                                identifier.moduleConfiguration
+                            )
+                        } else {
+                            dependency
+                        }
+                    },
+                    { artifact -> AccessWidenedComponentArtifactMetadata(artifact as ModuleComponentArtifactMetadata, identifier, namespace) },
+                    objects
+                )
+            } else {
+                this
+            }
+        },
+        objects
+    )
+
     override fun resolve(dependency: DependencyMetadata, acceptor: VersionSelector?, rejector: VersionSelector?, result: BuildableComponentIdResolveResult) {
         if (dependency is AccessWidenedDependencyMetadata) {
             resolvers.get().componentIdResolver.resolve(dependency.delegate, acceptor, rejector, result)
@@ -92,24 +132,16 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                     val accessWidenersConfiguration = project.getSourceSetConfigurationName(dependency, MinecraftCodevAccessWidenerPlugin.ACCESS_WIDENERS_CONFIGURATION)
 
                     if (result.id is ModuleComponentIdentifier) {
+                        val id = AccessWidenedComponentIdentifier(
+                            result.id as ModuleComponentIdentifier,
+                            accessWidenersConfiguration,
+                            dependency.getModuleConfiguration()
+                        )
+
                         if (metadata == null) {
-                            result.resolved(
-                                AccessWidenedComponentIdentifier(
-                                    result.id as ModuleComponentIdentifier,
-                                    accessWidenersConfiguration,
-                                    dependency.getModuleConfiguration()
-                                ),
-                                result.moduleVersionId
-                            )
+                            result.resolved(id, result.moduleVersionId)
                         } else {
-                            // FIXME
-                            result.resolved(object : ComponentResolveMetadata by metadata {
-                                override fun getId() = AccessWidenedComponentIdentifier(
-                                    result.id as ModuleComponentIdentifier,
-                                    accessWidenersConfiguration,
-                                    dependency.getModuleConfiguration()
-                                )
-                            })
+                            result.resolved(wrapMetadata(metadata, id))
                         }
                     }
                 }
@@ -123,33 +155,7 @@ open class AccessWidenedComponentResolvers @Inject constructor(
             resolvers.get().componentResolver.resolve(identifier.original, componentOverrideMetadata, newResult)
 
             if (newResult.hasResult() && newResult.failure == null) {
-                val existingMetadata = newResult.metadata
-
-                val metadata = existingMetadata.copy(
-                    identifier,
-                    {
-                        val category = attributes.findEntry(Category.CATEGORY_ATTRIBUTE.name)
-                        val libraryElements = attributes.findEntry(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE.name)
-                        if (category.isPresent && libraryElements.isPresent && category.get() == Category.LIBRARY && libraryElements.get() == LibraryElements.JAR) {
-                            copy(
-                                { oldName ->
-                                    object : DisplayName {
-                                        override fun getDisplayName() = "access widened ${oldName.displayName}"
-                                        override fun getCapitalizedDisplayName() = "Access Widened ${oldName.capitalizedDisplayName}"
-                                    }
-                                },
-                                { dependencies -> dependencies },
-                                { artifact -> AccessWidenedComponentArtifactMetadata(artifact as ModuleComponentArtifactMetadata, identifier) },
-                                objects
-                            )
-                        } else {
-                            this
-                        }
-                    },
-                    objects
-                )
-
-                result.resolved(metadata)
+                result.resolved(wrapMetadata(newResult.metadata, identifier))
             }
         }
     }
@@ -186,16 +192,19 @@ open class AccessWidenedComponentResolvers @Inject constructor(
             resolvers.get().artifactResolver.resolveArtifact(artifact.delegate, moduleSources, newResult)
 
             if (newResult.isSuccessful) {
-                val accessWideners = project.configurations.getByName(id.accessWidenersConfiguration)
+                val accessWideners = project.unsafeResolveConfiguration(project.configurations.getByName(id.accessWidenersConfiguration))
                 val messageDigest = MessageDigest.getInstance("SHA1")
 
-                val accessWidener = AccessWidener().also {
-                    val reader = AccessWidenerReader(it)
+                val accessWidener = AccessWidener().also { visitor ->
+                    val reader = AccessWidenerReader(visitor)
                     for (accessWidener in accessWideners) {
-                        DigestInputStream(accessWidener.inputStream(), messageDigest).bufferedReader()
-
-                        // TODO Pass namespace here
-                        accessWidener.bufferedReader().use(reader::read)
+                        DigestInputStream(accessWidener.inputStream(), messageDigest).bufferedReader().use {
+                            if (artifact.namespace == null) {
+                                reader.read(it)
+                            } else {
+                                reader.read(it, artifact.namespace)
+                            }
+                        }
                     }
                 }
 
@@ -221,7 +230,7 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                         val file = buildOperationExecutor.call(object : CallableBuildOperation<Path> {
                             override fun description() = BuildOperationDescriptor
                                 .displayName("Access Widening ${newResult.result}")
-                                .progressDisplayName("Access Wideners Hash: $hash")
+                                .progressDisplayName("Access Wideners: ${accessWideners.joinToString()}")
                                 .metadata(BuildOperationCategory.TASK)
 
                             override fun call(context: BuildOperationContext) = context.callWithStatus {

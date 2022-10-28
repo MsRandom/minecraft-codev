@@ -22,12 +22,9 @@ import org.gradle.api.artifacts.Configuration
 import org.gradle.api.artifacts.component.ComponentIdentifier
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.internal.artifacts.DefaultModuleVersionIdentifier
-import org.gradle.api.internal.artifacts.GlobalDependencyResolutionRules
 import org.gradle.api.internal.artifacts.RepositoriesSupplier
-import org.gradle.api.internal.artifacts.ResolveContext
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ComponentResolvers
-import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ResolveIvyFactory
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionSelector
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.FileStoreAndIndexProvider
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.artifacts.DefaultCachedArtifact
@@ -36,7 +33,6 @@ import org.gradle.api.internal.artifacts.ivyservice.resolveengine.excludes.specs
 import org.gradle.api.internal.artifacts.repositories.ResolutionAwareRepository
 import org.gradle.api.internal.artifacts.type.ArtifactTypeRegistry
 import org.gradle.api.internal.attributes.ImmutableAttributes
-import org.gradle.api.internal.attributes.ImmutableAttributesFactory
 import org.gradle.api.internal.component.ArtifactType
 import org.gradle.api.model.ObjectFactory
 import org.gradle.cache.scopes.GlobalScopedCache
@@ -45,7 +41,6 @@ import org.gradle.internal.component.model.*
 import org.gradle.internal.hash.ChecksumService
 import org.gradle.internal.hash.HashCode
 import org.gradle.internal.model.CalculatedValueContainerFactory
-import org.gradle.internal.resolve.caching.ComponentMetadataSupplierRuleExecutor
 import org.gradle.internal.resolve.resolver.ArtifactResolver
 import org.gradle.internal.resolve.resolver.ComponentMetaDataResolver
 import org.gradle.internal.resolve.resolver.DependencyToComponentIdResolver
@@ -62,14 +57,7 @@ import javax.inject.Inject
 import kotlin.io.path.Path
 
 open class PatchedMinecraftComponentResolvers @Inject constructor(
-    private val resolveContext: ResolveContext,
     private val project: Project,
-
-    private val repositoriesSupplier: RepositoriesSupplier,
-    private val resolveIvyFactory: ResolveIvyFactory,
-    private val metadataHandler: GlobalDependencyResolutionRules,
-    private val attributesFactory: ImmutableAttributesFactory,
-    private val componentMetadataSupplierRuleExecutor: ComponentMetadataSupplierRuleExecutor,
     private val fileStoreAndIndexProvider: FileStoreAndIndexProvider,
     private val calculatedValueContainerFactory: CalculatedValueContainerFactory,
     private val objectFactory: ObjectFactory,
@@ -77,6 +65,8 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
     private val cachePolicy: CachePolicy,
     private val checksumService: ChecksumService,
     private val timeProvider: BuildCommencedTimeProvider,
+
+    repositoriesSupplier: RepositoriesSupplier,
     cacheProvider: CodevCacheProvider
 ) : ComponentResolvers, DependencyToComponentIdResolver, ComponentMetaDataResolver, OriginArtifactSelector, ArtifactResolver {
     private val minecraftCacheManager = cacheProvider.manager("minecraft")
@@ -232,7 +222,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
     override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactResolveResult) {
         if (artifact.componentId is PatchedComponentIdentifier) {
             val moduleComponentIdentifier = artifact.componentId as PatchedComponentIdentifier
-            val patches = project.configurations.getByName(moduleComponentIdentifier.patches)
+            val patches = project.unsafeResolveConfiguration(project.configurations.getByName(moduleComponentIdentifier.patches))
 
             val id = artifact.id as ModuleComponentArtifactIdentifier
 

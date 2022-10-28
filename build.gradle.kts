@@ -67,7 +67,9 @@ childProjects.values.forEach { project ->
             useJUnitPlatform()
 
             testLogging {
-                showStandardStreams = true
+                error {
+                    showStandardStreams = true
+                }
             }
         }
     }

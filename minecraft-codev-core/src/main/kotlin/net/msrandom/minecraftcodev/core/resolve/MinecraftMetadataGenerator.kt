@@ -7,6 +7,7 @@ import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
 import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
 import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.resolveMojangFile
+import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.addNamed
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.asMinecraftDownload
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader
 import org.gradle.api.artifacts.Dependency
@@ -44,7 +45,6 @@ import org.gradle.internal.resolve.result.BuildableComponentResolveResult
 import org.gradle.internal.resolve.result.BuildableModuleVersionListingResolveResult
 import org.gradle.internal.resource.ExternalResourceName
 import org.gradle.internal.resource.transfer.CacheAwareExternalResourceAccessor
-import org.gradle.internal.snapshot.impl.CoercingStringValueSnapshot
 import org.gradle.nativeplatform.OperatingSystemFamily
 import org.gradle.nativeplatform.platform.internal.DefaultOperatingSystem
 import java.io.File
@@ -418,8 +418,8 @@ open class MinecraftMetadataGenerator @Inject constructor(
     private fun ImmutableAttributes.addInt(attribute: Attribute<Int>, value: Int) =
         attributesFactory.concat(this, attribute, value)
 
-    private fun <T> ImmutableAttributes.addNamed(attribute: Attribute<T>, value: String) =
-        attributesFactory.concat(this, Attribute.of(attribute.name, String::class.java), CoercingStringValueSnapshot(value, instantiator))
+    private fun ImmutableAttributes.addNamed(attribute: Attribute<*>, value: String) =
+        addNamed(attributesFactory, instantiator, attribute, value)
 
     companion object {
         private val manifestLock = Any()

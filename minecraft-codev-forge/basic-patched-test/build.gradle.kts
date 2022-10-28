@@ -3,11 +3,17 @@ plugins {
 }
 
 repositories {
+    maven(url = "https://maven.minecraftforge.net/") {
+        metadataSources {
+            gradleMetadata()
+            mavenPom()
+            artifact()
+        }
+    }
+
     maven(url = "https://libraries.minecraft.net/")
     mavenCentral()
     minecraft()
-
-    maven(url = "https://maven.minecraftforge.net/")
 }
 
 val printCompileClasspath by tasks.registering {

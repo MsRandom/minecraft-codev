@@ -161,21 +161,10 @@ open class MinecraftComponentResolvers @Inject constructor(
 
         private val UNIQUE_VERSION_ID = Regex(".+-(\\d{8}\\.\\d{6}-\\d+)")
 
-        private val getArtifactsMethod = ConfigurationMetadata::class.java.getMethod("getArtifacts")
+        fun ImmutableAttributes.addNamed(attributesFactory: ImmutableAttributesFactory, instantiator: NamedObjectInstantiator, attribute: Attribute<*>, value: String): ImmutableAttributes =
+            attributesFactory.concat(this, Attribute.of(attribute.name, String::class.java), CoercingStringValueSnapshot(value, instantiator))
 
-        init {
-            getArtifactsMethod.isAccessible = true
-        }
-
-        @Suppress("UNCHECKED_CAST")
-        internal fun getArtifacts(configurationMetadata: ConfigurationMetadata) = getArtifactsMethod(configurationMetadata) as List<ComponentArtifactMetadata>
-
-        fun ImmutableAttributes.addInt(attributesFactory: ImmutableAttributesFactory, attribute: Attribute<Int>, value: Int) = attributesFactory.concat(this, attribute, value)
-
-        fun <T> ImmutableAttributes.addNamed(attributesFactory: ImmutableAttributesFactory, instantiator: NamedObjectInstantiator, attribute: Attribute<T>, value: T) =
-            attributesFactory.concat(this, Attribute.of(attribute.name, String::class.java), CoercingStringValueSnapshot(value.toString(), instantiator))
-
-        fun String.asMinecraftDownload() = takeIf { startsWith(PREFIX) && !contains('_') }?.removePrefix(PREFIX)?.replace('-', '_')
+        internal fun String.asMinecraftDownload() = takeIf { startsWith(PREFIX) && !contains('_') }?.removePrefix(PREFIX)?.replace('-', '_')
 
         fun ComponentArtifactMetadata.hash(): HashCode = HashCode.fromBytes(name.hashCode().let {
             byteArrayOf((it and 0xFF).toByte(), (it shl 8 and 0xFF).toByte(), (it shl 16 and 0xFF).toByte(), (it shl 24 and 0xFF).toByte())
