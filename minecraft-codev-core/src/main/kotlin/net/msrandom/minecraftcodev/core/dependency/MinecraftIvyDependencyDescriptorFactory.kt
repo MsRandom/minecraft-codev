@@ -26,7 +26,7 @@ open class MinecraftIvyDependencyDescriptorFactory @Inject constructor(excludeRu
         val transitive = externalModuleDependency.isTransitive
 
         val selector = DefaultModuleComponentSelector.newSelector(
-            DefaultModuleIdentifier.newId(dependency.group ?: "", dependency.name),
+            DefaultModuleIdentifier.newId(dependency.group.orEmpty(), dependency.name),
             (externalModuleDependency.versionConstraint as VersionConstraintInternal).asImmutable(),
             dependency.getAttributes(),
             dependency.getRequestedCapabilities()

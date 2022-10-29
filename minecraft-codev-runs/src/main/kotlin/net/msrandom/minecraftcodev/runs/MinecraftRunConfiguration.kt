@@ -28,7 +28,7 @@ abstract class MinecraftRunConfiguration @Inject constructor(val project: Projec
     val modClasspaths = mutableMapOf<String, ConfigurableFileCollection>()
 
     init {
-        apply {
+        run {
             name.finalizeValueOnRead()
             mainClass.finalizeValueOnRead()
             jvmVersion.finalizeValueOnRead()

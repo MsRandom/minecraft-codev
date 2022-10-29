@@ -247,7 +247,7 @@ open class RemappedComponentResolvers @Inject constructor(
                                 .metadata(BuildOperationCategory.TASK)
 
                             override fun call(context: BuildOperationContext) = context.callWithStatus {
-                                JarRemapper.remap(mappings.tree, sourceNamespace, id.targetNamespace.name, newResult.result.toPath())
+                                JarRemapper.remap(mappings.tree, sourceNamespace, id.targetNamespace.name, newResult.result.toPath(), project.files(), false)
                             }
                         })
 

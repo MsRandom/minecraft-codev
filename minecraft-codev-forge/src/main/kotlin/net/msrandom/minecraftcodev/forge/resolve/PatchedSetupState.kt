@@ -8,26 +8,32 @@ import net.minecraftforge.srgutils.INamedMappingFile
 import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.callWithStatus
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.unsafeResolveConfiguration
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.walk
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.zipFileSystem
+import net.msrandom.minecraftcodev.core.ModuleLibraryIdentifier
 import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
-import net.msrandom.minecraftcodev.core.resolve.JarSplittingResult
-import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
-import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
-import net.msrandom.minecraftcodev.core.resolve.getExtractionState
+import net.msrandom.minecraftcodev.core.resolve.*
 import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter.useFileSystems
 import net.msrandom.minecraftcodev.forge.McpConfig
 import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin
 import net.msrandom.minecraftcodev.forge.PatchLibrary
 import net.msrandom.minecraftcodev.forge.UserdevConfig
-import org.gradle.api.Project
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.internal.ProcessOperations
+import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
+import org.gradle.api.internal.cache.StringInterner
 import org.gradle.api.model.ObjectFactory
+import org.gradle.internal.component.external.model.DefaultModuleComponentArtifactMetadata
+import org.gradle.internal.component.external.model.DefaultModuleComponentIdentifier
+import org.gradle.internal.component.model.DefaultComponentOverrideMetadata
+import org.gradle.internal.component.model.DefaultIvyArtifactName
 import org.gradle.internal.hash.ChecksumService
 import org.gradle.internal.hash.HashCode
 import org.gradle.internal.operations.*
+import org.gradle.internal.reflect.Instantiator
+import org.gradle.internal.resolve.ArtifactResolveException
+import org.gradle.internal.resolve.result.DefaultBuildableArtifactResolveResult
+import org.gradle.internal.resolve.result.DefaultBuildableComponentResolveResult
 import java.io.File
 import java.io.PrintStream
 import java.nio.file.Files
@@ -50,7 +56,7 @@ open class PatchedSetupState @Inject constructor(
     private val buildOperationExecutor: BuildOperationExecutor,
     private val processOperations: ProcessOperations,
     private val checksumService: ChecksumService,
-    private val project: Project
+    private val resolvers: ComponentResolversChainProvider
 ) {
     private val extractionState = getExtractionState(buildOperationExecutor, manifest, serverJar) { clientJar }
 
@@ -61,7 +67,7 @@ open class PatchedSetupState @Inject constructor(
     }
 
     private val mcpConfigFile by lazy {
-        project.unsafeResolveConfiguration(project.configurations.detachedConfiguration(project.dependencies.create(userdevConfig.mcp))).singleFile.toPath()
+        resolveArtifact(userdevConfig.mcp).toPath()
     }
 
     private val mcpConfig by lazy {
@@ -135,9 +141,7 @@ open class PatchedSetupState @Inject constructor(
             )
 
             // Add Forge files
-            val universal = project.unsafeResolveConfiguration(project.configurations.detachedConfiguration(project.dependencies.create(userdevConfig.universal)).apply {
-                isTransitive = false
-            }).singleFile
+            val universal = resolveArtifact(userdevConfig.universal)
 
             zipFileSystem(patched).use { patchedZip ->
                 // Add missing non-patched files
@@ -220,14 +224,9 @@ open class PatchedSetupState @Inject constructor(
                 Triple(
                     "libraries",
                     "-e",
-                    project.unsafeResolveConfiguration(
-                        project.configurations.detachedConfiguration(
-                            *extractionState.value
-                                .libraries
-                                .map { project.dependencies.create(it.toString()) }
-                                .toTypedArray()
-                        )
-                    ).map(File::toString)
+                    extractionState.value
+                        .libraries
+                        .map { resolveArtifact(it, null).toString() }
                 )
             )
 
@@ -376,14 +375,55 @@ open class PatchedSetupState @Inject constructor(
         })
     }
 
+    private fun resolveArtifact(library: String): File {
+        val extensionIndex = library.indexOf('@')
+
+        val id: ModuleLibraryIdentifier
+        val extension: String?
+        if (extensionIndex < 0) {
+            id = ModuleLibraryIdentifier.load(library)
+            extension = null
+        } else {
+            id = ModuleLibraryIdentifier.load(library.substring(0, extensionIndex))
+            extension = library.substring(extensionIndex + 1)
+        }
+
+        return resolveArtifact(id, extension)
+    }
+
+    private fun resolveArtifact(library: ModuleLibraryIdentifier, extension: String?): File {
+        val id = DefaultModuleComponentIdentifier.newId(DefaultModuleIdentifier.newId(library.group, library.module), library.version)
+        val componentResult = DefaultBuildableComponentResolveResult()
+
+        resolvers.get().componentResolver.resolve(
+            id,
+            DefaultComponentOverrideMetadata.EMPTY,
+            componentResult
+        )
+
+        if (componentResult.hasResult()) {
+            val artifactResult = DefaultBuildableArtifactResolveResult()
+
+            resolvers.get().artifactResolver.resolveArtifact(
+                DefaultModuleComponentArtifactMetadata(id, DefaultIvyArtifactName(library.module, ArtifactTypeDefinition.JAR_TYPE, extension ?: ArtifactTypeDefinition.JAR_TYPE, library.classifier)),
+                componentResult.metadata.sources,
+                artifactResult
+            )
+
+            if (artifactResult.hasResult()) {
+                return artifactResult.result
+            }
+        }
+
+        throw ArtifactResolveException(id, "No artifact found")
+    }
+
     private fun executeMcp(
         function: PatchLibrary,
         argumentTemplates: Map<String, Any?>,
         argumentLists: Triple<String, String, Collection<String>>? = null
     ) {
-        val jar = project.unsafeResolveConfiguration(project.configurations.detachedConfiguration(project.dependencies.create(function.version)).apply {
-            isTransitive = false
-        }).singleFile
+        val jar = resolveArtifact(function.version)
 
         val mainClass = JarFile(jar).use {
             it.manifest.mainAttributes.getValue(Attributes.Name.MAIN_CLASS)

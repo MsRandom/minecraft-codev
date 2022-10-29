@@ -201,14 +201,16 @@ open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(private val
                             cacheProvider = CodevCacheProvider(gradle)
                         }
 
+                        val resolversProvider by lazy {
+                            ComponentResolversChain(resolvers as List<ComponentResolvers>, project.serviceOf(), project.serviceOf())
+                        }
+
                         newServices.add(ConfigurationInternal::class.java, configuration)
                         newServices.add(CachePolicy::class.java, cachePolicy)
                         newServices.add(ObjectFactory::class.java, projectObjectFactory)
                         newServices.add(CodevCacheProvider::class.java, cacheProvider)
 
-                        newServices.add(ComponentResolversChainProvider::class.java, ComponentResolversChainProvider {
-                            ComponentResolversChain(resolvers as List<ComponentResolvers>, project.serviceOf(), project.serviceOf())
-                        })
+                        newServices.add(ComponentResolversChainProvider::class.java, ComponentResolversChainProvider { resolversProvider })
 
                         resolvers.add(projectObjectFactory.newInstance(componentResolvers))
                     }
@@ -296,25 +298,25 @@ open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(private val
                         isTransitive = false
                     }
                 }
-/*
-                project.afterEvaluate {
-                    kotlin.targets.all { target ->
-                        target.compilations.all { compilation ->
-                            val start = target.disambiguationClassifier
-                            val middle = compilation.name.takeIf { it != KotlinCompilation.MAIN_COMPILATION_NAME }?.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
-                            val end = name.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
-                            val configurationName =
-                            val configuration = configurations.getByName(compilation.compileOnlyConfigurationName)
-                            val defaultSourceSet = compilation.defaultSourceSet
-                            val allSourceSets = compilation.kotlinSourceSets + compilation.kotlinSourceSets.flatMapTo(mutableSetOf()) {
-                                transitiveClosure(defaultSourceSet) { dependsOn }
-                            }
+                /*
+                                project.afterEvaluate {
+                                    kotlin.targets.all { target ->
+                                        target.compilations.all { compilation ->
+                                            val start = target.disambiguationClassifier
+                                            val middle = compilation.name.takeIf { it != KotlinCompilation.MAIN_COMPILATION_NAME }?.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+                                            val end = name.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+                                            val configurationName =
+                                            val configuration = configurations.getByName(compilation.compileOnlyConfigurationName)
+                                            val defaultSourceSet = compilation.defaultSourceSet
+                                            val allSourceSets = compilation.kotlinSourceSets + compilation.kotlinSourceSets.flatMapTo(mutableSetOf()) {
+                                                transitiveClosure(defaultSourceSet) { dependsOn }
+                                            }
 
-                            for (allSourceSet in allSourceSets) {
-                            }
-                        }
-                    }
-                }*/
+                                            for (allSourceSet in allSourceSets) {
+                                            }
+                                        }
+                                    }
+                                }*/
             }
         }
 

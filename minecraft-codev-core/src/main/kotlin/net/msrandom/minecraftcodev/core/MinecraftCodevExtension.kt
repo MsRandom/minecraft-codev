@@ -11,7 +11,7 @@ abstract class MinecraftCodevExtension(private val attributesFactory: ImmutableA
     private val capabilityNotationParser = CapabilityNotationParserFactory(false).create()!!
 
     operator fun invoke(name: Any, version: String?): MinecraftDependency =
-        MinecraftDependencyImpl(name.toString(), version ?: "", null).apply {
+        MinecraftDependencyImpl(name.toString(), version.orEmpty(), null).apply {
             setAttributesFactory(attributesFactory)
             setCapabilityNotationParser(capabilityNotationParser)
         }

@@ -8,7 +8,7 @@ import kotlinx.serialization.encoding.Encoder
 
 @Serializable(ModuleLibraryIdentifier.IdentifierSerializer::class)
 data class ModuleLibraryIdentifier(val group: String, val module: String, val version: String, val classifier: String?) {
-    override fun toString() = "$group:$module:$version${classifier?.let { ":$it" } ?: ""}"
+    override fun toString() = "$group:$module:$version${classifier?.let { ":$it" }.orEmpty()}"
 
     companion object {
         fun load(notation: String) = notation.split(":").let { ModuleLibraryIdentifier(it[0], it[1], it[2], it.getOrNull(3)) }

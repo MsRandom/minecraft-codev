@@ -31,7 +31,7 @@ fun RepositoryHandler.minecraft(configure: Action<MinecraftRepository>): Minecra
 
 @Suppress("unused", "UnusedReceiverParameter")
 fun DependencyConstraintHandler.minecraft(name: Any, version: String?) =
-    DefaultDependencyConstraint(MinecraftComponentResolvers.GROUP, MinecraftComponentResolvers.PREFIX + name.toString(), version ?: "")
+    DefaultDependencyConstraint(MinecraftComponentResolvers.GROUP, MinecraftComponentResolvers.PREFIX + name.toString(), version.orEmpty())
 
 fun DependencyConstraintHandler.minecraft(name: Any) =
     minecraft(name, null)
