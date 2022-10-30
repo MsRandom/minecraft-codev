@@ -19,7 +19,7 @@ internal class MinecraftDependencyImpl(private val name: String, version: String
     override var isChanging = false
 
     private val versionConstraint = DefaultMutableVersionConstraint(version)
-    private val module = DefaultModuleIdentifier.newId(MinecraftComponentResolvers.GROUP, MinecraftComponentResolvers.PREFIX + name)
+    private val module = DefaultModuleIdentifier.newId(MinecraftComponentResolvers.GROUP, name)
 
     private fun isContentEqualsFor(dependencyRhs: MinecraftDependencyImpl) =
         isCommonContentEquals(dependencyRhs) && isChanging == dependencyRhs.isChanging && getVersionConstraint() == dependencyRhs.versionConstraint

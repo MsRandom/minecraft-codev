@@ -8,6 +8,8 @@ import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
 import net.msrandom.minecraftcodev.core.resolve.MinecraftMetadataGenerator
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
+import net.msrandom.minecraftcodev.runs.task.ExtractNatives
+import org.apache.commons.lang3.StringUtils
 import org.apache.commons.lang3.SystemUtils
 import org.gradle.api.artifacts.Configuration
 import org.gradle.api.artifacts.ResolvedArtifact
@@ -18,6 +20,7 @@ import org.gradle.api.internal.artifacts.configurations.ResolutionStrategyIntern
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.StartParameterResolutionOverride
 import org.gradle.api.plugins.ExtensionAware
 import org.gradle.api.provider.Provider
+import org.gradle.api.tasks.SourceSet
 import org.gradle.configurationcache.extensions.serviceOf
 import org.gradle.internal.os.OperatingSystem
 import java.io.File
@@ -42,7 +45,7 @@ abstract class RunConfigurationDefaultsContainer @Inject constructor(val builder
 
     fun client(): RunConfigurationDefaultsContainer = apply {
         builder.action {
-            val plugin = project.plugins.getPlugin(MinecraftCodevPlugin::class.java)
+            val plugin = project.plugins.getPlugin(MinecraftCodevRunsPlugin::class.java)
             val configuration = getConfiguration()
             val artifact = configuration.findMinecraft(MinecraftComponentResolvers.CLIENT_MODULE, ::client.name)
             val manifest = getManifest(configuration, artifact)
@@ -50,8 +53,6 @@ abstract class RunConfigurationDefaultsContainer @Inject constructor(val builder
             mainClass.set(manifest.map(MinecraftVersionMetadata::mainClass))
 
             jvmVersion.set(manifest.map { it.javaVersion.majorVersion })
-
-            beforeRunTasks.add(MinecraftCodevPlugin.DOWNLOAD_ASSETS)
 
             arguments.addAll(manifest.map {
                 val arguments = it.arguments.game.ifEmpty {
@@ -68,9 +69,15 @@ abstract class RunConfigurationDefaultsContainer @Inject constructor(val builder
                             if (value.startsWith("\${") && value.endsWith("}")) {
                                 when (value.subSequence(2, value.length - 1)) {
                                     "version_name" -> fixedArguments.add(MinecraftRunConfiguration.Argument(it.id))
-                                    "assets_root" -> fixedArguments.add(MinecraftRunConfiguration.Argument(plugin.assets))
+                                    "assets_root" -> {
+                                        AssetDownloader.downloadAssets(project, it.assetIndex)
+                                        fixedArguments.add(MinecraftRunConfiguration.Argument(plugin.assets))
+                                    }
                                     "assets_index_name" -> fixedArguments.add(MinecraftRunConfiguration.Argument(it.assets))
-                                    "game_assets" -> fixedArguments.add(MinecraftRunConfiguration.Argument(plugin.resources))
+                                    "game_assets" -> {
+                                        AssetDownloader.downloadAssets(project, it.assetIndex)
+                                        fixedArguments.add(MinecraftRunConfiguration.Argument(plugin.resources))
+                                    }
                                     "auth_access_token" -> fixedArguments.add(MinecraftRunConfiguration.Argument(Random.nextLong()))
                                     "user_properties" -> fixedArguments.add(MinecraftRunConfiguration.Argument("{}"))
                                     else -> fixedArguments.removeLastOrNull()
@@ -86,9 +93,14 @@ abstract class RunConfigurationDefaultsContainer @Inject constructor(val builder
             })
 
             jvmArguments.addAll(manifest.map {
+                val jvmArguments = it.arguments.jvm.ifEmpty {
+                    // For some reason, older versions didn't include this
+                    listOf(MinecraftVersionMetadata.Argument(emptyList(), listOf("-Djava.library.path=\${natives_directory}")))
+                }
+
                 val fixedJvmArguments = mutableListOf<MinecraftRunConfiguration.Argument>()
 
-                ARGUMENTS@ for (argument in it.arguments.jvm) {
+                ARGUMENTS@ for (argument in jvmArguments) {
                     var matches = argument.rules.isEmpty()
 
                     if (!matches) {
@@ -125,15 +137,18 @@ abstract class RunConfigurationDefaultsContainer @Inject constructor(val builder
                             } else {
                                 val templateStart = value.indexOf("\${")
                                 if (templateStart != -1) {
-                                    // FIXME
-                                    /*
                                     val template = value.subSequence(templateStart + 2, value.indexOf('}'))
                                     if (template == "natives_directory") {
-                                        val nativesDirectory = project.tasks.withType(CopyNatives::class.java).getByName(MinecraftCodevPlugin.COPY_NATIVES).output.asFile.get().toPath()
-                                        fixedJvmArguments.add(MinecraftRunConfiguration.Argument(value.substring(0, templateStart), nativesDirectory))
+                                        @Suppress("UnstableApiUsage")
+                                        val sourceSetName = StringUtils.capitalize(if (SourceSet.isMain(sourceSet.get())) "" else sourceSet.get().name)
+                                        val task = project.tasks.withType(ExtractNatives::class.java).getByName("extract${sourceSetName}Natives")
+
+                                        fixedJvmArguments.add(MinecraftRunConfiguration.Argument(value.substring(0, templateStart), task.destinationDirectory.get().asFile.toPath()))
+
+                                        beforeRunTasks.add(task.path)
                                     } else {
                                         continue
-                                    }*/
+                                    }
                                     continue
                                 } else {
                                     if (' ' in value) {
@@ -229,7 +244,7 @@ abstract class RunConfigurationDefaultsContainer @Inject constructor(val builder
                     MinecraftMetadataGenerator.getVersionManifest(
                         artifact.id.componentIdentifier as ModuleComponentIdentifier,
                         repository.url,
-                        project.serviceOf(),
+                        MinecraftCodevPlugin.getCacheProvider(project.gradle).manager("minecraft"),
                         cachePolicy,
                         repository.transport.resourceAccessor,
                         project.serviceOf(),

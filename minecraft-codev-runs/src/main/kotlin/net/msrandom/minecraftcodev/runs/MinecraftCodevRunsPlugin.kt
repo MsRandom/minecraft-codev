@@ -1,45 +1,74 @@
 package net.msrandom.minecraftcodev.runs
 
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.applyPlugin
+import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.createSourceSetElements
+import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.extendKotlinConfigurations
+import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
+import net.msrandom.minecraftcodev.runs.task.ExtractNatives
 import net.msrandom.minecraftcodev.runs.task.GenerateIdeaRuns
 import org.apache.commons.lang3.StringUtils
 import org.gradle.api.Plugin
 import org.gradle.api.plugins.ApplicationPlugin
 import org.gradle.api.plugins.PluginAware
 import org.gradle.api.tasks.JavaExec
+import org.gradle.initialization.layout.GlobalCacheDir
 import java.nio.file.Path
+import javax.inject.Inject
 
-class MinecraftCodevRunsPlugin<T : PluginAware> : Plugin<T> {
-    override fun apply(target: T) {
-        val codev = target.plugins.apply(MinecraftCodevPlugin::class.java)
+class MinecraftCodevRunsPlugin<T : PluginAware> @Inject constructor(cacheDir: GlobalCacheDir) : Plugin<T> {
+    private val cache: Path = cacheDir.dir.toPath().resolve(CodevCacheManager.ROOT_NAME)
 
-        // Log4j configs
-        val logging: Path =codev.cache.resolve("logging")
+    // Asset indexes and objects
+    val assets: Path = cache.resolve("assets")
 
-        applyPlugin(target) {
-            val runs = project.container(MinecraftRunConfigurationBuilder::class.java)
+    // Legacy assets
+    val resources: Path = cache.resolve("resources")
 
-            extensions.getByType(MinecraftCodevExtension::class.java).extensions.add("runs", runs)
+    // Log4j configs
+    val logging: Path = cache.resolve("logging")
 
-            tasks.register("generateIdeaRuns", GenerateIdeaRuns::class.java)
+    override fun apply(target: T) = applyPlugin(target) {
+        val runs = project.container(MinecraftRunConfigurationBuilder::class.java)
 
-            runs.all { builder ->
-                tasks.register("${ApplicationPlugin.TASK_RUN_NAME}${StringUtils.capitalize(builder.name)}", JavaExec::class.java) { javaExec ->
-                    val configuration = builder.build(project)
+        val capitalizedNatives = StringUtils.capitalize(NATIVES_CONFIGURATION)
 
-                    javaExec.args(configuration.arguments.get().map { it.parts.joinToString("") })
-                    javaExec.jvmArgs(configuration.jvmArguments.get().map { it.parts.joinToString("") })
-                    javaExec.environment(configuration.environment.get().mapValues { it.value.parts.joinToString("") })
-                    javaExec.classpath = configuration.sourceSet.get().runtimeClasspath
-                    javaExec.workingDir(configuration.workingDirectory)
-                    javaExec.mainClass.set(configuration.mainClass)
-                    javaExec.dependsOn(*configuration.beforeRunTasks.get().toTypedArray())
+        createSourceSetElements { name ->
+            val configurationName = if (name.isEmpty()) NATIVES_CONFIGURATION else name + capitalizedNatives
 
-                    javaExec.group = ApplicationPlugin.APPLICATION_GROUP
-                }
+            val configuration = configurations.maybeCreate(configurationName).apply {
+                isCanBeConsumed = false
+            }
+
+            tasks.register("extract${StringUtils.capitalize(name)}$capitalizedNatives", ExtractNatives::class.java) {
+                it.natives.set(configuration)
             }
         }
+
+        extendKotlinConfigurations(NATIVES_CONFIGURATION)
+
+        extensions.getByType(MinecraftCodevExtension::class.java).extensions.add("runs", runs)
+
+        tasks.register("generateIdeaRuns", GenerateIdeaRuns::class.java)
+
+        runs.all { builder ->
+            tasks.register("${ApplicationPlugin.TASK_RUN_NAME}${StringUtils.capitalize(builder.name)}", JavaExec::class.java) { javaExec ->
+                val configuration = builder.build(project)
+
+                javaExec.args(configuration.arguments.get().map { it.parts.joinToString("") })
+                javaExec.jvmArgs(configuration.jvmArguments.get().map { it.parts.joinToString("") })
+                javaExec.environment(configuration.environment.get().mapValues { it.value.parts.joinToString("") })
+                javaExec.classpath = configuration.sourceSet.get().runtimeClasspath
+                javaExec.workingDir(configuration.workingDirectory)
+                javaExec.mainClass.set(configuration.mainClass)
+                javaExec.dependsOn(*configuration.beforeRunTasks.get().toTypedArray())
+
+                javaExec.group = ApplicationPlugin.APPLICATION_GROUP
+            }
+        }
+    }
+
+    companion object {
+        const val NATIVES_CONFIGURATION = "natives"
     }
 }

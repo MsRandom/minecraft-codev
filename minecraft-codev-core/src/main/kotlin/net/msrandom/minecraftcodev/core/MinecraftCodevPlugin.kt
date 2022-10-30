@@ -44,7 +44,6 @@ import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.util.PatternSet
 import org.gradle.configurationcache.extensions.serviceOf
-import org.gradle.initialization.layout.GlobalCacheDir
 import org.gradle.internal.Factory
 import org.gradle.internal.instantiation.InstantiatorFactory
 import org.gradle.internal.operations.BuildOperationContext
@@ -52,25 +51,19 @@ import org.gradle.internal.os.OperatingSystem
 import org.gradle.internal.service.DefaultServiceRegistry
 import org.gradle.internal.work.WorkerLeaseService
 import org.gradle.nativeplatform.OperatingSystemFamily
-import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
+import org.jetbrains.kotlin.commonizer.util.transitiveClosure
+import org.jetbrains.kotlin.gradle.plugin.KotlinCompilation
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSetContainer
+import org.jetbrains.kotlin.gradle.plugin.KotlinTargetsContainer
+import org.jetbrains.kotlin.gradle.utils.extendsFrom
 import java.net.URI
 import java.nio.file.FileSystem
 import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.Path
-import javax.inject.Inject
 import kotlin.streams.asSequence
 
-open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(cacheDir: GlobalCacheDir) : Plugin<T> {
-    val cache: Path = cacheDir.dir.toPath().resolve("minecraft-codev")
-
-    // Asset indexes and objects
-    val assets: Path = cache.resolve("assets")
-
-    // Legacy assets
-    val resources: Path = cache.resolve("resources")
-
+open class MinecraftCodevPlugin<T : PluginAware> : Plugin<T> {
     private fun applyGradle(gradle: Gradle) {
         registerCustomDependency("minecraft", gradle, MinecraftIvyDependencyDescriptorFactory::class.java, MinecraftComponentResolvers::class.java)
     }
@@ -96,8 +89,6 @@ open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(cacheDir: G
     }
 
     companion object {
-        const val DOWNLOAD_ASSETS = "downloadAssets"
-
         @JvmField
         val OPERATING_SYSTEM_VERSION_PATTERN_ATTRIBUTE: Attribute<String> = Attribute.of("net.msrandom.minecraftcodev.operatingSystemVersionPattern", String::class.java)
 
@@ -249,73 +240,110 @@ open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(cacheDir: G
             it.asSequence().action()
         }
 
+        /**
+         * Find a matching configuration name by attempting to find which source set the resolving module configuration is from.
+         */
         fun Project.getSourceSetConfigurationName(dependency: ConfiguredDependencyMetadata, defaultConfiguration: String) = dependency.relatedConfiguration ?: run {
             val moduleConfiguration = dependency.getModuleConfiguration()
             if (moduleConfiguration == null) {
                 defaultConfiguration
             } else {
+                // First, look for a Java source set. We can't know if this is an exact match as Java source sets don't keep a list of related configurations, but it's good enough.
                 var owningSourceSetName = extensions
-                    .getByType(SourceSetContainer::class.java)
-                    .firstOrNull { moduleConfiguration.startsWith(it.name) }
+                    .findByType(SourceSetContainer::class.java)
+                    ?.firstOrNull { moduleConfiguration.startsWith(it.name) }
                     ?.name
 
                 if (owningSourceSetName == null) {
+                    // If that fails, look for a matching Kotlin source set.
                     owningSourceSetName = extensions
-                        .findByType(KotlinMultiplatformExtension::class.java)
+                        .findByType(KotlinSourceSetContainer::class.java)
                         ?.sourceSets
                         ?.firstOrNull { moduleConfiguration in it.relatedConfigurationNames }
                         ?.name
+
+                    if (owningSourceSetName == null) {
+                        // If all fails, look for a matching Kotlin compilation as a last resort.
+                        owningSourceSetName = extensions
+                            .findByType(KotlinTargetsContainer::class.java)
+                            ?.targets
+                            ?.firstNotNullOfOrNull { target ->
+                                target.compilations.firstOrNull {
+                                    moduleConfiguration in it.relatedConfigurationNames
+                                }
+                            }
+                            ?.name
+                    }
                 }
 
-                owningSourceSetName?.let { "$it${StringUtils.capitalize(defaultConfiguration)}" } ?: defaultConfiguration
+                // If no related source set/compilation was found, we can return the default configuration, and it will error later if it doesn't exist.
+                owningSourceSetName?.let { it + StringUtils.capitalize(defaultConfiguration) } ?: defaultConfiguration
             }
         }
 
-        fun Project.createSourceSetConfigurations(name: String) {
-            val capitalized = StringUtils.capitalize(name)
+        private fun KotlinCompilation<*>.configurationBase() = target.disambiguationClassifier +
+                name.takeIf { it != KotlinCompilation.MAIN_COMPILATION_NAME }?.let(StringUtils::capitalize).orEmpty()
 
+        fun Project.createSourceSetElements(action: (name: String) -> Unit) {
             extensions.findByType(SourceSetContainer::class.java)?.let {
-                configurations.maybeCreate(name).apply {
-                    isCanBeConsumed = false
-                    isTransitive = false
-                }
+                action("")
 
                 it.all { sourceSet ->
                     @Suppress("UnstableApiUsage")
                     if (!SourceSet.isMain(sourceSet)) {
-                        configurations.maybeCreate("${sourceSet.name}$capitalized").apply {
-                            isCanBeConsumed = false
-                            isTransitive = false
-                        }
+                        action(sourceSet.name)
                     }
                 }
             }
 
             extensions.findByType(KotlinSourceSetContainer::class.java)?.sourceSets?.all { sourceSet ->
-                configurations.maybeCreate("${sourceSet.name}$capitalized").apply {
+                if (sourceSet.name == SourceSet.MAIN_SOURCE_SET_NAME) {
+                    action("")
+                } else {
+                    action(sourceSet.name)
+                }
+            }
+
+            extensions.findByType(KotlinTargetsContainer::class.java)?.targets?.all { target ->
+                target.compilations.all { compilation ->
+                    action(compilation.configurationBase())
+                }
+            }
+        }
+
+        fun Project.createSourceSetConfigurations(name: String) {
+            createSourceSetElements { setName ->
+                val configurationName = if (setName.isEmpty()) name else setName + StringUtils.capitalize(name)
+                configurations.maybeCreate(configurationName).apply {
                     isCanBeConsumed = false
                     isTransitive = false
                 }
             }
-            /*
-                            project.afterEvaluate {
-                                kotlin.targets.all { target ->
-                                    target.compilations.all { compilation ->
-                                        val start = target.disambiguationClassifier
-                                        val middle = compilation.name.takeIf { it != KotlinCompilation.MAIN_COMPILATION_NAME }?.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
-                                        val end = name.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
-                                        val configurationName =
-                                        val configuration = configurations.getByName(compilation.compileOnlyConfigurationName)
-                                        val defaultSourceSet = compilation.defaultSourceSet
-                                        val allSourceSets = compilation.kotlinSourceSets + compilation.kotlinSourceSets.flatMapTo(mutableSetOf()) {
-                                            transitiveClosure(defaultSourceSet) { dependsOn }
-                                        }
 
-                                        for (allSourceSet in allSourceSets) {
-                                        }
-                                    }
-                                }
-                            }*/
+            extendKotlinConfigurations(name)
+        }
+
+        fun Project.extendKotlinConfigurations(name: String) = afterEvaluate {
+            extensions.findByType(KotlinTargetsContainer::class.java)?.targets?.all { target ->
+                target.compilations.all { compilation ->
+                    val configuration = configurations.named(compilation.configurationBase() + StringUtils.capitalize(name))
+                    val defaultSourceSet = compilation.defaultSourceSet
+
+                    val allSourceSets = compilation.kotlinSourceSets + compilation.kotlinSourceSets.flatMapTo(mutableSetOf()) {
+                        transitiveClosure(defaultSourceSet) { dependsOn }
+                    }
+
+                    for (sourceSet in allSourceSets) {
+                        if (sourceSet != defaultSourceSet) {
+                            if (sourceSet.name == SourceSet.MAIN_SOURCE_SET_NAME) {
+                                configuration.extendsFrom(configurations.named(name))
+                            } else {
+                                configuration.extendsFrom(configurations.named(name))
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         fun <T : PluginAware> Plugin<T>.applyPlugin(target: T, action: Project.() -> Unit) = applyPlugin(target, {}, action)

@@ -16,6 +16,7 @@ import org.gradle.internal.component.external.model.DefaultModuleComponentIdenti
 import org.gradle.internal.component.external.model.ModuleComponentArtifactIdentifier
 import org.gradle.internal.component.external.model.ModuleComponentArtifactMetadata
 import org.gradle.internal.component.external.model.ModuleComponentFileArtifactIdentifier
+import org.gradle.internal.component.local.model.LocalComponentArtifactMetadata
 import org.gradle.internal.component.model.ComponentArtifactMetadata
 import org.gradle.internal.component.model.ComponentResolveMetadata
 import org.gradle.internal.component.model.ModuleSources
@@ -61,7 +62,10 @@ open class MinecraftArtifactResolver @Inject constructor(
 
     override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactResolveResult) {
         val componentIdentifier = artifact.componentId
-        if (componentIdentifier is MinecraftComponentIdentifier) {
+
+        if (artifact is LocalComponentArtifactMetadata) {
+            result.resolved(artifact.file)
+        } else if (componentIdentifier is MinecraftComponentIdentifier) {
             val id = artifact.id as ModuleComponentArtifactIdentifier
             val urlId = ModuleComponentFileArtifactIdentifier(DefaultModuleComponentIdentifier.newId(componentIdentifier.moduleIdentifier, componentIdentifier.version), id.fileName)
             val cached = artifactCache[urlId]
@@ -177,7 +181,7 @@ open class MinecraftArtifactResolver @Inject constructor(
     ) = MinecraftMetadataGenerator.getVersionManifest(
         moduleComponentIdentifier,
         repository.url,
-        globalScopedCache,
+        cacheManager,
         cachePolicy,
         repository.transport.resourceAccessor,
         fileStoreAndIndexProvider,

@@ -92,7 +92,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
             val manifest = MinecraftMetadataGenerator.getVersionManifest(
                 moduleComponentIdentifier,
                 repository.url,
-                globalScopedCache,
+                minecraftCacheManager,
                 cachePolicy,
                 repository.transport.resourceAccessor,
                 fileStoreAndIndexProvider,
@@ -131,6 +131,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
     override fun resolve(dependency: DependencyMetadata, acceptor: VersionSelector?, rejector: VersionSelector?, result: BuildableComponentIdResolveResult) {
         if (dependency is PatchedMinecraftDependencyMetadata) {
             componentIdResolver.resolveVersion(dependency, acceptor, rejector, result) { module, version ->
+                println("Resolving ${dependency.getModuleConfiguration()} with patches ${project.getSourceSetConfigurationName(dependency, MinecraftCodevForgePlugin.PATCHES_CONFIGURATION)}")
                 PatchedComponentIdentifier(
                     MinecraftComponentIdentifier(module, version),
                     project.getSourceSetConfigurationName(dependency, MinecraftCodevForgePlugin.PATCHES_CONFIGURATION),
@@ -143,7 +144,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
     override fun resolve(identifier: ComponentIdentifier, componentOverrideMetadata: ComponentOverrideMetadata, result: BuildableComponentResolveResult) {
         if (identifier is PatchedComponentIdentifier) {
             val patches = project.unsafeResolveConfiguration(project.configurations.getByName(identifier.patches))
-            val config = UserdevConfig.fromFile(patches.first())
+            val config = UserdevConfig.fromFile(patches.singleFile)
 
             if (config != null) {
                 for (repository in repositories) {
@@ -176,7 +177,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
     ) = if (component.id is PatchedComponentIdentifier) {
         val moduleComponentIdentifier = component.id as PatchedComponentIdentifier
         val patches = project.configurations.getByName(moduleComponentIdentifier.patches)
-        val patchState = getPatchState(moduleComponentIdentifier, patches.first(), hash(patches)) { _, duration ->
+        val patchState = getPatchState(moduleComponentIdentifier, patches.singleFile, hash(patches)) { _, duration ->
             cachePolicy.moduleExpiry(
                 moduleComponentIdentifier,
                 DefaultResolvedModuleVersion(DefaultModuleVersionIdentifier.newId(moduleComponentIdentifier.moduleIdentifier, moduleComponentIdentifier.version)),
@@ -251,7 +252,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
 
                 when (moduleComponentIdentifier.module) {
                     MinecraftComponentResolvers.COMMON_MODULE -> {
-                        getPatchState(moduleComponentIdentifier, patches.first(), patchesHash, shouldRefresh)?.split?.common?.let {
+                        getPatchState(moduleComponentIdentifier, patches.singleFile, patchesHash, shouldRefresh)?.split?.common?.let {
                             val file = it.toFile()
                             result.resolved(file)
 
@@ -260,7 +261,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
                     }
 
                     MinecraftComponentResolvers.CLIENT_MODULE -> {
-                        getPatchState(moduleComponentIdentifier, patches.first(), patchesHash, shouldRefresh)?.split?.client?.let {
+                        getPatchState(moduleComponentIdentifier, patches.singleFile, patchesHash, shouldRefresh)?.split?.client?.let {
                             val file = it.toFile()
                             result.resolved(file)
 

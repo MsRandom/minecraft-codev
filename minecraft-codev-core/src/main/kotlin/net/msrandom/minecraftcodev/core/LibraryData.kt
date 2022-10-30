@@ -1,6 +1,7 @@
 package net.msrandom.minecraftcodev.core
 
 import com.google.common.collect.Multimap
+import kotlinx.serialization.Serializable
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
 
 class LibraryData(
@@ -21,5 +22,6 @@ class LibraryData(
      */
     val natives: Multimap<MinecraftVersionMetadata.Rule.OperatingSystem, Native>,
 ) {
+    @Serializable
     data class Native(val library: ModuleLibraryIdentifier, val extractData: MinecraftVersionMetadata.Library.ExtractData?)
 }

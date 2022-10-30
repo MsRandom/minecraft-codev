@@ -1,4 +1,4 @@
-package net.msrandom.minecraftcodev.core.task
+package net.msrandom.minecraftcodev.runs
 
 import com.google.common.hash.Hashing
 import com.google.common.util.concurrent.AtomicDouble
@@ -8,11 +8,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import net.msrandom.minecraftcodev.core.AssetsIndex
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
-import org.gradle.api.DefaultTask
-import org.gradle.api.tasks.Input
-import org.gradle.api.tasks.TaskAction
+import org.gradle.api.Project
 import java.io.IOException
 import java.io.InputStream
 import java.net.URL
@@ -27,10 +24,8 @@ import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 import com.google.common.io.Files as GuavaFiles
 
-abstract class DownloadAssets : DefaultTask() {
-    abstract val assetIndex: MinecraftVersionMetadata.AssetIndex
-        @Input get
-
+// TODO Maybe somehow turn this to a task, despite needing dynamic parameters after configuration?
+object AssetDownloader {
     private val sizeCategories = arrayOf(" Bytes", "KB", "MB", "GB", "TB", "PB", "EB")
     private val decimalFormat = DecimalFormat("#.##")
 
@@ -71,9 +66,9 @@ abstract class DownloadAssets : DefaultTask() {
         return input
     }
 
-    @TaskAction
-    fun download() {
-        val codev = project.plugins.getPlugin(MinecraftCodevPlugin::class.java)
+    fun downloadAssets(project: Project, assetIndex: MinecraftVersionMetadata.AssetIndex) {
+        val codev = project.plugins.getPlugin(MinecraftCodevRunsPlugin::class.java)
+        val logger = project.logger
         val assetsDirectory = codev.assets
         val resourcesDirectory = codev.resources
         val indexesDirectory = assetsDirectory.resolve("indexes")

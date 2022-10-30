@@ -1,7 +1,9 @@
 package net.msrandom.minecraftcodev.core.resolve
 
 import com.google.common.collect.HashMultimap
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
+import kotlinx.serialization.json.encodeToStream
 import net.msrandom.minecraftcodev.core.*
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
 import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
@@ -21,24 +23,22 @@ import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
 import org.gradle.api.internal.artifacts.DefaultModuleVersionIdentifier
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
 import org.gradle.api.internal.artifacts.dependencies.DefaultImmutableVersionConstraint
-import org.gradle.api.internal.artifacts.ivyservice.CacheLayout
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.FileStoreAndIndexProvider
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.dynamicversions.DefaultResolvedModuleVersion
+import org.gradle.api.internal.artifacts.publish.ImmutablePublishArtifact
 import org.gradle.api.internal.attributes.ImmutableAttributes
 import org.gradle.api.internal.attributes.ImmutableAttributesFactory
 import org.gradle.api.internal.model.NamedObjectInstantiator
 import org.gradle.api.internal.project.ProjectInternal
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.plugins.JavaPlugin
-import org.gradle.cache.scopes.GlobalScopedCache
+import org.gradle.initialization.layout.GlobalCacheDir
 import org.gradle.internal.component.external.model.DefaultModuleComponentArtifactMetadata
 import org.gradle.internal.component.external.model.DefaultModuleComponentSelector
 import org.gradle.internal.component.external.model.GradleDependencyMetadata
 import org.gradle.internal.component.external.model.ImmutableCapabilities
-import org.gradle.internal.component.model.ComponentOverrideMetadata
-import org.gradle.internal.component.model.ConfigurationMetadata
-import org.gradle.internal.component.model.DefaultIvyArtifactName
-import org.gradle.internal.component.model.DependencyMetadata
+import org.gradle.internal.component.local.model.PublishArtifactLocalArtifactMetadata
+import org.gradle.internal.component.model.*
 import org.gradle.internal.hash.ChecksumService
 import org.gradle.internal.operations.BuildOperationExecutor
 import org.gradle.internal.resolve.result.BuildableComponentResolveResult
@@ -58,7 +58,7 @@ import kotlin.io.path.*
 
 open class MinecraftMetadataGenerator @Inject constructor(
     private val cacheManager: CodevCacheManager,
-    private val globalScopedCache: GlobalScopedCache,
+    private val globalCacheDir: GlobalCacheDir,
     private val attributesFactory: ImmutableAttributesFactory,
     private val buildOperationExecutor: BuildOperationExecutor,
     private val fileStoreAndIndexProvider: FileStoreAndIndexProvider,
@@ -119,7 +119,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
             moduleComponentIdentifier,
             DefaultResolvedModuleVersion(DefaultModuleVersionIdentifier.newId(moduleComponentIdentifier)),
             repository.url,
-            globalScopedCache,
+            cacheManager,
             cachePolicy,
             resourceAccessor,
             fileStoreAndIndexProvider,
@@ -328,6 +328,77 @@ open class MinecraftMetadataGenerator @Inject constructor(
                     )
 
                     return
+                }
+
+                MinecraftComponentResolvers.CLIENT_NATIVES_MODULE -> {
+                    val extractionResult = extractionState(
+                        moduleComponentIdentifier,
+                        repository,
+                        manifest
+                    )?.value
+
+                    val libraries = collectLibraries(manifest, extractionResult?.libraries ?: emptyList())
+                    val variants = mutableListOf<ConfigurationMetadata>()
+
+                    for ((system, platformLibraries) in libraries.natives.asMap()) {
+                        val dependencies = mutableListOf<DependencyMetadata>()
+                        val artifacts = mutableListOf<ComponentArtifactMetadata>()
+
+                        for (platformLibrary in platformLibraries) {
+                            dependencies.add(mapLibrary(platformLibrary.library))
+
+                            val path = globalCacheDir.dir
+                                .toPath()
+                                .resolve(CodevCacheManager.ROOT_NAME)
+                                .resolve("native-extraction-rules")
+                                .resolve("${platformLibrary.hashCode().toString(16)}.json")
+
+                            path.parent.createDirectories()
+
+                            path.outputStream().use {
+                                Json.encodeToStream(platformLibrary, it)
+                            }
+
+                            artifacts.add(
+                                PublishArtifactLocalArtifactMetadata(
+                                    moduleComponentIdentifier,
+                                    ImmutablePublishArtifact(
+                                        platformLibrary.library.module,
+                                        "json",
+                                        "json",
+                                        platformLibrary.library.classifier,
+                                        path.toFile()
+                                    )
+                                )
+                            )
+                        }
+
+                        variants.add(
+                            CodevGradleLinkageLoader.ConfigurationMetadata(
+                                system.name.toString(),
+                                moduleComponentIdentifier,
+                                dependencies,
+                                artifacts,
+                                defaultAttributes(manifest, defaultAttributes).runtimeAttributes().addNamed(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE, system.name.toString()),
+                                ImmutableCapabilities.EMPTY,
+                                setOf(system.name.toString()),
+                                objectFactory
+                            )
+                        )
+                    }
+
+                    result.resolved(
+                        CodevGradleLinkageLoader.ComponentResolveMetadata(
+                            attributesFactory.of(ProjectInternal.STATUS_ATTRIBUTE, manifest.type),
+                            moduleComponentIdentifier,
+                            DefaultModuleVersionIdentifier.newId(moduleComponentIdentifier.moduleIdentifier, moduleComponentIdentifier.version),
+                            variants,
+                            requestMetaData.isChanging,
+                            manifest.type,
+                            versionList.latest.keys.reversed(),
+                            objectFactory
+                        )
+                    )
                 }
 
                 else -> if (extraLibraries.isEmpty()) {
@@ -547,7 +618,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
             id: ModuleComponentIdentifier,
             resolvedModuleVersion: ResolvedModuleVersion?,
             url: URI,
-            globalScopedCache: GlobalScopedCache,
+            cacheManager: CodevCacheManager,
             cachePolicy: CachePolicy,
             resourceAccessor: CacheAwareExternalResourceAccessor,
             fileStoreAndIndexProvider: FileStoreAndIndexProvider,
@@ -556,10 +627,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
             if (isManifestInitialized) {
                 versionManifest
             } else {
-                val versionManifest = CacheLayout.META_DATA.getPath(globalScopedCache.baseDirForCrossVersionCache(CacheLayout.ROOT.key))
-                    .toPath()
-                    .resolve("minecraft-codev")
-                    .resolve("version-manifest.json")
+                val versionManifest = cacheManager.rootPath.resolve("version-manifest.json")
 
                 val cached = versionManifest.takeIf(Path::exists)?.let { checkCached(id, resolvedModuleVersion, it, cachePolicy) }
 
@@ -573,7 +641,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
         fun getVersionManifest(
             id: ModuleComponentIdentifier,
             url: URI,
-            globalScopedCache: GlobalScopedCache,
+            cacheManager: CodevCacheManager,
             cachePolicy: CachePolicy,
             resourceAccessor: CacheAwareExternalResourceAccessor,
             fileStoreAndIndexProvider: FileStoreAndIndexProvider,
@@ -583,7 +651,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
             resourceAccessor,
             fileStoreAndIndexProvider,
             attempt,
-            getVersionList(id, DefaultResolvedModuleVersion(DefaultModuleVersionIdentifier.newId(id)), url, globalScopedCache, cachePolicy, resourceAccessor, fileStoreAndIndexProvider, null)
+            getVersionList(id, DefaultResolvedModuleVersion(DefaultModuleVersionIdentifier.newId(id)), url, cacheManager, cachePolicy, resourceAccessor, fileStoreAndIndexProvider, null)
         )
 
         fun getVersionManifest(

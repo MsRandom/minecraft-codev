@@ -98,7 +98,7 @@ open class MinecraftComponentResolvers @Inject constructor(
         val componentIdentifier = component.id
         return if (componentIdentifier is MinecraftComponentIdentifier) {
             // Direct server downloads are not allowed, as the common dependency should be used for that instead
-            val valid = if (componentIdentifier.module.startsWith(PREFIX) && !componentIdentifier.module.endsWith(SERVER_DOWNLOAD)) {
+            val valid = if (componentIdentifier.module != SERVER_DOWNLOAD) {
                 if (componentIdentifier.module == CLIENT_MODULE) {
                     true
                 } else {
@@ -106,7 +106,7 @@ open class MinecraftComponentResolvers @Inject constructor(
 
                     for (repository in repositories) {
                         val manifest = MinecraftMetadataGenerator.getVersionManifest(
-                            componentIdentifier, repository.url, globalScopedCache, cachePolicy, repository.transport.resourceAccessor, fileStoreAndIndexProvider, null
+                            componentIdentifier, repository.url, cacheManager, cachePolicy, repository.transport.resourceAccessor, fileStoreAndIndexProvider, null
                         )
 
                         if (manifest != null) {
@@ -118,7 +118,7 @@ open class MinecraftComponentResolvers @Inject constructor(
                             } else {
                                 val fixedName = componentIdentifier.module.asMinecraftDownload()
 
-                                if (fixedName != SERVER_DOWNLOAD && fixedName in manifest.downloads) {
+                                if (fixedName != SERVER_DOWNLOAD && (fixedName in manifest.downloads || componentIdentifier.module == CLIENT_NATIVES_MODULE)) {
                                     exists = true
                                     break
                                 }
@@ -147,10 +147,10 @@ open class MinecraftComponentResolvers @Inject constructor(
 
     companion object {
         const val GROUP = "net.minecraft"
-        const val PREFIX = ""
 
-        const val COMMON_MODULE = "${PREFIX}common"
-        const val CLIENT_MODULE = "${PREFIX}client"
+        const val COMMON_MODULE = "common"
+        const val CLIENT_MODULE = "client"
+        const val CLIENT_NATIVES_MODULE = "client-natives"
         const val CLIENT_DOWNLOAD = "client"
         const val SERVER_DOWNLOAD = "server"
 
@@ -159,7 +159,7 @@ open class MinecraftComponentResolvers @Inject constructor(
         fun ImmutableAttributes.addNamed(attributesFactory: ImmutableAttributesFactory, instantiator: NamedObjectInstantiator, attribute: Attribute<*>, value: String): ImmutableAttributes =
             attributesFactory.concat(this, Attribute.of(attribute.name, String::class.java), CoercingStringValueSnapshot(value, instantiator))
 
-        internal fun String.asMinecraftDownload() = takeIf { startsWith(PREFIX) && !contains('_') }?.removePrefix(PREFIX)?.replace('-', '_')
+        internal fun String.asMinecraftDownload() = takeUnless { contains('_') }?.replace('-', '_')
 
         fun ComponentArtifactMetadata.hash(): HashCode = HashCode.fromBytes(name.hashCode().let {
             byteArrayOf((it and 0xFF).toByte(), (it shl 8 and 0xFF).toByte(), (it shl 16 and 0xFF).toByte(), (it shl 24 and 0xFF).toByte())

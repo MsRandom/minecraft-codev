@@ -1,6 +1,7 @@
 package net.msrandom.minecraftcodev.core.resolve
 
 import net.minecraftforge.srgutils.MinecraftVersion
+import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.dependency.MinecraftDependencyMetadata
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
 import org.gradle.api.InvalidUserCodeException
@@ -41,8 +42,11 @@ open class MinecraftDependencyToComponentIdResolver @Inject constructor(
     private val fileStoreAndIndexProvider: FileStoreAndIndexProvider,
     private val versionParser: VersionParser,
     private val globalScopedCache: GlobalScopedCache,
-    private val attributesFactory: ImmutableAttributesFactory
+    private val attributesFactory: ImmutableAttributesFactory,
+    cacheProvider: CodevCacheProvider
 ) : DependencyToComponentIdResolver {
+    private val cacheManager = cacheProvider.manager("minecraft")
+
     override fun resolve(dependency: DependencyMetadata, acceptor: VersionSelector?, rejector: VersionSelector?, result: BuildableComponentIdResolveResult) {
         if (dependency is MinecraftDependencyMetadata) {
             resolveVersion(dependency, acceptor, rejector, result, ::MinecraftComponentIdentifier)
@@ -67,7 +71,7 @@ open class MinecraftDependencyToComponentIdResolver @Inject constructor(
                             DefaultModuleComponentIdentifier.newId(componentSelector.moduleIdentifier, componentSelector.version),
                             null,
                             repository.url,
-                            globalScopedCache,
+                            cacheManager,
                             cachePolicy,
                             repository.transport.resourceAccessor,
                             fileStoreAndIndexProvider,
