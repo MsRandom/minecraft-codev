@@ -69,9 +69,9 @@ plugins {
   id("minecraft-codev-remapper") version "1.0"
 }
 
-val mod16: Configuration by configurations.creating // For 1.16
-val mod18: Configuration by configurations.creating // For 1.18
-val mod19: Configuration by configurations.creating // For 1.19
+val mod16: Configuration by sourceSets.creating // For 1.16
+val mod18: Configuration by sourceSets.creating // For 1.18
+val mod19: Configuration by sourceSets.creating // For 1.19
 
 repositories {
   minecraft()
