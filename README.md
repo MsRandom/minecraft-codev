@@ -79,12 +79,12 @@ dependencies {
   // The remapper can automatically find the right mappings configuration based on the resolving module, like finding mod16Mappings from mod16Implementation.
 
   "mod16Mappings"(minecraft(MinecraftType.ClientMappings, "1.16+"))
-  "mod16Implementation(minecraft(MinecraftType.ClientMappings, "1.18+").remapped)
+  "mod16Implementation"(minecraft(MinecraftType.ClientMappings, "1.18+").remapped)
 
   "mod18Mappings"(minecraft(MinecraftType.ClientMappings, "1.18+"))
-  "mod18Implementation(minecraft(MinecraftType.ClientMappings, "1.18+").remapped)
+  "mod18Implementation"(minecraft(MinecraftType.ClientMappings, "1.18+").remapped)
 
   "mod19Mappings"(minecraft(MinecraftType.ClientMappings, "1.19+"))
-  "mod19Implementation(minecraft(MinecraftType.ClientMappings, "1.19+").remapped)
+  "mod19Implementation"(minecraft(MinecraftType.ClientMappings, "1.19+").remapped)
 }
 ```
