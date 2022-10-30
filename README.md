@@ -13,6 +13,7 @@ This project is currently heavily WIP, so many of the planned features are yet n
 ### Simple Minecraft Example
 ```kotlin
 plugins {
+  java
   id("minecraft-codev-remapper") version "1.0"
 }
 
@@ -38,6 +39,7 @@ dependencies {
 ### Forge Patched Minecraft Example
 ```kotlin
 plugins {
+  java
   id("minecraft-codev-forge") version "1.0"
   id("minecraft-codev-remapper") version "1.0"
 }
@@ -63,6 +65,7 @@ dependencies {
 ### Multiversion Example
 ```kotlin
 plugins {
+  java
   id("minecraft-codev-remapper") version "1.0"
 }
 
