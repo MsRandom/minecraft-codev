@@ -3,6 +3,7 @@ package net.msrandom.minecraftcodev.runs
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.applyPlugin
+import net.msrandom.minecraftcodev.runs.task.GenerateIdeaRuns
 import org.apache.commons.lang3.StringUtils
 import org.gradle.api.Plugin
 import org.gradle.api.plugins.ApplicationPlugin
@@ -21,6 +22,8 @@ class MinecraftCodevRunsPlugin<T : PluginAware> : Plugin<T> {
             val runs = project.container(MinecraftRunConfigurationBuilder::class.java)
 
             extensions.getByType(MinecraftCodevExtension::class.java).extensions.add("runs", runs)
+
+            tasks.register("generateIdeaRuns", GenerateIdeaRuns::class.java)
 
             runs.all { builder ->
                 tasks.register("${ApplicationPlugin.TASK_RUN_NAME}${StringUtils.capitalize(builder.name)}", JavaExec::class.java) { javaExec ->

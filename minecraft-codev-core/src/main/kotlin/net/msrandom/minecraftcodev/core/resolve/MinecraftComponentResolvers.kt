@@ -3,7 +3,6 @@ package net.msrandom.minecraftcodev.core.resolve
 import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.dependency.MinecraftDependencyMetadataWrapper
-import net.msrandom.minecraftcodev.core.repository.MinecraftRepository
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
 import org.gradle.api.artifacts.ModuleIdentifier
 import org.gradle.api.artifacts.component.ComponentIdentifier
@@ -16,7 +15,6 @@ import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ComponentResolver
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.FileStoreAndIndexProvider
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.artifact.ArtifactSet
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.excludes.specs.ExcludeSpec
-import org.gradle.api.internal.artifacts.repositories.ResolutionAwareRepository
 import org.gradle.api.internal.artifacts.type.ArtifactTypeRegistry
 import org.gradle.api.internal.attributes.ImmutableAttributes
 import org.gradle.api.internal.attributes.ImmutableAttributesFactory
@@ -50,12 +48,9 @@ open class MinecraftComponentResolvers @Inject constructor(
 
     repositoriesSupplier: RepositoriesSupplier
 ) : ComponentResolvers, ComponentMetaDataResolver, OriginArtifactSelector {
-    private val repositories = repositoriesSupplier.get().asSequence()
-        .filterIsInstance<MinecraftRepository>()
-        .filterIsInstance<ResolutionAwareRepository>()
-        .map(ResolutionAwareRepository::createResolver)
-        .filterIsInstance<MinecraftRepositoryImpl.Resolver>()
-        .toList()
+    private val repositories = repositoriesSupplier.get()
+        .filterIsInstance<MinecraftRepositoryImpl>()
+        .map(MinecraftRepositoryImpl::createResolver)
 
     private val componentIdResolver = objects.newInstance(MinecraftDependencyToComponentIdResolver::class.java, repositories)
     private val artifactResolver = objects.newInstance(MinecraftArtifactResolver::class.java, repositories)

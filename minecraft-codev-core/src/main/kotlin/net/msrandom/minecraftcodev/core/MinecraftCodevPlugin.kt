@@ -121,6 +121,14 @@ open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(cacheDir: G
             isAccessible = true
         }
 
+        fun getCacheProvider(gradle: Gradle): CodevCacheProvider {
+            if (!::cacheProvider.isInitialized) {
+                cacheProvider = CodevCacheProvider(gradle)
+            }
+
+            return cacheProvider
+        }
+
         // FIXME This can cause deadlocks, should probably figure out a way around all of this.
         fun Project.unsafeResolveConfiguration(configuration: Configuration): Configuration {
             // Create new thread that can acquire a new binary store
@@ -193,10 +201,6 @@ open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(cacheDir: G
 
                         startParameterResolutionOverride.applyToCachePolicy(cachePolicy)
 
-                        if (!::cacheProvider.isInitialized) {
-                            cacheProvider = CodevCacheProvider(gradle)
-                        }
-
                         val resolversProvider by lazy {
                             ComponentResolversChain(resolvers as List<ComponentResolvers>, project.serviceOf(), project.serviceOf())
                         }
@@ -204,7 +208,7 @@ open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(cacheDir: G
                         newServices.add(ConfigurationInternal::class.java, configuration)
                         newServices.add(CachePolicy::class.java, cachePolicy)
                         newServices.add(ObjectFactory::class.java, projectObjectFactory)
-                        newServices.add(CodevCacheProvider::class.java, cacheProvider)
+                        newServices.add(CodevCacheProvider::class.java, getCacheProvider(gradle))
 
                         newServices.add(ComponentResolversChainProvider::class.java, ComponentResolversChainProvider { resolversProvider })
 

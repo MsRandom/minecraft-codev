@@ -4,7 +4,6 @@ import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.getSource
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.unsafeResolveConfiguration
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
-import net.msrandom.minecraftcodev.core.repository.MinecraftRepository
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
 import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.resolveMojangFile
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentIdentifier
@@ -30,7 +29,6 @@ import org.gradle.api.internal.artifacts.ivyservice.modulecache.FileStoreAndInde
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.artifacts.DefaultCachedArtifact
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.dynamicversions.DefaultResolvedModuleVersion
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.excludes.specs.ExcludeSpec
-import org.gradle.api.internal.artifacts.repositories.ResolutionAwareRepository
 import org.gradle.api.internal.artifacts.type.ArtifactTypeRegistry
 import org.gradle.api.internal.attributes.ImmutableAttributes
 import org.gradle.api.internal.component.ArtifactType
@@ -78,17 +76,11 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
         }.asFile
     }
 
-    private val repositories = repositoriesSupplier.get().asSequence()
-        .filterIsInstance<MinecraftRepository>()
-        .filterIsInstance<ResolutionAwareRepository>()
-        .toList()
+    private val repositories = repositoriesSupplier.get()
+        .filterIsInstance<MinecraftRepositoryImpl>()
+        .map(MinecraftRepositoryImpl::createResolver)
 
-    private val repositoryResolvers = repositories
-        .map(ResolutionAwareRepository::createResolver)
-        .filterIsInstance<MinecraftRepositoryImpl.Resolver>()
-        .toList()
-
-    private val componentIdResolver = objectFactory.newInstance(MinecraftDependencyToComponentIdResolver::class.java, repositoryResolvers)
+    private val componentIdResolver = objectFactory.newInstance(MinecraftDependencyToComponentIdResolver::class.java, repositories)
 
     override fun getComponentIdResolver() = this
     override fun getComponentResolver() = this
@@ -96,7 +88,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
     override fun getArtifactResolver() = this
 
     private fun getPatchState(moduleComponentIdentifier: ModuleComponentIdentifier, patches: File, patchesHash: HashCode, shouldRefresh: (File, Duration) -> Boolean): PatchedSetupState? {
-        for (repository in repositoryResolvers) {
+        for (repository in repositories) {
             val manifest = MinecraftMetadataGenerator.getVersionManifest(
                 moduleComponentIdentifier,
                 repository.url,
@@ -154,7 +146,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
             val config = UserdevConfig.fromFile(patches.first())
 
             if (config != null) {
-                for (repository in repositoryResolvers) {
+                for (repository in repositories) {
                     objectFactory.newInstance(MinecraftMetadataGenerator::class.java, minecraftCacheManager).resolveMetadata(
                         repository,
                         config.libraries,

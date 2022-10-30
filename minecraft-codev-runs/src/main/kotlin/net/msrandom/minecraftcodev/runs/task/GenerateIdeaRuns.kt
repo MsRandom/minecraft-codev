@@ -17,7 +17,7 @@ import kotlin.io.path.createDirectories
 import kotlin.io.path.inputStream
 import kotlin.io.path.notExists
 
-open class GenerateIntellijRuns : GenerateRuns() {
+open class GenerateIdeaRuns : GenerateRuns() {
     private val projectPath
         get() = project.layout.projectDirectory.asFile.toPath()
 

@@ -12,12 +12,21 @@ import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSetContainer
 import javax.inject.Inject
 
-abstract class MinecraftRunConfigurationBuilder @Inject constructor(objectFactory: ObjectFactory) : Named, ExtensionAware {
-    val defaults = apply { objectFactory.newInstance(RunConfigurationDefaultsContainer::class.java, this) }
-    private val actions = mutableListOf<Action<MinecraftRunConfiguration>>()
+abstract class MinecraftRunConfigurationBuilder @Inject constructor(private val name: String, objectFactory: ObjectFactory) : Named, ExtensionAware {
+    val defaults = run { objectFactory.newInstance(RunConfigurationDefaultsContainer::class.java, this) }
+    private val setupActions = mutableListOf<Action<MinecraftRunConfiguration>>()
+    private val configurationActions = mutableListOf<Action<MinecraftRunConfiguration>>()
+
+    override fun getName() = name
+
+    fun setup(action: Action<MinecraftRunConfiguration>) {
+        setupActions += action
+    }
+
+    fun setup(action: MinecraftRunConfiguration.() -> Unit) = setup(Action(action))
 
     fun action(action: Action<MinecraftRunConfiguration>) {
-        actions += action
+        configurationActions += action
     }
 
     fun action(action: MinecraftRunConfiguration.() -> Unit) = action(Action(action))
@@ -35,27 +44,27 @@ abstract class MinecraftRunConfigurationBuilder @Inject constructor(objectFactor
     }
 
     fun sourceSet(sourceSet: String) = apply {
-        action { this.sourceSet.set(project.extensions.getByType(SourceSetContainer::class.java).named(sourceSet)) }
+        setup { this.sourceSet.set(project.extensions.getByType(SourceSetContainer::class.java).named(sourceSet)) }
     }
 
     fun sourceSet(sourceSet: Provider<SourceSet>) = apply {
-        action { this.sourceSet.set(sourceSet) }
+        setup { this.sourceSet.set(sourceSet) }
     }
 
     fun sourceSet(sourceSet: SourceSet) = apply {
-        action { this.sourceSet.set(sourceSet) }
+        setup { this.sourceSet.set(sourceSet) }
     }
 
     fun kotlinSourceSet(sourceSet: String) = apply {
-        action { this.kotlinSourceSet.set(project.extensions.getByType(KotlinSourceSetContainer::class.java).sourceSets.named(sourceSet)) }
+        setup { this.kotlinSourceSet.set(project.extensions.getByType(KotlinSourceSetContainer::class.java).sourceSets.named(sourceSet)) }
     }
 
     fun kotlinSourceSet(sourceSet: Provider<KotlinSourceSet>) = apply {
-        action { this.kotlinSourceSet.set(sourceSet) }
+        setup { this.kotlinSourceSet.set(sourceSet) }
     }
 
     fun kotlinSourceSet(sourceSet: KotlinSourceSet) = apply {
-        action { this.kotlinSourceSet.set(sourceSet) }
+        setup { this.kotlinSourceSet.set(sourceSet) }
     }
 
     fun beforeRun(vararg taskNames: String) = apply {
@@ -107,7 +116,11 @@ abstract class MinecraftRunConfigurationBuilder @Inject constructor(objectFactor
     }
 
     internal fun build(project: Project) = project.objects.newInstance(MinecraftRunConfiguration::class.java).also {
-        for (action in actions) {
+        for (action in setupActions) {
+            action.execute(it)
+        }
+
+        for (action in configurationActions) {
             action.execute(it)
         }
     }
