@@ -18,7 +18,6 @@ plugins {
 }
 
 repositories {
-  maven(url = "https://maven.minecraftforge.net/")
   minecraft()
   mavenCentral()
 }
@@ -45,6 +44,7 @@ plugins {
 }
 
 repositories {
+  maven(url = "https://maven.minecraftforge.net/")
   minecraft()
   mavenCentral()
 }
