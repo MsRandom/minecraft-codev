@@ -9,6 +9,7 @@ import net.msrandom.minecraftcodev.core.dependency.MinecraftIvyDependencyDescrip
 import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
 import org.apache.commons.lang3.StringUtils
+import org.apache.commons.lang3.SystemUtils
 import org.gradle.api.Named
 import org.gradle.api.Plugin
 import org.gradle.api.Project
@@ -29,7 +30,6 @@ import org.gradle.api.internal.artifacts.ivyservice.moduleconverter.dependencies
 import org.gradle.api.internal.artifacts.ivyservice.moduleconverter.dependencies.IvyDependencyDescriptorFactory
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.ComponentResolversChain
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.DefaultArtifactDependencyResolver
-import org.gradle.api.internal.attributes.ImmutableAttributesFactory
 import org.gradle.api.internal.collections.DomainObjectCollectionFactory
 import org.gradle.api.internal.file.FileCollectionFactory
 import org.gradle.api.internal.file.FilePropertyFactory
@@ -39,7 +39,6 @@ import org.gradle.api.internal.model.NamedObjectInstantiator
 import org.gradle.api.internal.provider.PropertyFactory
 import org.gradle.api.invocation.Gradle
 import org.gradle.api.model.ObjectFactory
-import org.gradle.api.plugins.JavaPlugin
 import org.gradle.api.plugins.PluginAware
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
@@ -47,7 +46,6 @@ import org.gradle.api.tasks.util.PatternSet
 import org.gradle.configurationcache.extensions.serviceOf
 import org.gradle.initialization.layout.GlobalCacheDir
 import org.gradle.internal.Factory
-import org.gradle.internal.impldep.org.apache.commons.lang.SystemUtils
 import org.gradle.internal.instantiation.InstantiatorFactory
 import org.gradle.internal.operations.BuildOperationContext
 import org.gradle.internal.os.OperatingSystem
@@ -55,7 +53,7 @@ import org.gradle.internal.service.DefaultServiceRegistry
 import org.gradle.internal.work.WorkerLeaseService
 import org.gradle.nativeplatform.OperatingSystemFamily
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
-import org.jetbrains.kotlin.gradle.plugin.KotlinMultiplatformPluginWrapper
+import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSetContainer
 import java.net.URI
 import java.nio.file.FileSystem
 import java.nio.file.FileSystems
@@ -64,7 +62,7 @@ import java.nio.file.Path
 import javax.inject.Inject
 import kotlin.streams.asSequence
 
-open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(private val attributesFactory: ImmutableAttributesFactory, cacheDir: GlobalCacheDir) : Plugin<T> {
+open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(cacheDir: GlobalCacheDir) : Plugin<T> {
     val cache: Path = cacheDir.dir.toPath().resolve("minecraft-codev")
 
     // Asset indexes and objects
@@ -78,8 +76,6 @@ open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(private val
     }
 
     override fun apply(target: T) = applyPlugin(target, ::applyGradle) {
-        plugins.apply(JavaPlugin::class.java)
-
         extensions.create("minecraft", MinecraftCodevExtension::class.java)
 
         project.dependencies.attributesSchema { schema ->
@@ -272,52 +268,50 @@ open class MinecraftCodevPlugin<T : PluginAware> @Inject constructor(private val
         }
 
         fun Project.createSourceSetConfigurations(name: String) {
-            configurations.maybeCreate(name).apply {
-                isCanBeConsumed = false
-                isTransitive = false
-            }
-
             val capitalized = StringUtils.capitalize(name)
 
-            extensions.getByType(SourceSetContainer::class.java).all { sourceSet ->
-                @Suppress("UnstableApiUsage")
-                if (!SourceSet.isMain(sourceSet)) {
-                    configurations.maybeCreate("${sourceSet.name}$capitalized").apply {
-                        isCanBeConsumed = false
-                        isTransitive = false
+            extensions.findByType(SourceSetContainer::class.java)?.let {
+                configurations.maybeCreate(name).apply {
+                    isCanBeConsumed = false
+                    isTransitive = false
+                }
+
+                it.all { sourceSet ->
+                    @Suppress("UnstableApiUsage")
+                    if (!SourceSet.isMain(sourceSet)) {
+                        configurations.maybeCreate("${sourceSet.name}$capitalized").apply {
+                            isCanBeConsumed = false
+                            isTransitive = false
+                        }
                     }
                 }
             }
 
-            plugins.withType(KotlinMultiplatformPluginWrapper::class.java) {
-                val kotlin = extensions.getByType(KotlinMultiplatformExtension::class.java)
-
-                kotlin.sourceSets.all { sourceSet ->
-                    configurations.maybeCreate("${sourceSet.name}$capitalized").apply {
-                        isCanBeConsumed = false
-                        isTransitive = false
-                    }
+            extensions.findByType(KotlinSourceSetContainer::class.java)?.sourceSets?.all { sourceSet ->
+                configurations.maybeCreate("${sourceSet.name}$capitalized").apply {
+                    isCanBeConsumed = false
+                    isTransitive = false
                 }
-                /*
-                                project.afterEvaluate {
-                                    kotlin.targets.all { target ->
-                                        target.compilations.all { compilation ->
-                                            val start = target.disambiguationClassifier
-                                            val middle = compilation.name.takeIf { it != KotlinCompilation.MAIN_COMPILATION_NAME }?.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
-                                            val end = name.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
-                                            val configurationName =
-                                            val configuration = configurations.getByName(compilation.compileOnlyConfigurationName)
-                                            val defaultSourceSet = compilation.defaultSourceSet
-                                            val allSourceSets = compilation.kotlinSourceSets + compilation.kotlinSourceSets.flatMapTo(mutableSetOf()) {
-                                                transitiveClosure(defaultSourceSet) { dependsOn }
-                                            }
+            }
+            /*
+                            project.afterEvaluate {
+                                kotlin.targets.all { target ->
+                                    target.compilations.all { compilation ->
+                                        val start = target.disambiguationClassifier
+                                        val middle = compilation.name.takeIf { it != KotlinCompilation.MAIN_COMPILATION_NAME }?.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+                                        val end = name.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+                                        val configurationName =
+                                        val configuration = configurations.getByName(compilation.compileOnlyConfigurationName)
+                                        val defaultSourceSet = compilation.defaultSourceSet
+                                        val allSourceSets = compilation.kotlinSourceSets + compilation.kotlinSourceSets.flatMapTo(mutableSetOf()) {
+                                            transitiveClosure(defaultSourceSet) { dependsOn }
+                                        }
 
-                                            for (allSourceSet in allSourceSets) {
-                                            }
+                                        for (allSourceSet in allSourceSets) {
                                         }
                                     }
-                                }*/
-            }
+                                }
+                            }*/
         }
 
         fun <T : PluginAware> Plugin<T>.applyPlugin(target: T, action: Project.() -> Unit) = applyPlugin(target, {}, action)

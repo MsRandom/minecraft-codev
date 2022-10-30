@@ -11,6 +11,8 @@ gradlePlugin {
 }
 
 dependencies {
+    implementation(group = "org.apache.commons", name = "commons-lang3", version = "3.12.0")
+
     implementation(projects.minecraftCodevCore)
 }
 

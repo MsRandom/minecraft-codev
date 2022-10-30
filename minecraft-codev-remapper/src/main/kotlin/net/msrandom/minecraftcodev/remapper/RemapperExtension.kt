@@ -16,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 typealias MappingResolutionRule = (path: Path, extension: String, visitor: MappingVisitor, decorate: InputStream.() -> InputStream, existingMappings: MappingTreeView) -> Boolean
 typealias ZipMappingResolutionRule = FileSystem.(visitor: MappingVisitor, decorate: InputStream.() -> InputStream, existingMappings: MappingTreeView, isJar: Boolean) -> Boolean
+typealias ExtraFileRemapper = MappingTreeView.(directory: Path, sourceNamespaceId: Int, targetNamespaceId: Int) -> Unit
 
 open class RemapperExtension {
     private val mappingResolutionRules = mutableListOf<MappingResolutionRule>(
@@ -40,6 +41,9 @@ open class RemapperExtension {
     )
 
     private val zipMappingResolutionRules = mutableListOf<ZipMappingResolutionRule>()
+
+    private val extraFileRemappers = mutableListOf<ExtraFileRemapper>()
+
     private val mappingsCache = ConcurrentHashMap<Configuration, Mappings>()
 
     fun loadMappings(files: Configuration) = mappingsCache.computeIfAbsent(files) {
@@ -80,6 +84,16 @@ open class RemapperExtension {
 
     fun zipMappingsResolution(action: ZipMappingResolutionRule) {
         zipMappingResolutionRules.add(action)
+    }
+
+    fun extraFileRemapper(action: ExtraFileRemapper) {
+        extraFileRemappers.add(action)
+    }
+
+    fun remapFiles(mappings: MappingTreeView, directory: Path, sourceNamespaceId: Int, targetNamespaceId: Int) {
+        for (extraMapper in extraFileRemappers) {
+            mappings.extraMapper(directory, sourceNamespaceId, targetNamespaceId)
+        }
     }
 
     data class Mappings(val tree: MappingTreeView, val hash: HashCode)

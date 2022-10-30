@@ -3,11 +3,11 @@ package net.msrandom.minecraftcodev.runs
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.applyPlugin
+import org.apache.commons.lang3.StringUtils
 import org.gradle.api.Plugin
 import org.gradle.api.plugins.ApplicationPlugin
 import org.gradle.api.plugins.PluginAware
 import org.gradle.api.tasks.JavaExec
-import org.gradle.configurationcache.extensions.capitalized
 import java.nio.file.Path
 
 class MinecraftCodevRunsPlugin<T : PluginAware> : Plugin<T> {
@@ -23,7 +23,7 @@ class MinecraftCodevRunsPlugin<T : PluginAware> : Plugin<T> {
             extensions.getByType(MinecraftCodevExtension::class.java).extensions.add("runs", runs)
 
             runs.all { builder ->
-                tasks.register("${ApplicationPlugin.TASK_RUN_NAME}${builder.name.capitalized()}", JavaExec::class.java) { javaExec ->
+                tasks.register("${ApplicationPlugin.TASK_RUN_NAME}${StringUtils.capitalize(builder.name)}", JavaExec::class.java) { javaExec ->
                     val configuration = builder.build(project)
 
                     javaExec.args(configuration.arguments.get().map { it.parts.joinToString("") })

@@ -21,15 +21,19 @@ import net.msrandom.minecraftcodev.forge.dependency.PatchedMinecraftIvyDependenc
 import net.msrandom.minecraftcodev.forge.resolve.PatchedMinecraftComponentResolvers
 import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
 import net.msrandom.minecraftcodev.remapper.RemapperExtension
+import org.cadixdev.at.io.AccessTransformFormats
+import org.cadixdev.lorenz.MappingSet
 import org.gradle.api.Plugin
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.attributes.Attribute
 import org.gradle.api.invocation.Gradle
+import org.gradle.api.plugins.JvmEcosystemPlugin
 import org.gradle.api.plugins.PluginAware
 import java.io.File
 import java.io.InputStream
 import java.nio.file.FileSystem
 import java.nio.file.Path
+import kotlin.io.path.deleteExisting
 import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 
@@ -42,6 +46,8 @@ open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
         target.plugins.apply(MinecraftCodevPlugin::class.java)
 
         applyPlugin(target, ::applyGradle) {
+            plugins.apply(JvmEcosystemPlugin::class.java)
+
             createSourceSetConfigurations(PATCHES_CONFIGURATION)
 
             dependencies.attributesSchema {
@@ -58,9 +64,10 @@ open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
                 }
             }
 
+            @Suppress("UnstableApiUsage")
             dependencies.registerTransform(ForgeJarTransformer::class.java) {
-                it.from.attribute(ARTIFACT_TYPE, ArtifactTypeDefinition.JAR_TYPE).attribute(FORGE_TRANSFORMED_ATTRIBUTE, false)
-                it.to.attribute(ARTIFACT_TYPE, ArtifactTypeDefinition.JAR_TYPE).attribute(FORGE_TRANSFORMED_ATTRIBUTE, true)
+                it.from.attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, ArtifactTypeDefinition.JAR_TYPE).attribute(FORGE_TRANSFORMED_ATTRIBUTE, false)
+                it.to.attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, ArtifactTypeDefinition.JAR_TYPE).attribute(FORGE_TRANSFORMED_ATTRIBUTE, true)
             }
 
             plugins.withType(MinecraftCodevRemapperPlugin::class.java) {
@@ -185,6 +192,44 @@ open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
                         false
                     }
                 }
+
+                remapper.extraFileRemapper { directory, sourceNamespaceId, targetNamespaceId ->
+                    val path = directory.resolve("META-INF/accesstransformer.cfg")
+
+                    if (path.exists()) {
+                        val mappingSet = MappingSet.create()
+
+                        for (treeClass in classes) {
+                            val mapping = mappingSet.getOrCreateClassMapping(treeClass.getName(sourceNamespaceId))
+                                .setDeobfuscatedName(treeClass.getName(targetNamespaceId))
+
+                            for (field in treeClass.fields) {
+                                val descriptor = field.getDesc(sourceNamespaceId)
+                                val fieldMapping = if (descriptor == null) {
+                                    mapping.getOrCreateFieldMapping(field.getName(sourceNamespaceId))
+                                } else {
+                                    mapping.getOrCreateFieldMapping(field.getName(sourceNamespaceId), descriptor)
+                                }
+
+                                fieldMapping.deobfuscatedName = field.getName(targetNamespaceId)
+                            }
+
+                            for (method in treeClass.methods) {
+                                val methodMapping = mapping.getOrCreateMethodMapping(method.getName(sourceNamespaceId), method.getDesc(sourceNamespaceId))
+                                    .setDeobfuscatedName(method.getName(targetNamespaceId))
+
+                                for (argument in method.args) {
+                                    methodMapping.getOrCreateParameterMapping(argument.argPosition).deobfuscatedName = argument.getName(targetNamespaceId)
+                                }
+                            }
+                        }
+
+                        val accessTransformer = AccessTransformFormats.FML.read(path)
+                        path.deleteExisting()
+
+                        AccessTransformFormats.FML.write(path, accessTransformer.remap(mappingSet))
+                    }
+                }
             }
         }
     }
@@ -208,7 +253,6 @@ open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
         const val SRG_MAPPINGS_NAMESPACE = "srg"
 
         val FORGE_TRANSFORMED_ATTRIBUTE: Attribute<Boolean> = Attribute.of("net.msrandom.minecraftcodev.transformed", Boolean::class.javaObjectType)
-        val ARTIFACT_TYPE: Attribute<String> = Attribute.of("artifactType", String::class.java)
 
         const val PATCHES_CONFIGURATION = "patches"
 

@@ -8,6 +8,8 @@ import org.gradle.api.plugins.ExtensionAware
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
+import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
+import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSetContainer
 import javax.inject.Inject
 
 abstract class MinecraftRunConfigurationBuilder @Inject constructor(objectFactory: ObjectFactory) : Named, ExtensionAware {
@@ -42,6 +44,18 @@ abstract class MinecraftRunConfigurationBuilder @Inject constructor(objectFactor
 
     fun sourceSet(sourceSet: SourceSet) = apply {
         action { this.sourceSet.set(sourceSet) }
+    }
+
+    fun kotlinSourceSet(sourceSet: String) = apply {
+        action { this.kotlinSourceSet.set(project.extensions.getByType(KotlinSourceSetContainer::class.java).sourceSets.named(sourceSet)) }
+    }
+
+    fun kotlinSourceSet(sourceSet: Provider<KotlinSourceSet>) = apply {
+        action { this.kotlinSourceSet.set(sourceSet) }
+    }
+
+    fun kotlinSourceSet(sourceSet: KotlinSourceSet) = apply {
+        action { this.kotlinSourceSet.set(sourceSet) }
     }
 
     fun beforeRun(vararg taskNames: String) = apply {

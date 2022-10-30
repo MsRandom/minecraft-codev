@@ -2,9 +2,9 @@ package net.msrandom.minecraftcodev.runs
 
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.osVersion
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
+import org.apache.commons.lang3.SystemUtils
 import org.gradle.api.Project
 import org.gradle.api.plugins.ExtensionAware
-import org.gradle.internal.impldep.org.apache.commons.lang.SystemUtils
 import org.gradle.internal.os.OperatingSystem
 
 abstract class RunConfigurationDefaultsContainer(val project: Project, val builder: MinecraftRunConfigurationBuilder) : ExtensionAware {
@@ -19,8 +19,8 @@ abstract class RunConfigurationDefaultsContainer(val project: Project, val build
     }
 
     fun client(): RunConfigurationDefaultsContainer = apply {
-        builder.action {
-/*            val extension = project.minecraftCodev
+/*        builder.action {
+            val extension = project.minecraftCodev
             val version = findMinecraftVersion(sourceSet, MinecraftRepositoryAccess.CLIENT)
                 ?: throw UnsupportedOperationException(WRONG_SIDE_ERROR.format(MinecraftRepositoryAccess.CLIENT))
 
@@ -102,13 +102,13 @@ abstract class RunConfigurationDefaultsContainer(val project: Project, val build
                         } else {
                             val templateStart = value.indexOf("\${")
                             if (templateStart != -1) {
-                                *//*val template = value.subSequence(templateStart + 2, value.indexOf('}'))
+                                val template = value.subSequence(templateStart + 2, value.indexOf('}'))
                                 if (template == "natives_directory") {
                                     val nativesDirectory = project.tasks.withType(CopyNatives::class.java).getByName(MinecraftCodevPlugin.COPY_NATIVES).output.asFile.get().toPath()
                                     fixedJvmArguments.add(MinecraftRunConfiguration.Argument(value.substring(0, templateStart), nativesDirectory))
                                 } else {
                                     continue
-                                }*//*
+                                }
                                 continue
                             } else {
                                 if (' ' in value) {
@@ -123,9 +123,10 @@ abstract class RunConfigurationDefaultsContainer(val project: Project, val build
             }
 
             this.arguments.addAll(fixedArguments)
-            this.jvmArguments.addAll(fixedJvmArguments)*/
-        }
+            this.jvmArguments.addAll(fixedJvmArguments)
+        }*/
     }
+
 
     fun server(): RunConfigurationDefaultsContainer = apply {
         builder.action {

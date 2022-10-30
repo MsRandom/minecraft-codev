@@ -5,6 +5,7 @@ import net.fabricmc.tinyremapper.IMappingProvider
 import net.fabricmc.tinyremapper.NonClassCopyMode
 import net.fabricmc.tinyremapper.OutputConsumerPath
 import net.fabricmc.tinyremapper.TinyRemapper
+import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.zipFileSystem
 import org.gradle.api.file.FileCollection
 import java.io.File
 import java.nio.file.Files
@@ -12,8 +13,15 @@ import java.nio.file.Path
 import kotlin.io.path.deleteExisting
 
 object JarRemapper {
-    fun remap(mappings: MappingTreeView, sourceNamespace: String, targetNamespace: String, input: Path, classpath: FileCollection, directory: Boolean): Path {
-        val output = if (directory) Files.createTempDirectory("remapped") else Files.createTempFile("remapped", ".tmp.jar")
+    fun remap(
+        remapperExtension: RemapperExtension,
+        mappings: MappingTreeView,
+        sourceNamespace: String,
+        targetNamespace: String,
+        input: Path,
+        classpath: FileCollection
+    ): Path {
+        val output = Files.createTempFile("remapped", ".tmp.jar")
         val sourceNamespaceId = mappings.getNamespaceId(sourceNamespace)
         val targetNamespaceId = mappings.getNamespaceId(targetNamespace)
 
@@ -85,6 +93,10 @@ object JarRemapper {
             }
         } finally {
             remapper.finish()
+        }
+
+        zipFileSystem(output).use {
+            remapperExtension.remapFiles(mappings, it.getPath("/"), sourceNamespaceId, targetNamespaceId)
         }
 
         return output

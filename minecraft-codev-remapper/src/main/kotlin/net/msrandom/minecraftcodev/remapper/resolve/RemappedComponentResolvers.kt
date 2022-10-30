@@ -210,11 +210,12 @@ open class RemappedComponentResolvers @Inject constructor(
 
             val mappingFiles = project.unsafeResolveConfiguration(project.configurations.getByName(id.mappingsConfiguration))
 
-            val mappings = project.extensions
+            val remapper = project.extensions
                 .getByType(MinecraftCodevExtension::class.java)
                 .extensions
                 .getByType(RemapperExtension::class.java)
-                .loadMappings(mappingFiles)
+
+            val mappings = remapper.loadMappings(mappingFiles)
 
             val newResult = DefaultBuildableArtifactResolveResult()
             resolvers.get().artifactResolver.resolveArtifact(artifact.delegate, moduleSources, newResult)
@@ -247,7 +248,7 @@ open class RemappedComponentResolvers @Inject constructor(
                                 .metadata(BuildOperationCategory.TASK)
 
                             override fun call(context: BuildOperationContext) = context.callWithStatus {
-                                JarRemapper.remap(mappings.tree, sourceNamespace, id.targetNamespace.name, newResult.result.toPath(), project.files(), false)
+                                JarRemapper.remap(remapper, mappings.tree, sourceNamespace, id.targetNamespace.name, newResult.result.toPath(), project.files())
                             }
                         })
 

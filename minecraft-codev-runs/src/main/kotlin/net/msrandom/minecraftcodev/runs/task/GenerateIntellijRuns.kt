@@ -1,10 +1,10 @@
 package net.msrandom.minecraftcodev.runs.task
 
 import net.msrandom.minecraftcodev.runs.MinecraftRunConfiguration
+import org.apache.commons.lang3.StringUtils
+import org.apache.commons.lang3.SystemUtils
 import org.gradle.api.plugins.ApplicationPlugin
 import org.gradle.api.tasks.SourceSet
-import org.gradle.configurationcache.extensions.capitalized
-import org.gradle.internal.impldep.org.apache.commons.lang.SystemUtils
 import org.w3c.dom.Node
 import java.io.File
 import java.nio.file.Path
@@ -23,8 +23,8 @@ open class GenerateIntellijRuns : GenerateRuns() {
 
     private fun configName(gradleName: String, run: MinecraftRunConfiguration) = when {
         run.name.isPresent -> run.name.get()
-        project == project.rootProject -> "${ApplicationPlugin.TASK_RUN_NAME}${gradleName.capitalized()}"
-        else -> "${project.path}:${ApplicationPlugin.TASK_RUN_NAME}${gradleName.capitalized()}"
+        project == project.rootProject -> "${ApplicationPlugin.TASK_RUN_NAME}${StringUtils.capitalize(gradleName)}"
+        else -> "${project.path}:${ApplicationPlugin.TASK_RUN_NAME}${StringUtils.capitalize(gradleName)}"
     }
 
     private fun moduleName(sourceSet: SourceSet) = if (project == project.rootProject) {

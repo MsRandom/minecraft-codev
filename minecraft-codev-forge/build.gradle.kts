@@ -17,6 +17,7 @@ dependencies {
     implementation(group = "net.fabricmc", name = "access-widener", version = "2.1.0")
     implementation(group = "net.minecraftforge", name = "accesstransformers", version = "8.0.7")
     implementation(group = "org.cadixdev", name = "at", version = "0.1.0-rc1")
+    implementation(group = "org.cadixdev", name = "lorenz", version = "0.5.8")
 
     implementation(group = "de.siegmar", name = "fastcsv", version = "2.2.0")
 

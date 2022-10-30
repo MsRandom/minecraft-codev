@@ -9,6 +9,7 @@ import org.gradle.api.provider.Property
 import org.gradle.api.provider.SetProperty
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
+import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
 import javax.inject.Inject
 
 abstract class MinecraftRunConfiguration @Inject constructor(val project: Project) {
@@ -17,6 +18,7 @@ abstract class MinecraftRunConfiguration @Inject constructor(val project: Projec
     abstract val jvmVersion: Property<Int>
 
     abstract val sourceSet: Property<SourceSet>
+    abstract val kotlinSourceSet: Property<KotlinSourceSet>
 
     val beforeRunTasks: ListProperty<String> = project.objects.listProperty(String::class.java)
     val arguments: SetProperty<Argument> = project.objects.setProperty(Argument::class.java)
@@ -33,9 +35,9 @@ abstract class MinecraftRunConfiguration @Inject constructor(val project: Projec
             mainClass.finalizeValueOnRead()
             jvmVersion.finalizeValueOnRead()
 
-            sourceSet
-                .convention(project.extensions.getByType(SourceSetContainer::class.java).named(SourceSet.MAIN_SOURCE_SET_NAME))
-                .finalizeValueOnRead()
+            project.extensions.findByType(SourceSetContainer::class.java)?.let {
+                sourceSet.convention(it.named(SourceSet.MAIN_SOURCE_SET_NAME))
+            }
 
             beforeRunTasks.finalizeValueOnRead()
             arguments.finalizeValueOnRead()

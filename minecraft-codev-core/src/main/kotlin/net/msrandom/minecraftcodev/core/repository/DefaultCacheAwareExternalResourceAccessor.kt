@@ -1,6 +1,8 @@
 package net.msrandom.minecraftcodev.core.repository
 
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
+import org.apache.commons.io.IOUtils
+import org.apache.commons.lang3.StringUtils
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.StartParameterResolutionOverride
 import org.gradle.api.internal.artifacts.ivyservice.resolutionstrategy.DefaultExternalResourceCachePolicy
 import org.gradle.api.internal.file.temp.TemporaryFileProvider
@@ -8,8 +10,6 @@ import org.gradle.cache.internal.ProducerGuard
 import org.gradle.internal.hash.ChecksumService
 import org.gradle.internal.hash.HashCode
 import org.gradle.internal.hash.Hashing
-import org.gradle.internal.impldep.org.apache.commons.io.IOUtils
-import org.gradle.internal.impldep.org.apache.commons.lang.StringUtils
 import org.gradle.internal.resource.ExternalResource
 import org.gradle.internal.resource.ExternalResourceName
 import org.gradle.internal.resource.ExternalResourceRepository

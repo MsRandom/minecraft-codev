@@ -1,4 +1,5 @@
 plugins {
+    java
     id("minecraft-codev")
 }
 

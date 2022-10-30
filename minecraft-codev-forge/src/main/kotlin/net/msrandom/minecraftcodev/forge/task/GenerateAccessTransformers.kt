@@ -31,6 +31,11 @@ abstract class GenerateAccessTransformers : DefaultTask() {
         val accessTransformers = AccessTransformSet.create()
 
         for (accessWidener in input) {
+            if (accessWidener.extension.lowercase() != "accesswidener") {
+                // Implies that this is supposed to have specific handling, for example mod Jars to enable transitive Access Wideners, in
+                continue
+            }
+
             val reader = AccessWidenerReader(object : AccessWidenerVisitor {
                 private fun getAccess(access: AccessType) = when (access) {
                     AccessType.ACCESSIBLE -> AccessTransform.of(AccessChange.PUBLIC)
