@@ -13,11 +13,11 @@ This project is currently heavily WIP, so many of the planned features are yet n
 ### Simple Minecraft Example
 ```kotlin
 plugins {
+  java
   id("minecraft-codev-remapper") version "1.0"
 }
 
 repositories {
-  maven(url = "https://maven.minecraftforge.net/")
   minecraft()
   mavenCentral()
 }
@@ -38,11 +38,13 @@ dependencies {
 ### Forge Patched Minecraft Example
 ```kotlin
 plugins {
+  java
   id("minecraft-codev-forge") version "1.0"
   id("minecraft-codev-remapper") version "1.0"
 }
 
 repositories {
+  maven(url = "https://maven.minecraftforge.net/")
   minecraft()
   mavenCentral()
 }
@@ -63,12 +65,13 @@ dependencies {
 ### Multiversion Example
 ```kotlin
 plugins {
+  java
   id("minecraft-codev-remapper") version "1.0"
 }
 
-val mod16: Configuration by configurations.creating // For 1.16
-val mod18: Configuration by configurations.creating // For 1.18
-val mod19: Configuration by configurations.creating // For 1.19
+val mod16: SourceSet by sourceSets.creating // For 1.16
+val mod18: SourceSet by sourceSets.creating // For 1.18
+val mod19: SourceSet by sourceSets.creating // For 1.19
 
 repositories {
   minecraft()
@@ -79,12 +82,46 @@ dependencies {
   // The remapper can automatically find the right mappings configuration based on the resolving module, like finding mod16Mappings from mod16Implementation.
 
   "mod16Mappings"(minecraft(MinecraftType.ClientMappings, "1.16+"))
-  "mod16Implementation"(minecraft(MinecraftType.ClientMappings, "1.18+").remapped)
+  "mod16Implementation"(minecraft(MinecraftType.Client, "1.18+").remapped)
 
   "mod18Mappings"(minecraft(MinecraftType.ClientMappings, "1.18+"))
-  "mod18Implementation"(minecraft(MinecraftType.ClientMappings, "1.18+").remapped)
+  "mod18Implementation"(minecraft(MinecraftType.Client, "1.18+").remapped)
 
   "mod19Mappings"(minecraft(MinecraftType.ClientMappings, "1.19+"))
-  "mod19Implementation"(minecraft(MinecraftType.ClientMappings, "1.19+").remapped)
+  "mod19Implementation"(minecraft(MinecraftType.Client, "1.19+").remapped)
+}
+```
+
+### Split source sets Example
+```kotlin
+plugins {
+  java
+  id("minecraft-codev-remapper") version "1.0"
+}
+
+val client: SourceSet by sourceSets.creating {
+  // Extend main configurations
+  configurations[compileClasspathConfigurationName].extendsFrom(configurations.compileClasspath.get())
+  configurations[runtimeClasspathConfigurationName].extendsFrom(configurations.compileClasspath.get())
+  configurations[mappingsConfigurationName].extendsFrom(configurations.mappings.get())
+
+  // Add main output to classpaths
+  compileClasspath += sourceSets.main.get().output
+  runtimeClasspath += sourceSets.main.get().output
+}
+
+repositories {
+  minecraft()
+  mavenCentral()
+}
+
+dependencies {
+  val minecraftVersion: String by project
+
+  mappings(minecraft(MinecraftType.ServerMappings, minecraftVersion))
+  implementation(minecraft(MinecraftType.Common).remapped)
+
+  "clientMappings"(minecraft(MinecraftType.ClientMappings, minecraftVersion))
+  "clientImplementation"(minecraft(MinecraftType.Client, minecraftVersion).remapped)
 }
 ```
