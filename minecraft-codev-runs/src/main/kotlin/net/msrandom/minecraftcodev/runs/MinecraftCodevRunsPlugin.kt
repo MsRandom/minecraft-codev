@@ -29,8 +29,6 @@ class MinecraftCodevRunsPlugin<T : PluginAware> @Inject constructor(cacheDir: Gl
     val logging: Path = cache.resolve("logging")
 
     override fun apply(target: T) = applyPlugin(target) {
-        val runs = project.container(MinecraftRunConfigurationBuilder::class.java)
-
         val capitalizedNatives = StringUtils.capitalize(NATIVES_CONFIGURATION)
 
         createSourceSetElements { name ->
@@ -47,7 +45,12 @@ class MinecraftCodevRunsPlugin<T : PluginAware> @Inject constructor(cacheDir: Gl
 
         extendKotlinConfigurations(NATIVES_CONFIGURATION)
 
-        extensions.getByType(MinecraftCodevExtension::class.java).extensions.add("runs", runs)
+        val runs = extensions
+            .getByType(MinecraftCodevExtension::class.java)
+            .extensions
+            .create(RunsContainer::class.java, "runs", RunsContainerImpl::class.java)
+
+        runs.extensions.create("defaults", RunConfigurationDefaultsContainer::class.java)
 
         tasks.register("generateIdeaRuns", GenerateIdeaRuns::class.java)
 

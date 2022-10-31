@@ -4,6 +4,7 @@ import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.remapper.JarRemapper
 import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
 import net.msrandom.minecraftcodev.remapper.RemapperExtension
+import org.gradle.api.artifacts.Configuration
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
@@ -25,10 +26,8 @@ abstract class RemapJar : Jar() {
     abstract val targetNamespace: Property<String>
         @Input get
 
-    abstract val mappings: ConfigurableFileCollection
-        @InputFiles
-        @PathSensitive(PathSensitivity.NONE)
-        get
+    abstract val mappings: Property<Configuration>
+        @Input get
 
     abstract val classpath: ConfigurableFileCollection
         @InputFiles
@@ -51,9 +50,9 @@ abstract class RemapJar : Jar() {
             .extensions
             .getByType(RemapperExtension::class.java)
 
-        val mappings = remapper.loadMappings(mappings)
+        val mappings = remapper.loadMappings(mappings.get())
 
-        val remapped = JarRemapper.remap(remapper, mappings, sourceNamespace.get(), targetNamespace.get(), input.asFile.get().toPath(), classpath)
+        val remapped = JarRemapper.remap(remapper, mappings.tree, sourceNamespace.get(), targetNamespace.get(), input.asFile.get().toPath(), classpath)
 
         remapped.copyTo(archiveFile.get().asFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
     }

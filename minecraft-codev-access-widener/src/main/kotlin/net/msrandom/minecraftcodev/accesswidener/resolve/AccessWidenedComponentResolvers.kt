@@ -225,7 +225,7 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                             Duration.ofMillis(timeProvider.currentTime - cached.cachedAt),
                             false,
                             artifact.hash() == cached.descriptorHash
-                        ).isMustCheck
+                        ).isMustCheck || cached.cachedFile?.exists() != true
                     ) {
                         val file = buildOperationExecutor.call(object : CallableBuildOperation<Path> {
                             override fun description() = BuildOperationDescriptor

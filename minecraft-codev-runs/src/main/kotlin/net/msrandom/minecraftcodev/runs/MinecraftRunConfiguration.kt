@@ -3,6 +3,7 @@ package net.msrandom.minecraftcodev.runs
 import org.gradle.api.Project
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.plugins.JvmEcosystemPlugin
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.MapProperty
 import org.gradle.api.provider.Property
@@ -35,8 +36,8 @@ abstract class MinecraftRunConfiguration @Inject constructor(val project: Projec
             mainClass.finalizeValueOnRead()
             jvmVersion.finalizeValueOnRead()
 
-            project.extensions.findByType(SourceSetContainer::class.java)?.let {
-                sourceSet.convention(it.named(SourceSet.MAIN_SOURCE_SET_NAME))
+            project.plugins.withType(JvmEcosystemPlugin::class.java) {
+                sourceSet.convention(project.extensions.getByType(SourceSetContainer::class.java).named(SourceSet.MAIN_SOURCE_SET_NAME))
             }
 
             beforeRunTasks.finalizeValueOnRead()

@@ -131,7 +131,6 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
     override fun resolve(dependency: DependencyMetadata, acceptor: VersionSelector?, rejector: VersionSelector?, result: BuildableComponentIdResolveResult) {
         if (dependency is PatchedMinecraftDependencyMetadata) {
             componentIdResolver.resolveVersion(dependency, acceptor, rejector, result) { module, version ->
-                println("Resolving ${dependency.getModuleConfiguration()} with patches ${project.getSourceSetConfigurationName(dependency, MinecraftCodevForgePlugin.PATCHES_CONFIGURATION)}")
                 PatchedComponentIdentifier(
                     MinecraftComponentIdentifier(module, version),
                     project.getSourceSetConfigurationName(dependency, MinecraftCodevForgePlugin.PATCHES_CONFIGURATION),
@@ -236,7 +235,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
                     Duration.ofMillis(timeProvider.currentTime - cached.cachedAt),
                     false,
                     artifact.hash() == cached.descriptorHash
-                ).isMustCheck
+                ).isMustCheck || cached.cachedFile?.exists() != true
             ) {
                 val sources = artifact.name.classifier == "sources"
 

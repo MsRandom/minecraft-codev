@@ -5,7 +5,6 @@ import net.fabricmc.mappingio.tree.MappingTreeView
 import net.fabricmc.mappingio.tree.MemoryMappingTree
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
 import org.gradle.api.artifacts.Configuration
-import org.gradle.api.file.FileCollection
 import org.gradle.internal.hash.HashCode
 import java.io.InputStream
 import java.nio.file.FileSystem
@@ -50,10 +49,12 @@ open class RemapperExtension {
         val tree = MemoryMappingTree()
         val md = MessageDigest.getInstance("SHA1")
 
-        for (file in files) {
-            for (rule in mappingResolutionRules) {
-                if (rule(file.toPath(), file.extension, tree, { DigestInputStream(this, md) }, tree)) {
-                    break
+        for (dependency in it.dependencies) {
+            for (file in it.files(dependency)) {
+                for (rule in mappingResolutionRules) {
+                    if (rule(file.toPath(), file.extension, tree, { DigestInputStream(this, md) }, tree)) {
+                        break
+                    }
                 }
             }
         }
@@ -62,20 +63,6 @@ open class RemapperExtension {
             tree,
             HashCode.fromBytes(md.digest())
         )
-    }
-
-    fun loadMappings(files: FileCollection): MemoryMappingTree {
-        val tree = MemoryMappingTree()
-
-        for (file in files) {
-            for (rule in mappingResolutionRules) {
-                if (rule(file.toPath(), file.extension, tree, { this }, tree)) {
-                    break
-                }
-            }
-        }
-
-        return tree
     }
 
     fun mappingsResolution(action: MappingResolutionRule) {

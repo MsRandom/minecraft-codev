@@ -28,13 +28,14 @@ import java.time.Duration
 import java.util.jar.Attributes
 import java.util.jar.JarFile
 import java.util.jar.Manifest
-import javax.inject.Inject
 import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 import kotlin.io.path.readBytes
 import kotlin.random.Random
 
-abstract class RunConfigurationDefaultsContainer @Inject constructor(val builder: MinecraftRunConfigurationBuilder) : ExtensionAware {
+abstract class RunConfigurationDefaultsContainer : ExtensionAware {
+    lateinit var builder: MinecraftRunConfigurationBuilder
+
     private fun ruleMatches(os: MinecraftVersionMetadata.Rule.OperatingSystem): Boolean {
         if (os.name != null && OperatingSystem.forName(os.name) != OperatingSystem.current()) return false
         if (os.version != null && osVersion() matches Regex(os.version!!)) return false
@@ -221,15 +222,15 @@ abstract class RunConfigurationDefaultsContainer @Inject constructor(val builder
     companion object {
         private const val WRONG_SIDE_ERROR = "There is no Minecraft %s dependency for defaults.%s to work"
 
-        internal fun MinecraftRunConfiguration.getConfiguration() = sourceSet.flatMap { project.configurations.named(it.runtimeClasspathConfigurationName) }
+        fun MinecraftRunConfiguration.getConfiguration() = sourceSet.flatMap { project.configurations.named(it.runtimeClasspathConfigurationName) }
 
-        internal fun Provider<Configuration>.findMinecraft(type: String, caller: String) = map {
+        fun Provider<Configuration>.findMinecraft(type: String, caller: String) = map {
             it.resolvedConfiguration.resolvedArtifacts.firstOrNull { artifact ->
                 artifact.moduleVersion.id.group == MinecraftComponentResolvers.GROUP && artifact.moduleVersion.id.name == type
             } ?: throw UnsupportedOperationException(WRONG_SIDE_ERROR.format(type, caller))
         }
 
-        internal fun MinecraftRunConfiguration.getManifest(configurationProvider: Provider<Configuration>, artifactProvider: Provider<ResolvedArtifact>) = artifactProvider
+        fun MinecraftRunConfiguration.getManifest(configurationProvider: Provider<Configuration>, artifactProvider: Provider<ResolvedArtifact>) = artifactProvider
             .zip(configurationProvider) { artifact, configuration -> artifact to configuration }
             .map { (artifact, configuration) ->
                 val repositories = project.serviceOf<RepositoriesSupplier>().get()

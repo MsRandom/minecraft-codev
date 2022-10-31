@@ -20,6 +20,7 @@ dependencies {
     implementation(group = "org.cadixdev", name = "lorenz", version = "0.5.8")
 
     implementation(group = "de.siegmar", name = "fastcsv", version = "2.2.0")
+    implementation(group = "org.apache.commons", name = "commons-lang3", version = "3.12.0")
 
     compileOnly(projects.minecraftCodevGradleLinkage)
 

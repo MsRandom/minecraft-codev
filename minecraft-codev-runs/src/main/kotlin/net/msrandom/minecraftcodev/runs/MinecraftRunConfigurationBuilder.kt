@@ -3,8 +3,6 @@ package net.msrandom.minecraftcodev.runs
 import org.gradle.api.Action
 import org.gradle.api.Named
 import org.gradle.api.Project
-import org.gradle.api.model.ObjectFactory
-import org.gradle.api.plugins.ExtensionAware
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
@@ -12,10 +10,14 @@ import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSetContainer
 import javax.inject.Inject
 
-abstract class MinecraftRunConfigurationBuilder @Inject constructor(private val name: String, objectFactory: ObjectFactory) : Named, ExtensionAware {
-    val defaults = run { objectFactory.newInstance(RunConfigurationDefaultsContainer::class.java, this) }
+abstract class MinecraftRunConfigurationBuilder @Inject constructor(private val name: String, private val runsContainer: RunsContainer) : Named {
     private val setupActions = mutableListOf<Action<MinecraftRunConfiguration>>()
     private val configurationActions = mutableListOf<Action<MinecraftRunConfiguration>>()
+
+    val defaults: RunConfigurationDefaultsContainer
+        get() = runsContainer.extensions
+            .getByType(RunConfigurationDefaultsContainer::class.java)
+            .also { it.builder = this }
 
     override fun getName() = name
 

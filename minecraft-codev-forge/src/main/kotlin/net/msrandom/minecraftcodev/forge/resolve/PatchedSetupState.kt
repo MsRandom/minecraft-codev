@@ -21,7 +21,6 @@ import net.msrandom.minecraftcodev.forge.UserdevConfig
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.internal.ProcessOperations
 import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
-import org.gradle.api.internal.cache.StringInterner
 import org.gradle.api.model.ObjectFactory
 import org.gradle.internal.component.external.model.DefaultModuleComponentArtifactMetadata
 import org.gradle.internal.component.external.model.DefaultModuleComponentIdentifier
@@ -30,7 +29,6 @@ import org.gradle.internal.component.model.DefaultIvyArtifactName
 import org.gradle.internal.hash.ChecksumService
 import org.gradle.internal.hash.HashCode
 import org.gradle.internal.operations.*
-import org.gradle.internal.reflect.Instantiator
 import org.gradle.internal.resolve.ArtifactResolveException
 import org.gradle.internal.resolve.result.DefaultBuildableArtifactResolveResult
 import org.gradle.internal.resolve.result.DefaultBuildableComponentResolveResult
@@ -140,8 +138,6 @@ open class PatchedSetupState @Inject constructor(
                 )
             )
 
-            // Add Forge files
-            val universal = resolveArtifact(userdevConfig.universal)
 
             zipFileSystem(patched).use { patchedZip ->
                 // Add missing non-patched files
@@ -159,13 +155,20 @@ open class PatchedSetupState @Inject constructor(
                 }
 
                 // Add files from the universal Jar
+                val universal = resolveArtifact(userdevConfig.universal)
+                val filters = userdevConfig.universalFilters.map(::Regex)
                 zipFileSystem(universal.toPath()).use { universalZip ->
-                    universalZip.getPath("/").walk {
+                    val root = universalZip.getPath("/")
+                    root.walk {
                         for (path in filter(Path::isRegularFile)) {
-                            val output = patchedZip.getPath(path.toString())
+                            val name = root.relativize(path).toString()
 
-                            output.parent?.createDirectories()
-                            path.copyTo(output)
+                            if (filters.all { name matches it }) {
+                                val output = patchedZip.getPath(name)
+
+                                output.parent?.createDirectories()
+                                path.copyTo(output)
+                            }
                         }
                     }
                 }

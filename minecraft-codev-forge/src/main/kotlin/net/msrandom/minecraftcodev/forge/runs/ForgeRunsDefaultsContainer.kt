@@ -2,6 +2,7 @@ package net.msrandom.minecraftcodev.forge.runs
 
 import net.minecraftforge.srgutils.IMappingBuilder
 import net.minecraftforge.srgutils.IMappingFile
+import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
 import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin
 import net.msrandom.minecraftcodev.forge.UserdevConfig
@@ -9,29 +10,39 @@ import net.msrandom.minecraftcodev.runs.AssetDownloader
 import net.msrandom.minecraftcodev.runs.MinecraftCodevRunsPlugin
 import net.msrandom.minecraftcodev.runs.MinecraftRunConfiguration
 import net.msrandom.minecraftcodev.runs.RunConfigurationDefaultsContainer
-import org.gradle.api.Project
-import org.gradle.api.provider.SetProperty
+import net.msrandom.minecraftcodev.runs.RunConfigurationDefaultsContainer.Companion.findMinecraft
+import net.msrandom.minecraftcodev.runs.RunConfigurationDefaultsContainer.Companion.getConfiguration
+import net.msrandom.minecraftcodev.runs.RunConfigurationDefaultsContainer.Companion.getManifest
+import org.apache.commons.lang3.StringUtils
+import org.gradle.api.plugins.JvmEcosystemPlugin
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
 import java.io.File
 
-class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefaultsContainer) {
-    private fun getUserdevData(project: Project): UserdevConfig? {
-        for (file in project.configurations.getByName(MinecraftCodevForgePlugin.PATCHES_CONFIGURATION)) {
-            var config: UserdevConfig? = null
+open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefaultsContainer) {
+    private fun MinecraftRunConfiguration.getUserdevData() = sourceSet.flatMap {
+        @Suppress("UnstableApiUsage")
+        val name = if (SourceSet.isMain(it)) {
+            MinecraftCodevForgePlugin.PATCHES_CONFIGURATION
+        } else {
+            it.name + StringUtils.capitalize(MinecraftCodevForgePlugin.PATCHES_CONFIGURATION)
+        }
+
+        project.configurations.named(name)
+    }.map { patches ->
+        var config: UserdevConfig? = null
+        for (file in patches) {
             val isUserdev = MinecraftCodevForgePlugin.userdevConfig(file) {
                 config = it
             }
 
-            if (isUserdev) return config
+            if (isUserdev) break
         }
 
-        return null
+        config ?: throw UnsupportedOperationException("Patches configuration $patches did not contain Forge userdev.")
     }
 
-    private fun fail(): Nothing = throw UnsupportedOperationException("Forge userdev not in ${MinecraftCodevForgePlugin.PATCHES_CONFIGURATION}.")
-
-    private fun MinecraftRunConfiguration.addArgs(manifest: MinecraftVersionMetadata, config: UserdevConfig, arguments: SetProperty<MinecraftRunConfiguration.Argument>, existing: List<String>) {
+    private fun MinecraftRunConfiguration.addArgs(manifest: MinecraftVersionMetadata, config: UserdevConfig, arguments: MutableSet<MinecraftRunConfiguration.Argument>, existing: List<String>) {
         arguments.addAll(
             existing.map {
                 if (it.startsWith('{')) {
@@ -50,11 +61,13 @@ class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefaultsC
                 AssetDownloader.downloadAssets(project, manifest.assetIndex)
                 project.plugins.getPlugin(MinecraftCodevRunsPlugin::class.java).assets
             }
+
             "modules" -> config.modules.flatMapTo(mutableSetOf()) {
                 project.configurations.detachedConfiguration(project.dependencies.create(it)).setTransitive(false)
             }.joinToString(File.pathSeparator)
+
             "MC_VERSION" -> manifest.id
-            "mcp_mappings" -> "minecraftcodev.mappings"
+            "mcp_mappings" -> "minecraft-codev.mappings"
             "source_roots" -> {
                 val sourceRoots = modClasspaths
 
@@ -92,24 +105,25 @@ class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefaultsC
 
                 modClasses.joinToString("")
             }
+
             "mcp_to_srg" -> {
                 val srgMappings = IMappingBuilder.create()
 
-/*                val mappings = project.minecraftCodev.remapper.mappings
-                val tree = mappings.tree
-                val sourceNamespace = tree.getNamespaceId(MappingNamespace.SRG)
-                val targetNamespace = tree.getNamespaceId(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
-                for (type in tree.classes) {
-                    val addedClass = srgMappings.addClass(type.getName(targetNamespace), type.getName(sourceNamespace))
+                /*                val mappings = project.minecraftCodev.remapper.mappings
+                                val tree = mappings.tree
+                                val sourceNamespace = tree.getNamespaceId(MappingNamespace.SRG)
+                                val targetNamespace = tree.getNamespaceId(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
+                                for (type in tree.classes) {
+                                    val addedClass = srgMappings.addClass(type.getName(targetNamespace), type.getName(sourceNamespace))
 
-                    for (field in type.fields) {
-                        addedClass.field(field.getName(sourceNamespace), field.getName(targetNamespace))
-                    }
+                                    for (field in type.fields) {
+                                        addedClass.field(field.getName(sourceNamespace), field.getName(targetNamespace))
+                                    }
 
-                    for (method in type.methods) {
-                        addedClass.method(method.getDesc(sourceNamespace), method.getName(sourceNamespace), method.getName(targetNamespace))
-                    }
-                }*/
+                                    for (method in type.methods) {
+                                        addedClass.method(method.getDesc(sourceNamespace), method.getName(sourceNamespace), method.getName(targetNamespace))
+                                    }
+                                }*/
 
                 // TODO fix this, somehow
                 val path = project.layout.buildDirectory.dir("mcp-to-srg").get().file("mcp.srg").asFile.toPath()
@@ -125,102 +139,108 @@ class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefaultsC
         }
     }
 
-    private fun MinecraftRunConfiguration.addData(version: String, config: UserdevConfig, run: UserdevConfig.Run) {
-/*        val manifest = project.serviceOf<RepositoriesSupplier>().get().filterIsInstance<MinecraftRepositoryImpl>().firstNotNullOfOrNull {
-            RawMinecraftRepositoryAccess.getVersionManifest(version, it.url, it.transport.resourceAccessor, project.serviceOf(), null)
-        }!!
+    private fun MinecraftRunConfiguration.addData(type: String, caller: String, runType: (UserdevConfig.Runs) -> UserdevConfig.Run?) {
+        val configProvider = getUserdevData()
 
-        mainClass.set(run.main)
-
-        addArgs(manifest, config, arguments, run.args)
-
-        addArgs(manifest, config, jvmArguments, run.jvmArgs)
-
-        for ((key, value) in run.env) {
-            val argument = if (value.startsWith('$')) {
-                MinecraftRunConfiguration.Argument(resolveTemplate(manifest, config, value.substring(2, value.length - 1)))
-            } else if (value.startsWith('{')) {
-                MinecraftRunConfiguration.Argument(resolveTemplate(manifest, config, value.substring(1, value.length - 1)))
-            } else {
-                MinecraftRunConfiguration.Argument(value)
-            }
-
-            environment.put(key, argument)
+        val runProvider = configProvider.map {
+            runType(it.runs)
+                ?: throw UnsupportedOperationException("Attempted to get use run configuration which doesn't exist.")
         }
 
-        for ((key, value) in run.props) {
-            if (value.startsWith('{')) {
-                val template = value.substring(1, value.length - 1)
-                if (template == "minecraft_classpath_file") {
-                    val configuration = project.configurations.getByName(sourceSet.get().runtimeClasspathConfigurationName).resolvedConfiguration.resolvedArtifacts
+        val configuration = getConfiguration()
+        val artifact = configuration.findMinecraft(type, caller)
+        val manifestProvider = getManifest(configuration, artifact)
 
-                    val minecraftJars = configuration.filter {
-                        it.moduleVersion.id.group == MinecraftRepositoryAccess.GROUP && (it.moduleVersion.id.name == MinecraftRepositoryAccess.COMMON || it.moduleVersion.id.name == MinecraftRepositoryAccess.CLIENT)
-                    }.joinToString(",") { it.file.absolutePath }
+        mainClass.set(runProvider.map(UserdevConfig.Run::main))
 
-                    val fmlJars = configuration.filter {
-                        it.moduleVersion.id.group == "net.minecraftforge" && (it.moduleVersion.id.name == "fmlcore" || it.moduleVersion.id.name == "javafmllanguage" || it.moduleVersion.id.name == "mclanguage")
-                    }.joinToString(",") { it.file.absolutePath }
+        val zipped = runProvider
+            .zip(manifestProvider) { run, manifest -> run to manifest }
+            .zip(configProvider) { (run, manifest), config -> Triple(run, manifest, config) }
 
-                    jvmArguments.add(MinecraftRunConfiguration.Argument("-DminecraftCodev.minecraftJars=$minecraftJars"))
-                    jvmArguments.add(MinecraftRunConfiguration.Argument("-DminecraftCodev.fmlJars=$fmlJars"))
-                } else {
-                    jvmArguments.add(MinecraftRunConfiguration.Argument("-D$key=", resolveTemplate(manifest, config, template)))
+        environment.putAll(zipped.map { (run, manifest, config) ->
+            buildMap {
+                for ((key, value) in run.env) {
+                    val argument = if (value.startsWith('$')) {
+                        MinecraftRunConfiguration.Argument(resolveTemplate(manifest, config, value.substring(2, value.length - 1)))
+                    } else if (value.startsWith('{')) {
+                        MinecraftRunConfiguration.Argument(resolveTemplate(manifest, config, value.substring(1, value.length - 1)))
+                    } else {
+                        MinecraftRunConfiguration.Argument(value)
+                    }
+
+                    put(key, argument)
                 }
-            } else {
-                jvmArguments.add(MinecraftRunConfiguration.Argument("-D$key=$value"))
             }
-        }*/
+        })
+
+        arguments.addAll(zipped.map { (run, manifest, config) ->
+            val arguments = mutableSetOf<MinecraftRunConfiguration.Argument>()
+
+            addArgs(manifest, config, arguments, run.args)
+
+            arguments
+        })
+
+        jvmArguments.addAll(zipped.map { (run, manifest, config) ->
+            val jvmArguments = mutableSetOf<MinecraftRunConfiguration.Argument>()
+
+            addArgs(manifest, config, jvmArguments, run.jvmArgs)
+
+            for ((key, value) in run.props) {
+                if (value.startsWith('{')) {
+                    val template = value.substring(1, value.length - 1)
+                    if (template == "minecraft_classpath_file") {
+                        val configuration = project.configurations.getByName(sourceSet.get().runtimeClasspathConfigurationName).resolvedConfiguration.resolvedArtifacts
+
+                        val minecraftJars = configuration.filter {
+                            it.moduleVersion.id.group == MinecraftComponentResolvers.GROUP && (it.moduleVersion.id.name == MinecraftComponentResolvers.COMMON_MODULE || it.moduleVersion.id.name == MinecraftComponentResolvers.CLIENT_MODULE)
+                        }.joinToString(",") { it.file.absolutePath }
+
+                        val fmlJars = configuration.filter {
+                            it.moduleVersion.id.group == "net.minecraftforge" && (it.moduleVersion.id.name == "fmlcore" || it.moduleVersion.id.name == "javafmllanguage" || it.moduleVersion.id.name == "mclanguage")
+                        }.joinToString(",") { it.file.absolutePath }
+
+                        jvmArguments.add(MinecraftRunConfiguration.Argument("-DminecraftCodev.minecraftJars=$minecraftJars"))
+                        jvmArguments.add(MinecraftRunConfiguration.Argument("-DminecraftCodev.fmlJars=$fmlJars"))
+                    } else {
+                        jvmArguments.add(MinecraftRunConfiguration.Argument("-D$key=", resolveTemplate(manifest, config, template)))
+                    }
+                } else {
+                    jvmArguments.add(MinecraftRunConfiguration.Argument("-D$key=$value"))
+                }
+            }
+
+            jvmArguments
+        })
     }
 
-    fun client(version: String): ForgeRunsDefaultsContainer = apply {
+    fun client(): ForgeRunsDefaultsContainer = apply {
         defaults.builder.action {
-/*
-            val version = findMinecraftVersion(sourceSet, MinecraftRepositoryAccess.CLIENT)
-                ?: throw IllegalArgumentException(WRONG_SIDE_ERROR.format(MinecraftRepositoryAccess.CLIENT, ::client.name))
-*/
-
-            val config = getUserdevData(project) ?: fail()
-
-            addData(version, config, config.runs.client)
+            addData(MinecraftComponentResolvers.CLIENT_MODULE, ::client.name, UserdevConfig.Runs::client)
         }
     }
 
-    fun server(version: String): ForgeRunsDefaultsContainer = apply {
+    fun server(): ForgeRunsDefaultsContainer = apply {
         defaults.builder.action {
-/*
-            val version = findMinecraftVersion(sourceSet, MinecraftRepositoryAccess.COMMON)
-                ?: throw IllegalArgumentException(WRONG_SIDE_ERROR.format(MinecraftRepositoryAccess.COMMON, ::server.name))
-*/
-
-            val config = getUserdevData(project) ?: fail()
-            addData(version, config, config.runs.server)
+            addData(MinecraftComponentResolvers.COMMON_MODULE, ::server.name, UserdevConfig.Runs::server)
         }
     }
 
-    fun data(version: String): ForgeRunsDefaultsContainer = apply {
+    fun data(): ForgeRunsDefaultsContainer = apply {
         defaults.builder.action {
-/*
-            val version = findMinecraftVersion(sourceSet, MinecraftRepositoryAccess.COMMON)
-                ?: throw IllegalArgumentException(WRONG_SIDE_ERROR.format(MinecraftRepositoryAccess.COMMON, ::server.name))
-*/
-
-            val config = getUserdevData(project) ?: fail()
-            addData(version, config, config.runs.server)
+            addData(MinecraftComponentResolvers.COMMON_MODULE, ::data.name, UserdevConfig.Runs::data)
         }
     }
 
-    fun gameTestServer(version: String): ForgeRunsDefaultsContainer = apply {
+    fun gameTestServer(): ForgeRunsDefaultsContainer = apply {
+        defaults.builder.setup {
+            project.plugins.withType(JvmEcosystemPlugin::class.java) {
+                sourceSet.convention(project.extensions.getByType(SourceSetContainer::class.java).getByName(SourceSet.TEST_SOURCE_SET_NAME))
+            }
+        }
+
         defaults.builder.action {
-            sourceSet.convention(project.extensions.getByType(SourceSetContainer::class.java).getByName(SourceSet.TEST_SOURCE_SET_NAME))
-
-/*
-            val version = findMinecraftVersion(sourceSet, MinecraftRepositoryAccess.COMMON)
-                ?: throw IllegalArgumentException(WRONG_SIDE_ERROR.format(MinecraftRepositoryAccess.COMMON, ::server.name))
-*/
-
-            val config = getUserdevData(project) ?: fail()
-            addData(version, config, config.runs.server)
+            addData(MinecraftComponentResolvers.COMMON_MODULE, ::data.name, UserdevConfig.Runs::gameTestServer)
         }
     }
 

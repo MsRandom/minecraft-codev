@@ -52,6 +52,7 @@ import org.gradle.internal.service.DefaultServiceRegistry
 import org.gradle.internal.work.WorkerLeaseService
 import org.gradle.nativeplatform.OperatingSystemFamily
 import org.jetbrains.kotlin.commonizer.util.transitiveClosure
+import org.jetbrains.kotlin.gradle.plugin.KotlinBasePluginWrapper
 import org.jetbrains.kotlin.gradle.plugin.KotlinCompilation
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSetContainer
 import org.jetbrains.kotlin.gradle.plugin.KotlinTargetsContainer
@@ -296,17 +297,19 @@ open class MinecraftCodevPlugin<T : PluginAware> : Plugin<T> {
                 }
             }
 
-            extensions.findByType(KotlinSourceSetContainer::class.java)?.sourceSets?.all { sourceSet ->
-                if (sourceSet.name == SourceSet.MAIN_SOURCE_SET_NAME) {
-                    action("")
-                } else {
-                    action(sourceSet.name)
+            plugins.withType(KotlinBasePluginWrapper::class.java) {
+                extensions.getByType(KotlinSourceSetContainer::class.java).sourceSets.all { sourceSet ->
+                    if (sourceSet.name == SourceSet.MAIN_SOURCE_SET_NAME) {
+                        action("")
+                    } else {
+                        action(sourceSet.name)
+                    }
                 }
-            }
 
-            extensions.findByType(KotlinTargetsContainer::class.java)?.targets?.all { target ->
-                target.compilations.all { compilation ->
-                    action(compilation.configurationBase())
+                extensions.getByType(KotlinTargetsContainer::class.java).targets.all { target ->
+                    target.compilations.all { compilation ->
+                        action(compilation.configurationBase())
+                    }
                 }
             }
         }
@@ -323,22 +326,26 @@ open class MinecraftCodevPlugin<T : PluginAware> : Plugin<T> {
             extendKotlinConfigurations(name)
         }
 
-        fun Project.extendKotlinConfigurations(name: String) = afterEvaluate {
-            extensions.findByType(KotlinTargetsContainer::class.java)?.targets?.all { target ->
-                target.compilations.all { compilation ->
-                    val configuration = configurations.named(compilation.configurationBase() + StringUtils.capitalize(name))
-                    val defaultSourceSet = compilation.defaultSourceSet
+        fun Project.extendKotlinConfigurations(name: String) {
+            plugins.withType(KotlinBasePluginWrapper::class.java) {
+                afterEvaluate {
+                    extensions.getByType(KotlinTargetsContainer::class.java).targets.all { target ->
+                        target.compilations.all { compilation ->
+                            val configuration = configurations.named(compilation.configurationBase() + StringUtils.capitalize(name))
+                            val defaultSourceSet = compilation.defaultSourceSet
 
-                    val allSourceSets = compilation.kotlinSourceSets + compilation.kotlinSourceSets.flatMapTo(mutableSetOf()) {
-                        transitiveClosure(defaultSourceSet) { dependsOn }
-                    }
+                            val allSourceSets = compilation.kotlinSourceSets + compilation.kotlinSourceSets.flatMapTo(mutableSetOf()) {
+                                transitiveClosure(defaultSourceSet) { dependsOn }
+                            }
 
-                    for (sourceSet in allSourceSets) {
-                        if (sourceSet != defaultSourceSet) {
-                            if (sourceSet.name == SourceSet.MAIN_SOURCE_SET_NAME) {
-                                configuration.extendsFrom(configurations.named(name))
-                            } else {
-                                configuration.extendsFrom(configurations.named(name))
+                            for (sourceSet in allSourceSets) {
+                                if (sourceSet != defaultSourceSet) {
+                                    if (sourceSet.name == SourceSet.MAIN_SOURCE_SET_NAME) {
+                                        configuration.extendsFrom(configurations.named(name))
+                                    } else {
+                                        configuration.extendsFrom(configurations.named(name))
+                                    }
+                                }
                             }
                         }
                     }
