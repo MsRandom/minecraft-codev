@@ -5,17 +5,18 @@ import net.msrandom.minecraftcodev.remapper.dependency.RemappedDependency
 import org.gradle.api.Action
 import org.gradle.api.artifacts.FileCollectionDependency
 import org.gradle.api.artifacts.ModuleDependency
+import org.gradle.api.artifacts.SelfResolvingDependency
 
 val <T : ModuleDependency> T.remapped
     get() = remapped()
 
-val FileCollectionDependency.remapped
+val SelfResolvingDependency.remapped
     get() = remapped()
 
 @JvmOverloads
 fun <T : ModuleDependency> T.remapped(arguments: Map<String, Any>, configure: Action<T>? = null) = getRemapped(arguments, configure)
 
-fun FileCollectionDependency.remapped(arguments: Map<String, Any>) = getRemapped(arguments)
+fun SelfResolvingDependency.remapped(arguments: Map<String, Any>) = getRemapped(arguments)
 
 fun <T : ModuleDependency> T.remapped(
     sourceNamespace: Any? = null,
@@ -24,7 +25,7 @@ fun <T : ModuleDependency> T.remapped(
     configure: Action<T>? = null
 ) = getRemapped(sourceNamespace, targetNamespace, mappingsConfiguration, configure)
 
-fun FileCollectionDependency.remapped(
+fun SelfResolvingDependency.remapped(
     sourceNamespace: Any? = null,
     targetNamespace: Any = MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE,
     mappingsConfiguration: String? = null
@@ -34,7 +35,7 @@ fun FileCollectionDependency.remapped(
 fun <T : ModuleDependency> T.getRemapped(arguments: Map<String, Any>, configure: Action<T>? = null) =
     getRemapped(arguments["sourceNamespace"], arguments.getOrDefault("targetNamespace", MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE), arguments["mappingsConfiguration"]?.toString(), configure)
 
-fun FileCollectionDependency.getRemapped(arguments: Map<String, Any>) =
+fun SelfResolvingDependency.getRemapped(arguments: Map<String, Any>) =
     getRemapped(arguments["sourceNamespace"], arguments.getOrDefault("targetNamespace", MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE), arguments["mappingsConfiguration"]?.toString())
 
 @Suppress("UNCHECKED_CAST")
@@ -47,8 +48,8 @@ fun <T : ModuleDependency> T.getRemapped(
     configure?.execute(sourceDependency)
 }
 
-fun FileCollectionDependency.getRemapped(
+fun SelfResolvingDependency.getRemapped(
     sourceNamespace: Any? = null,
     targetNamespace: Any = MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE,
     mappingsConfiguration: String? = null
-): FileCollectionDependency = TODO("Not yet implemented")
+): SelfResolvingDependency = TODO("Not yet implemented")

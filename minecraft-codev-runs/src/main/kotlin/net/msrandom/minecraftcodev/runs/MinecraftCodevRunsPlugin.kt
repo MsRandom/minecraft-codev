@@ -31,15 +31,17 @@ class MinecraftCodevRunsPlugin<T : PluginAware> @Inject constructor(cacheDir: Gl
     override fun apply(target: T) = applyPlugin(target) {
         val capitalizedNatives = StringUtils.capitalize(NATIVES_CONFIGURATION)
 
-        createSourceSetElements { name ->
+        createSourceSetElements { name, isSourceSet ->
             val configurationName = if (name.isEmpty()) NATIVES_CONFIGURATION else name + capitalizedNatives
 
             val configuration = configurations.maybeCreate(configurationName).apply {
                 isCanBeConsumed = false
             }
 
-            tasks.register("extract${StringUtils.capitalize(name)}$capitalizedNatives", ExtractNatives::class.java) {
-                it.natives.set(configuration)
+            if (isSourceSet) {
+                tasks.register("extract${StringUtils.capitalize(name)}$capitalizedNatives", ExtractNatives::class.java) {
+                    it.natives.set(configuration)
+                }
             }
         }
 

@@ -1,6 +1,6 @@
 plugins {
-    id("minecraft-codev-remapper")
     java
+    id("minecraft-codev-remapper")
 }
 
 repositories {
@@ -23,6 +23,6 @@ java {
 dependencies {
     val version = "1.18.2"
 
-    mappings(minecraft(MinecraftType.ServerMappings, version))
+    mappings(minecraft(MinecraftType.ClientMappings, version))
     implementation(minecraft(MinecraftType.Client, version).remapped)
 }

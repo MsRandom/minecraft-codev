@@ -2,11 +2,9 @@ package net.msrandom.minecraftcodev.remapper
 
 import net.fabricmc.mappingio.adapter.MappingSourceNsSwitch
 import net.fabricmc.mappingio.format.ProGuardReader
-import net.msrandom.minecraftcodev.core.MappingsNamespace
-import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.applyPlugin
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.createSourceSetConfigurations
+import net.msrandom.minecraftcodev.core.*
+import net.msrandom.minecraftcodev.core.dependency.registerCustomDependency
+import net.msrandom.minecraftcodev.remapper.dependency.RemappedDependencyFactory
 import net.msrandom.minecraftcodev.remapper.dependency.RemappedIvyDependencyDescriptorFactory
 import net.msrandom.minecraftcodev.remapper.resolve.RemappedComponentResolvers
 import org.gradle.api.Plugin
@@ -15,9 +13,12 @@ import org.gradle.api.plugins.PluginAware
 import kotlin.io.path.inputStream
 
 class MinecraftCodevRemapperPlugin<T : PluginAware> : Plugin<T> {
-    private fun applyGradle(gradle: Gradle) {
-        MinecraftCodevPlugin.registerCustomDependency("remapped", gradle, RemappedIvyDependencyDescriptorFactory::class.java, RemappedComponentResolvers::class.java)
-    }
+    private fun applyGradle(gradle: Gradle) = gradle.registerCustomDependency(
+        "remapped",
+        RemappedIvyDependencyDescriptorFactory::class.java,
+        RemappedDependencyFactory::class.java,
+        RemappedComponentResolvers::class.java
+    )
 
     override fun apply(target: T) {
         target.plugins.apply(MinecraftCodevPlugin::class.java)

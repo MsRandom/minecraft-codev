@@ -1,1 +1,1 @@
-rootProject.name = "basic-patched-test"
+rootProject.name = "basic-remapped-test"

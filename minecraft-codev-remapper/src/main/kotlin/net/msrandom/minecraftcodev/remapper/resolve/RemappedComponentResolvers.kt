@@ -3,10 +3,10 @@ package net.msrandom.minecraftcodev.remapper.resolve
 import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.callWithStatus
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.getSourceSetConfigurationName
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.unsafeResolveConfiguration
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
+import net.msrandom.minecraftcodev.core.dependency.convertDescriptor
+import net.msrandom.minecraftcodev.core.getSourceSetConfigurationName
 import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.addNamed
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.hash
@@ -17,6 +17,7 @@ import net.msrandom.minecraftcodev.remapper.RemapperExtension
 import net.msrandom.minecraftcodev.remapper.dependency.RemappedDependencyMetadata
 import net.msrandom.minecraftcodev.remapper.dependency.RemappedDependencyMetadataWrapper
 import org.gradle.api.Project
+import org.gradle.api.artifacts.Configuration
 import org.gradle.api.artifacts.component.ComponentIdentifier
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.artifacts.component.ModuleComponentSelector
@@ -25,6 +26,7 @@ import org.gradle.api.attributes.LibraryElements
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ComponentResolvers
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionSelector
+import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionSelectorScheme
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.artifacts.DefaultCachedArtifact
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.excludes.specs.ExcludeSpec
 import org.gradle.api.internal.artifacts.type.ArtifactTypeRegistry
@@ -60,6 +62,7 @@ import kotlin.io.path.copyTo
 import kotlin.io.path.createDirectories
 
 open class RemappedComponentResolvers @Inject constructor(
+    private val configuration: Configuration,
     private val resolvers: ComponentResolversChainProvider,
     private val project: Project,
     private val objects: ObjectFactory,
@@ -70,6 +73,7 @@ open class RemappedComponentResolvers @Inject constructor(
     private val buildOperationExecutor: BuildOperationExecutor,
     private val attributesFactory: ImmutableAttributesFactory,
     private val instantiator: NamedObjectInstantiator,
+    private val versionSelectorSchema: VersionSelectorScheme,
 
     cacheProvider: CodevCacheProvider
 ) : ComponentResolvers, DependencyToComponentIdResolver, ComponentMetaDataResolver, OriginArtifactSelector, ArtifactResolver {
@@ -89,6 +93,7 @@ open class RemappedComponentResolvers @Inject constructor(
     private fun wrapMetadata(metadata: ComponentResolveMetadata, identifier: RemappedComponentIdentifier) = metadata.copy(
         identifier,
         {
+            val transitiveDependencies = dependencies
             val sourceNamespace = attributes.findEntry(MappingsNamespace.attribute.name).takeIf(AttributeValue<*>::isPresent)?.get() as? String
 
             val category = attributes.findEntry(Category.CATEGORY_ATTRIBUTE.name)
@@ -125,7 +130,23 @@ open class RemappedComponentResolvers @Inject constructor(
                             dependency
                         }
                     },
-                    { artifact -> RemappedComponentArtifactMetadata(artifact as ModuleComponentArtifactMetadata, identifier, sourceNamespace) },
+                    { artifact ->
+                        val classpath = configuration.copy().apply {
+                            setExtendsFrom(emptySet())
+                            dependencies.clear()
+                            artifacts.clear()
+
+                            dependencies.addAll(transitiveDependencies.map { project.convertDescriptor(it) })
+                        }
+
+                        RemappedComponentArtifactMetadata(
+                            artifact as ModuleComponentArtifactMetadata,
+                            identifier,
+                            sourceNamespace,
+                            classpath,
+                            project
+                        )
+                    },
                     objects
                 )
             } else {
@@ -184,12 +205,6 @@ open class RemappedComponentResolvers @Inject constructor(
         exclusions: ExcludeSpec,
         overriddenAttributes: ImmutableAttributes
     ) = if (component.id is RemappedComponentIdentifier) {
-        project.extensions
-            .getByType(MinecraftCodevExtension::class.java)
-            .extensions
-            .getByType(RemapperExtension::class.java)
-            .loadMappings(project.unsafeResolveConfiguration(project.configurations.getByName((component.id as RemappedComponentIdentifier).mappingsConfiguration)))
-
         MetadataSourcedComponentArtifacts().getArtifactsFor(
             component, configuration, artifactResolver, hashMapOf(), artifactTypeRegistry, exclusions, overriddenAttributes, calculatedValueContainerFactory
         )
@@ -208,7 +223,7 @@ open class RemappedComponentResolvers @Inject constructor(
         if (artifact is RemappedComponentArtifactMetadata) {
             val id = artifact.componentId
 
-            val mappingFiles = project.unsafeResolveConfiguration(project.configurations.getByName(id.mappingsConfiguration))
+            val mappingFiles = project.configurations.getByName(id.mappingsConfiguration)
 
             val remapper = project.extensions
                 .getByType(MinecraftCodevExtension::class.java)
