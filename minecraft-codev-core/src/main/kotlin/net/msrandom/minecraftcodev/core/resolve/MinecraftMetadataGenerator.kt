@@ -5,6 +5,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.encodeToStream
 import net.msrandom.minecraftcodev.core.*
+import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.addConfigurationResolutionDependencies
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
 import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
@@ -12,6 +13,8 @@ import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Compan
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.addNamed
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.asMinecraftDownload
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader
+import org.gradle.api.Project
+import org.gradle.api.artifacts.Configuration
 import org.gradle.api.artifacts.Dependency
 import org.gradle.api.artifacts.ResolvedModuleVersion
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
@@ -30,6 +33,8 @@ import org.gradle.api.internal.attributes.ImmutableAttributes
 import org.gradle.api.internal.attributes.ImmutableAttributesFactory
 import org.gradle.api.internal.model.NamedObjectInstantiator
 import org.gradle.api.internal.project.ProjectInternal
+import org.gradle.api.internal.tasks.AbstractTaskDependency
+import org.gradle.api.internal.tasks.TaskDependencyResolveContext
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.plugins.JavaPlugin
 import org.gradle.initialization.layout.GlobalCacheDir
@@ -65,7 +70,8 @@ open class MinecraftMetadataGenerator @Inject constructor(
     private val instantiator: NamedObjectInstantiator,
     private val objectFactory: ObjectFactory,
     private val checksumService: ChecksumService,
-    private val cachePolicy: CachePolicy
+    private val cachePolicy: CachePolicy,
+    private val project: Project
 ) {
     private fun extractionState(
         componentIdentifier: ModuleComponentIdentifier,
@@ -113,7 +119,8 @@ open class MinecraftMetadataGenerator @Inject constructor(
         requestMetaData: ComponentOverrideMetadata,
         result: BuildableComponentResolveResult,
         mappingsNamespace: String,
-        dependencyFactory: (DependencyMetadata) -> DependencyMetadata
+        configuration: Configuration? = null,
+        dependencyFactory: (DependencyMetadata) -> DependencyMetadata,
     ) {
         val versionList = getVersionList(
             moduleComponentIdentifier,
@@ -135,6 +142,33 @@ open class MinecraftMetadataGenerator @Inject constructor(
         )
 
         if (versionList != null && manifest != null) {
+            fun artifact(extension: String, classifier: String? = null) = if (configuration == null) {
+                DefaultModuleComponentArtifactMetadata(
+                    moduleComponentIdentifier,
+                    DefaultIvyArtifactName(
+                        moduleComponentIdentifier.module,
+                        extension,
+                        extension,
+                        classifier
+                    )
+                )
+            } else {
+                object : DefaultModuleComponentArtifactMetadata(
+                    moduleComponentIdentifier,
+                    DefaultIvyArtifactName(
+                        moduleComponentIdentifier.module,
+                        extension,
+                        extension,
+                        classifier
+                    )
+                ) {
+                    override fun getBuildDependencies() = object : AbstractTaskDependency() {
+                        override fun visitDependencies(context: TaskDependencyResolveContext) =
+                            project.addConfigurationResolutionDependencies(context, configuration)
+                    }
+                }
+            }
+
             val defaultAttributes = ImmutableAttributes.EMPTY.addNamed(MappingsNamespace.attribute, mappingsNamespace)
             when (moduleComponentIdentifier.module) {
                 MinecraftComponentResolvers.COMMON_MODULE -> {
@@ -144,23 +178,11 @@ open class MinecraftMetadataGenerator @Inject constructor(
                         manifest
                     ) ?: return
 
-                    val files = listOf(
-                        DefaultModuleComponentArtifactMetadata(
-                            moduleComponentIdentifier,
-                            DefaultIvyArtifactName(
-                                moduleComponentIdentifier.module,
-                                ArtifactTypeDefinition.JAR_TYPE,
-                                ArtifactTypeDefinition.JAR_TYPE,
-                                null
-                            )
-                        )
-                    )
-
                     val library = CodevGradleLinkageLoader.ConfigurationMetadata(
                         Dependency.DEFAULT_CONFIGURATION,
                         moduleComponentIdentifier,
                         (collectLibraries(manifest, extractionState.value.libraries).common + extraLibraries).map(::mapLibrary),
-                        files,
+                        listOf(artifact(ArtifactTypeDefinition.JAR_TYPE)),
                         defaultAttributes(manifest, defaultAttributes).libraryAttributes().runtimeAttributes(),
                         ImmutableCapabilities.EMPTY,
                         setOf(Dependency.DEFAULT_CONFIGURATION),
@@ -171,17 +193,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                         JavaPlugin.SOURCES_ELEMENTS_CONFIGURATION_NAME,
                         moduleComponentIdentifier,
                         emptyList(),
-                        listOf(
-                            DefaultModuleComponentArtifactMetadata(
-                                moduleComponentIdentifier,
-                                DefaultIvyArtifactName(
-                                    moduleComponentIdentifier.module,
-                                    ArtifactTypeDefinition.JAR_TYPE,
-                                    ArtifactTypeDefinition.JAR_TYPE,
-                                    "sources"
-                                )
-                            )
-                        ),
+                        listOf(artifact(ArtifactTypeDefinition.JAR_TYPE, "sources")),
                         defaultAttributes(manifest, defaultAttributes).runtimeAttributes().docsAttributes(DocsType.SOURCES),
                         ImmutableCapabilities.EMPTY,
                         setOf(JavaPlugin.SOURCES_ELEMENTS_CONFIGURATION_NAME),
@@ -232,17 +244,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
 
                     val libraries = collectLibraries(manifest, extractionResult?.libraries ?: emptyList())
 
-                    val artifacts = listOf(
-                        DefaultModuleComponentArtifactMetadata(
-                            moduleComponentIdentifier,
-                            DefaultIvyArtifactName(
-                                moduleComponentIdentifier.module,
-                                ArtifactTypeDefinition.JAR_TYPE,
-                                ArtifactTypeDefinition.JAR_TYPE,
-                                null
-                            )
-                        )
-                    )
+                    val artifacts = listOf(artifact(ArtifactTypeDefinition.JAR_TYPE))
 
                     val variants = mutableListOf<ConfigurationMetadata>()
 
@@ -296,17 +298,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                             JavaPlugin.SOURCES_ELEMENTS_CONFIGURATION_NAME,
                             moduleComponentIdentifier,
                             emptyList(),
-                            listOf(
-                                DefaultModuleComponentArtifactMetadata(
-                                    moduleComponentIdentifier,
-                                    DefaultIvyArtifactName(
-                                        moduleComponentIdentifier.module,
-                                        ArtifactTypeDefinition.JAR_TYPE,
-                                        ArtifactTypeDefinition.JAR_TYPE,
-                                        "sources"
-                                    )
-                                )
-                            ),
+                            listOf(artifact(ArtifactTypeDefinition.JAR_TYPE, "sources")),
                             defaultAttributes(manifest, defaultAttributes).runtimeAttributes().docsAttributes(DocsType.SOURCES),
                             ImmutableCapabilities.EMPTY,
                             setOf(JavaPlugin.SOURCES_ELEMENTS_CONFIGURATION_NAME),
@@ -420,17 +412,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                                             Dependency.DEFAULT_CONFIGURATION,
                                             moduleComponentIdentifier,
                                             emptyList(),
-                                            listOf(
-                                                DefaultModuleComponentArtifactMetadata(
-                                                    moduleComponentIdentifier,
-                                                    DefaultIvyArtifactName(
-                                                        moduleComponentIdentifier.module,
-                                                        extension,
-                                                        extension,
-                                                        null
-                                                    )
-                                                )
-                                            ),
+                                            listOf(artifact(extension)),
                                             ImmutableAttributes.EMPTY,
                                             ImmutableCapabilities.EMPTY,
                                             setOf(Dependency.DEFAULT_CONFIGURATION),

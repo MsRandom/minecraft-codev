@@ -7,6 +7,7 @@ import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.zipFileSy
 import net.msrandom.minecraftcodev.core.applyPlugin
 import net.msrandom.minecraftcodev.core.createSourceSetConfigurations
 import net.msrandom.minecraftcodev.core.dependency.registerCustomDependency
+import net.msrandom.minecraftcodev.forge.dependency.PatchedMinecraftDependencyFactory
 import net.msrandom.minecraftcodev.forge.dependency.PatchedMinecraftIvyDependencyDescriptorFactory
 import net.msrandom.minecraftcodev.forge.resolve.PatchedMinecraftComponentResolvers
 import org.gradle.api.Plugin
@@ -21,13 +22,12 @@ import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 
 open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
-    private fun applyGradle(gradle: Gradle) {
-        gradle.registerCustomDependency(
-            "patched",
-            PatchedMinecraftIvyDependencyDescriptorFactory::class.java,
-            PatchedMinecraftComponentResolvers::class.java
-        )
-    }
+    private fun applyGradle(gradle: Gradle) = gradle.registerCustomDependency(
+        "patched",
+        PatchedMinecraftIvyDependencyDescriptorFactory::class.java,
+        PatchedMinecraftDependencyFactory::class.java,
+        PatchedMinecraftComponentResolvers::class.java
+    )
 
     override fun apply(target: T) {
         target.plugins.apply(MinecraftCodevPlugin::class.java)

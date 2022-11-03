@@ -84,7 +84,7 @@ open class MinecraftComponentResolvers @Inject constructor(
                     componentOverrideMetadata,
                     result,
                     MappingsNamespace.OBF,
-                    ::MinecraftDependencyMetadataWrapper
+                    dependencyFactory = ::MinecraftDependencyMetadataWrapper
                 )
             }
         }

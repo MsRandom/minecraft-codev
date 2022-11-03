@@ -1,9 +1,9 @@
 package net.msrandom.minecraftcodev.forge.resolve
 
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.getSourceSetConfigurationName
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.unsafeResolveConfiguration
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
+import net.msrandom.minecraftcodev.core.getSourceSetConfigurationName
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
 import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.resolveMojangFile
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentIdentifier
@@ -154,7 +154,8 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
                         identifier,
                         componentOverrideMetadata,
                         result,
-                        MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE
+                        MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE,
+                        patches
                     ) { PatchedMinecraftDependencyMetadataWrapper(it, identifier.patches, identifier.moduleConfiguration) }
 
                     if (result.hasResult()) {

@@ -4,8 +4,8 @@ import kotlinx.serialization.json.Json
 import net.msrandom.minecraftcodev.core.attributes.OperatingSystemDisambiguationRule
 import net.msrandom.minecraftcodev.core.attributes.VersionPatternCompatibilityRule
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
-import net.msrandom.minecraftcodev.core.dependency.MinecraftIvyDependencyDescriptorFactory
 import net.msrandom.minecraftcodev.core.dependency.MinecraftDependencyFactory
+import net.msrandom.minecraftcodev.core.dependency.MinecraftIvyDependencyDescriptorFactory
 import net.msrandom.minecraftcodev.core.dependency.registerCustomDependency
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
 import org.apache.commons.lang3.StringUtils
@@ -93,6 +93,7 @@ open class MinecraftCodevPlugin<T : PluginAware> : Plugin<T> {
         }
 
         // FIXME This can cause deadlocks, should probably figure out a way around all of this.
+        @Deprecated("In favor of artifact task dependencies")
         fun Project.unsafeResolveConfiguration(configuration: Configuration): Configuration {
             // Create new thread that can acquire a new binary store
             val thread = Thread {

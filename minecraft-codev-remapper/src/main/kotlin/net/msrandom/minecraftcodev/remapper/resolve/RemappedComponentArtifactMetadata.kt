@@ -19,6 +19,7 @@ class RemappedComponentArtifactMetadata(
 
     override fun getBuildDependencies(): TaskDependency = object : AbstractTaskDependency() {
         override fun visitDependencies(context: TaskDependencyResolveContext) {
+            context.add(delegate.buildDependencies)
             project.addConfigurationResolutionDependencies(context, classpath)
             project.addConfigurationResolutionDependencies(context, project.configurations.getByName(id.mappingsConfiguration))
         }

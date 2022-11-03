@@ -15,7 +15,7 @@ sealed interface MinecraftDependency : ExternalDependency {
     override fun copy(): MinecraftDependency
 }
 
-internal class MinecraftDependencyImpl(private val name: String, version: String, configuration: String?) : AbstractModuleDependency(configuration), MinecraftDependency {
+class MinecraftDependencyImpl(private val name: String, version: String, configuration: String?) : AbstractModuleDependency(configuration), MinecraftDependency {
     override var isChanging = false
 
     private val versionConstraint = DefaultMutableVersionConstraint(version)
