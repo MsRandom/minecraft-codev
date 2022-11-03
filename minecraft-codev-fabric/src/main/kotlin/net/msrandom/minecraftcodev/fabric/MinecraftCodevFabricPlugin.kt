@@ -8,7 +8,7 @@ import net.fabricmc.mappingio.format.Tiny2Reader
 import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.applyPlugin
+import net.msrandom.minecraftcodev.core.applyPlugin
 import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
 import net.msrandom.minecraftcodev.remapper.RemapperExtension
 import org.gradle.api.Plugin

@@ -5,6 +5,7 @@ import net.fabricmc.mappingio.format.ProGuardReader
 import net.msrandom.minecraftcodev.core.*
 import net.msrandom.minecraftcodev.core.dependency.registerCustomDependency
 import net.msrandom.minecraftcodev.remapper.dependency.RemappedDependencyFactory
+import net.msrandom.minecraftcodev.remapper.dependency.RemappedDependencyMetadata
 import net.msrandom.minecraftcodev.remapper.dependency.RemappedIvyDependencyDescriptorFactory
 import net.msrandom.minecraftcodev.remapper.resolve.RemappedComponentResolvers
 import org.gradle.api.Plugin
@@ -17,7 +18,8 @@ class MinecraftCodevRemapperPlugin<T : PluginAware> : Plugin<T> {
         "remapped",
         RemappedIvyDependencyDescriptorFactory::class.java,
         RemappedDependencyFactory::class.java,
-        RemappedComponentResolvers::class.java
+        RemappedComponentResolvers::class.java,
+        RemappedDependencyMetadata::class.java
     )
 
     override fun apply(target: T) {

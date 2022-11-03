@@ -13,6 +13,7 @@ import org.gradle.api.internal.artifacts.ArtifactDependencyResolver
 import org.gradle.api.internal.artifacts.configurations.ConfigurationInternal
 import org.gradle.api.internal.artifacts.configurations.DefaultConfiguration
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
+import org.gradle.api.internal.artifacts.ivyservice.DefaultConfigurationResolver
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ComponentResolvers
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ResolverProviderFactory
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.StartParameterResolutionOverride
@@ -30,6 +31,7 @@ import org.gradle.api.internal.model.NamedObjectInstantiator
 import org.gradle.api.internal.provider.PropertyFactory
 import org.gradle.api.invocation.Gradle
 import org.gradle.api.model.ObjectFactory
+import org.gradle.api.specs.Spec
 import org.gradle.api.tasks.util.PatternSet
 import org.gradle.configurationcache.extensions.serviceOf
 import org.gradle.internal.Factory
@@ -37,9 +39,9 @@ import org.gradle.internal.component.local.model.DslOriginDependencyMetadata
 import org.gradle.internal.component.model.DependencyMetadata
 import org.gradle.internal.instantiation.InstantiatorFactory
 import org.gradle.internal.service.DefaultServiceRegistry
+import sun.misc.Unsafe
 
-private val customDependencies = hashMapOf<Gradle, MutableSet<String>>()
-private val dependencyFactories = mutableListOf<DependencyFactory>()
+private val customDependencies = hashMapOf<Gradle, DependencyData>()
 
 private val dependencyDescriptorFactories = DefaultDependencyDescriptorFactory::class.java.getDeclaredField("dependencyDescriptorFactories").apply {
     isAccessible = true
@@ -53,16 +55,31 @@ private val domainObjectContext = DefaultConfiguration::class.java.getDeclaredFi
     isAccessible = true
 }
 
+private val IS_LOCAL_EDGE = DefaultConfigurationResolver::class.java.getDeclaredField("IS_LOCAL_EDGE").apply {
+    isAccessible = true
+}
+
+private val unsafe = Unsafe::class.java.getDeclaredField("theUnsafe").apply { isAccessible = true }[null] as Unsafe
+
 @Suppress("UNCHECKED_CAST")
 fun Gradle.registerCustomDependency(
     name: String,
     descriptorFactory: Class<out IvyDependencyDescriptorFactory>,
     dependencyFactory: Class<out DependencyFactory>,
-    componentResolvers: Class<out ComponentResolvers>
+    componentResolvers: Class<out ComponentResolvers>,
+    edgeDependency: Class<out DependencyMetadata>? = null
 ) {
-    val dependencies = customDependencies.computeIfAbsent(gradle) { hashSetOf() }
+    val dependency = customDependencies.computeIfAbsent(gradle) {
+        val dependency = DependencyData()
 
-    if (name !in dependencies) {
+        val localEdgeOffset = unsafe.staticFieldOffset(IS_LOCAL_EDGE)
+        val spec = unsafe.getObject(DefaultConfigurationResolver::class.java, localEdgeOffset) as Spec<DependencyMetadata>
+        unsafe.putObject(DefaultConfigurationResolver::class.java, localEdgeOffset, Spec<DependencyMetadata> { spec.isSatisfiedBy(it) || dependency.edgeTypes.any { type -> type.isInstance(it) } })
+
+        dependency
+    }
+
+    if (name !in dependency.registeredTypeNames) {
         val gradle = gradle
         gradle as GradleInternal
         val dependencyDescriptorFactory = gradle.serviceOf<DependencyDescriptorFactory>()
@@ -120,9 +137,9 @@ fun Gradle.registerCustomDependency(
             }
         })
 
-        dependencyFactories.add(objectFactory.newInstance(dependencyFactory))
-
-        dependencies.add(name)
+        dependency.dependencyFactories.add(objectFactory.newInstance(dependencyFactory))
+        dependency.registeredTypeNames.add(name)
+        edgeDependency?.let(dependency.edgeTypes::add)
     }
 }
 
@@ -131,7 +148,7 @@ fun Project.convertDescriptor(descriptor: DependencyMetadata): Dependency {
         return descriptor.source
     }
 
-    for (factory in dependencyFactories) {
+    for (factory in customDependencies[gradle]?.dependencyFactories.orEmpty()) {
         if (factory.canConvert(descriptor)) {
             return factory.createDependency(project, descriptor)
         }
@@ -163,3 +180,9 @@ fun Project.convertDescriptor(descriptor: DependencyMetadata): Dependency {
 
     throw UnsupportedOperationException("Don't know how to convert dependency metadata $descriptor into a DSL dependency for resolution.")
 }
+
+private class DependencyData(
+    val registeredTypeNames: MutableSet<String> = hashSetOf(),
+    val dependencyFactories: MutableList<DependencyFactory> = mutableListOf(),
+    val edgeTypes: MutableList<Class<out DependencyMetadata>> = mutableListOf()
+)

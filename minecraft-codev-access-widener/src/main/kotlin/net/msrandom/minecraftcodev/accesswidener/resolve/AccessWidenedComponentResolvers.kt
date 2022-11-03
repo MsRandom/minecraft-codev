@@ -2,16 +2,16 @@ package net.msrandom.minecraftcodev.accesswidener.resolve
 
 import net.fabricmc.accesswidener.AccessWidener
 import net.fabricmc.accesswidener.AccessWidenerReader
-import net.msrandom.minecraftcodev.accesswidener.AccessWidenedDependencyMetadata
-import net.msrandom.minecraftcodev.accesswidener.AccessWidenedDependencyMetadataWrapper
+import net.msrandom.minecraftcodev.accesswidener.dependency.AccessWidenedDependencyMetadata
+import net.msrandom.minecraftcodev.accesswidener.dependency.AccessWidenedDependencyMetadataWrapper
 import net.msrandom.minecraftcodev.accesswidener.JarAccessWidener
 import net.msrandom.minecraftcodev.accesswidener.MinecraftCodevAccessWidenerPlugin
 import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.callWithStatus
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.getSourceSetConfigurationName
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.unsafeResolveConfiguration
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
+import net.msrandom.minecraftcodev.core.getSourceSetConfigurationName
 import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.hash
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.copy

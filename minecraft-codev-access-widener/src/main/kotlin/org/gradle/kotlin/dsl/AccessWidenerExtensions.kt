@@ -1,6 +1,6 @@
 package org.gradle.kotlin.dsl
 
-import net.msrandom.minecraftcodev.accesswidener.AccessWidenedDependency
+import net.msrandom.minecraftcodev.accesswidener.dependency.AccessWidenedDependency
 import org.gradle.api.Action
 import org.gradle.api.artifacts.FileCollectionDependency
 import org.gradle.api.artifacts.ModuleDependency

@@ -1,10 +1,10 @@
 package net.msrandom.minecraftcodev.runs
 
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.applyPlugin
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.createSourceSetElements
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.extendKotlinConfigurations
+import net.msrandom.minecraftcodev.core.applyPlugin
 import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
+import net.msrandom.minecraftcodev.core.createSourceSetElements
+import net.msrandom.minecraftcodev.core.extendKotlinConfigurations
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
 import net.msrandom.minecraftcodev.runs.task.GenerateIdeaRuns
 import org.apache.commons.lang3.StringUtils
