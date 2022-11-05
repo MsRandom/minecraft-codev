@@ -89,9 +89,7 @@ data class MinecraftVersionMetadata(
                 element.map {
                     if (it is JsonPrimitive) {
                         JsonObject(
-                            mapOf(
-                                "value" to JsonArray(listOf(it))
-                            )
+                            mapOf("value" to JsonArray(listOf(it)))
                         )
                     } else {
                         val rules = it.jsonObject["rules"]

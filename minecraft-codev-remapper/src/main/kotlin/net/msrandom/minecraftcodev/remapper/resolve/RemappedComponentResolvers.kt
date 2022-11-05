@@ -3,6 +3,7 @@ package net.msrandom.minecraftcodev.remapper.resolve
 import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.callWithStatus
+import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.unsafeResolveConfiguration
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.dependency.convertDescriptor
@@ -223,7 +224,7 @@ open class RemappedComponentResolvers @Inject constructor(
         if (artifact is RemappedComponentArtifactMetadata) {
             val id = artifact.componentId
 
-            val mappingFiles = project.configurations.getByName(id.mappingsConfiguration)
+            val mappingFiles = project.unsafeResolveConfiguration(project.configurations.getByName(id.mappingsConfiguration))
 
             val remapper = project.extensions
                 .getByType(MinecraftCodevExtension::class.java)
@@ -263,7 +264,7 @@ open class RemappedComponentResolvers @Inject constructor(
                                 .metadata(BuildOperationCategory.TASK)
 
                             override fun call(context: BuildOperationContext) = context.callWithStatus {
-                                JarRemapper.remap(remapper, mappings.tree, sourceNamespace, id.targetNamespace.name, newResult.result.toPath(), artifact.classpath)
+                                JarRemapper.remap(remapper, mappings.tree, sourceNamespace, id.targetNamespace.name, newResult.result.toPath(), project.unsafeResolveConfiguration(artifact.classpath))
                             }
                         })
 
