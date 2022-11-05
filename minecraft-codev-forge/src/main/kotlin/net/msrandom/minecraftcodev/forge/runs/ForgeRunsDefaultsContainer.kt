@@ -13,6 +13,7 @@ import net.msrandom.minecraftcodev.runs.RunConfigurationDefaultsContainer
 import net.msrandom.minecraftcodev.runs.RunConfigurationDefaultsContainer.Companion.findMinecraft
 import net.msrandom.minecraftcodev.runs.RunConfigurationDefaultsContainer.Companion.getConfiguration
 import net.msrandom.minecraftcodev.runs.RunConfigurationDefaultsContainer.Companion.getManifest
+import net.msrandom.minecraftcodev.runs.task.ExtractNatives
 import org.apache.commons.lang3.StringUtils
 import org.gradle.api.plugins.JvmEcosystemPlugin
 import org.gradle.api.tasks.SourceSet
@@ -42,11 +43,11 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
         config ?: throw UnsupportedOperationException("Patches configuration $patches did not contain Forge userdev.")
     }
 
-    private fun MinecraftRunConfiguration.addArgs(manifest: MinecraftVersionMetadata, config: UserdevConfig, arguments: MutableSet<MinecraftRunConfiguration.Argument>, existing: List<String>) {
+    private fun MinecraftRunConfiguration.addArgs(manifest: MinecraftVersionMetadata, config: UserdevConfig, arguments: MutableSet<MinecraftRunConfiguration.Argument>, existing: List<String>, extractNativesName: String) {
         arguments.addAll(
             existing.map {
                 if (it.startsWith('{')) {
-                    MinecraftRunConfiguration.Argument(resolveTemplate(manifest, config, it.substring(1, it.length - 1)))
+                    MinecraftRunConfiguration.Argument(resolveTemplate(manifest, config, it.substring(1, it.length - 1), extractNativesName))
                 } else {
                     MinecraftRunConfiguration.Argument(it)
                 }
@@ -54,7 +55,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
         )
     }
 
-    private fun MinecraftRunConfiguration.resolveTemplate(manifest: MinecraftVersionMetadata, config: UserdevConfig, template: String): Any {
+    private fun MinecraftRunConfiguration.resolveTemplate(manifest: MinecraftVersionMetadata, config: UserdevConfig, template: String, extractNativesName: String): Any {
         return when (template) {
             "asset_index" -> manifest.assets
             "assets_root" -> {
@@ -130,8 +131,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
                 srgMappings.build().write(path, IMappingFile.Format.SRG)
                 path
             }
-            // TODO remove any argument containing natives
-            "natives" -> ""
+            "natives" -> project.tasks.withType(ExtractNatives::class.java).getByName(extractNativesName).destinationDirectory.get()
             else -> {
                 project.logger.warn("Unknown Forge userdev run configuration template $template")
                 template
@@ -141,6 +141,14 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
 
     private fun MinecraftRunConfiguration.addData(type: String, caller: String, runType: (UserdevConfig.Runs) -> UserdevConfig.Run?) {
         val configProvider = getUserdevData()
+
+        @Suppress("UnstableApiUsage")
+        val sourceSetName = sourceSet.get().takeUnless(SourceSet::isMain)?.name?.let(StringUtils::capitalize).orEmpty()
+        val taskName = "extract${sourceSetName}Natives"
+
+        if (type == MinecraftComponentResolvers.CLIENT_MODULE) {
+            beforeRunTasks.add(taskName)
+        }
 
         val runProvider = configProvider.map {
             runType(it.runs)
@@ -161,9 +169,9 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
             buildMap {
                 for ((key, value) in run.env) {
                     val argument = if (value.startsWith('$')) {
-                        MinecraftRunConfiguration.Argument(resolveTemplate(manifest, config, value.substring(2, value.length - 1)))
+                        MinecraftRunConfiguration.Argument(resolveTemplate(manifest, config, value.substring(2, value.length - 1), taskName))
                     } else if (value.startsWith('{')) {
-                        MinecraftRunConfiguration.Argument(resolveTemplate(manifest, config, value.substring(1, value.length - 1)))
+                        MinecraftRunConfiguration.Argument(resolveTemplate(manifest, config, value.substring(1, value.length - 1), taskName))
                     } else {
                         MinecraftRunConfiguration.Argument(value)
                     }
@@ -176,7 +184,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
         arguments.addAll(zipped.map { (run, manifest, config) ->
             val arguments = mutableSetOf<MinecraftRunConfiguration.Argument>()
 
-            addArgs(manifest, config, arguments, run.args)
+            addArgs(manifest, config, arguments, run.args, taskName)
 
             arguments
         })
@@ -184,7 +192,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
         jvmArguments.addAll(zipped.map { (run, manifest, config) ->
             val jvmArguments = mutableSetOf<MinecraftRunConfiguration.Argument>()
 
-            addArgs(manifest, config, jvmArguments, run.jvmArgs)
+            addArgs(manifest, config, jvmArguments, run.jvmArgs, taskName)
 
             for ((key, value) in run.props) {
                 if (value.startsWith('{')) {
@@ -203,7 +211,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
                         jvmArguments.add(MinecraftRunConfiguration.Argument("-DminecraftCodev.minecraftJars=$minecraftJars"))
                         jvmArguments.add(MinecraftRunConfiguration.Argument("-DminecraftCodev.fmlJars=$fmlJars"))
                     } else {
-                        jvmArguments.add(MinecraftRunConfiguration.Argument("-D$key=", resolveTemplate(manifest, config, template)))
+                        jvmArguments.add(MinecraftRunConfiguration.Argument("-D$key=", resolveTemplate(manifest, config, template, taskName)))
                     }
                 } else {
                     jvmArguments.add(MinecraftRunConfiguration.Argument("-D$key=$value"))

@@ -27,6 +27,7 @@ object JarRemapper {
 
         val remapper = TinyRemapper
             .newRemapper()
+            // .resolveMissing(true)
             .ignoreFieldDesc(true)
             .renameInvalidLocals(true)
             .rebuildSourceFilenames(true)

@@ -55,7 +55,7 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
             val sourceSetName = sourceSet.get().takeUnless(SourceSet::isMain)?.name?.let(StringUtils::capitalize).orEmpty()
             val task = project.tasks.withType(ExtractNatives::class.java).getByName("extract${sourceSetName}Natives")
 
-            beforeRunTasks.add(task.path)
+            beforeRunTasks.add(task.name)
 
             mainClass.set(manifest.map(MinecraftVersionMetadata::mainClass))
 
