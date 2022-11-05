@@ -6,7 +6,6 @@ import org.gradle.api.artifacts.transform.TransformAction
 import org.gradle.api.artifacts.transform.TransformOutputs
 import org.gradle.api.artifacts.transform.TransformParameters
 import org.gradle.api.file.FileSystemLocation
-import org.gradle.api.logging.Logger
 import org.gradle.api.provider.Provider
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassWriter
@@ -14,7 +13,6 @@ import org.objectweb.asm.Opcodes
 import org.objectweb.asm.tree.*
 import java.nio.file.Files
 import java.util.*
-import javax.inject.Inject
 import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 import kotlin.io.path.writeBytes

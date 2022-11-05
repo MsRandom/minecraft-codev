@@ -51,6 +51,12 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
             val artifact = configuration.findMinecraft(MinecraftComponentResolvers.CLIENT_MODULE, ::client.name)
             val manifest = getManifest(configuration, artifact)
 
+            @Suppress("UnstableApiUsage")
+            val sourceSetName = sourceSet.get().takeUnless(SourceSet::isMain)?.name?.let(StringUtils::capitalize).orEmpty()
+            val task = project.tasks.withType(ExtractNatives::class.java).getByName("extract${sourceSetName}Natives")
+
+            beforeRunTasks.add(task.path)
+
             mainClass.set(manifest.map(MinecraftVersionMetadata::mainClass))
 
             jvmVersion.set(manifest.map { it.javaVersion.majorVersion })
@@ -140,13 +146,7 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
                                 if (templateStart != -1) {
                                     val template = value.subSequence(templateStart + 2, value.indexOf('}'))
                                     if (template == "natives_directory") {
-                                        @Suppress("UnstableApiUsage")
-                                        val sourceSetName = StringUtils.capitalize(if (SourceSet.isMain(sourceSet.get())) "" else sourceSet.get().name)
-                                        val task = project.tasks.withType(ExtractNatives::class.java).getByName("extract${sourceSetName}Natives")
-
                                         fixedJvmArguments.add(MinecraftRunConfiguration.Argument(value.substring(0, templateStart), task.destinationDirectory.get().asFile.toPath()))
-
-                                        beforeRunTasks.add(task.path)
                                     } else {
                                         continue
                                     }

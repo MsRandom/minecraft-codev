@@ -9,9 +9,6 @@ plugins {
 subprojects {
     apply(plugin = "java")
 
-    group = "net.msrandom"
-    version = "1.0"
-
     java {
         toolchain.languageVersion.set(JavaLanguageVersion.of(8))
         withSourcesJar()

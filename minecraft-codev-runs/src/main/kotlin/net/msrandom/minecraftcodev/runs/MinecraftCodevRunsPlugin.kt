@@ -60,15 +60,18 @@ class MinecraftCodevRunsPlugin<T : PluginAware> @Inject constructor(cacheDir: Gl
             tasks.register("${ApplicationPlugin.TASK_RUN_NAME}${StringUtils.capitalize(builder.name)}", JavaExec::class.java) { javaExec ->
                 val configuration = builder.build(project)
 
-                javaExec.args(configuration.arguments.get().map { it.parts.joinToString("") })
-                javaExec.jvmArgs(configuration.jvmArguments.get().map { it.parts.joinToString("") })
-                javaExec.environment(configuration.environment.get().mapValues { it.value.parts.joinToString("") })
-                javaExec.classpath = configuration.sourceSet.get().runtimeClasspath
+                javaExec.doFirst { task ->
+                    (task as JavaExec).environment = configuration.environment.get().mapValues { it.value.parts.joinToString("") }
+                }
+
+                javaExec.argumentProviders.add(configuration.arguments.map { arguments -> arguments.map { it.parts.joinToString("") } }::get)
+                javaExec.jvmArgumentProviders.add(configuration.jvmArguments.map { arguments -> arguments.map { it.parts.joinToString("") } }::get)
                 javaExec.workingDir(configuration.workingDirectory)
                 javaExec.mainClass.set(configuration.mainClass)
-                javaExec.dependsOn(*configuration.beforeRunTasks.get().toTypedArray())
-
+                javaExec.classpath = configuration.sourceSet.get().runtimeClasspath
                 javaExec.group = ApplicationPlugin.APPLICATION_GROUP
+
+                javaExec.dependsOn(*configuration.beforeRunTasks.get().toTypedArray())
             }
         }
     }

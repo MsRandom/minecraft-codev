@@ -21,6 +21,7 @@ abstract class MinecraftRunConfiguration @Inject constructor(val project: Projec
     abstract val sourceSet: Property<SourceSet>
     abstract val kotlinSourceSet: Property<KotlinSourceSet>
 
+    // TODO Use tasks directly here?
     val beforeRunTasks: ListProperty<String> = project.objects.listProperty(String::class.java)
     val arguments: SetProperty<Argument> = project.objects.setProperty(Argument::class.java)
     val jvmArguments: SetProperty<Argument> = project.objects.setProperty(Argument::class.java)
