@@ -8,9 +8,10 @@ dependencyResolutionManagement {
 
     repositories {
         mavenCentral()
-        maven(url = "https://maven.fabricmc.net") // Used for mapping
+        maven(url = "https://maven.msrandom.net/repository/root/")
+        maven(url = "https://maven.fabricmc.net/")
         maven(url = "https://maven.quiltmc.org/repository/release/") // Used for decompilation
-        maven(url = "https://maven.minecraftforge.net") // Used for version sorting
+        maven(url = "https://maven.minecraftforge.net/")
     }
 }
 
