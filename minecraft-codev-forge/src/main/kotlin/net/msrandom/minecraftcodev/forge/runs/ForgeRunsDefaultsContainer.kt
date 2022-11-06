@@ -1,11 +1,16 @@
 package net.msrandom.minecraftcodev.forge.runs
 
+import net.fabricmc.mappingio.format.Tiny2Reader
+import net.fabricmc.mappingio.tree.MappingTreeView
+import net.fabricmc.mappingio.tree.MemoryMappingTree
 import net.minecraftforge.srgutils.IMappingBuilder
 import net.minecraftforge.srgutils.IMappingFile
+import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.zipFileSystem
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
 import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin
 import net.msrandom.minecraftcodev.forge.UserdevConfig
+import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
 import net.msrandom.minecraftcodev.runs.AssetDownloader
 import net.msrandom.minecraftcodev.runs.MinecraftCodevRunsPlugin
 import net.msrandom.minecraftcodev.runs.MinecraftRunConfiguration
@@ -15,10 +20,12 @@ import net.msrandom.minecraftcodev.runs.RunConfigurationDefaultsContainer.Compan
 import net.msrandom.minecraftcodev.runs.RunConfigurationDefaultsContainer.Companion.getManifest
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
 import org.apache.commons.lang3.StringUtils
+import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.plugins.JvmEcosystemPlugin
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
 import java.io.File
+import kotlin.io.path.reader
 
 open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefaultsContainer) {
     private fun MinecraftRunConfiguration.getUserdevData() = sourceSet.flatMap {
@@ -43,7 +50,13 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
         config ?: throw UnsupportedOperationException("Patches configuration $patches did not contain Forge userdev.")
     }
 
-    private fun MinecraftRunConfiguration.addArgs(manifest: MinecraftVersionMetadata, config: UserdevConfig, arguments: MutableSet<MinecraftRunConfiguration.Argument>, existing: List<String>, extractNativesName: String) {
+    private fun MinecraftRunConfiguration.addArgs(
+        manifest: MinecraftVersionMetadata,
+        config: UserdevConfig,
+        arguments: MutableSet<MinecraftRunConfiguration.Argument>,
+        existing: List<String>,
+        extractNativesName: String
+    ) {
         arguments.addAll(
             existing.map {
                 if (it.startsWith('{')) {
@@ -110,27 +123,51 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
             "mcp_to_srg" -> {
                 val srgMappings = IMappingBuilder.create()
 
-                /*                val mappings = project.minecraftCodev.remapper.mappings
-                                val tree = mappings.tree
-                                val sourceNamespace = tree.getNamespaceId(MappingNamespace.SRG)
-                                val targetNamespace = tree.getNamespaceId(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
-                                for (type in tree.classes) {
-                                    val addedClass = srgMappings.addClass(type.getName(targetNamespace), type.getName(sourceNamespace))
+                val mappingsArtifact = project.configurations.getByName(sourceSet.get().runtimeClasspathConfigurationName)
+                    .resolvedConfiguration
+                    .resolvedArtifacts
+                    .firstOrNull {
+                        it.moduleVersion.id.group == MinecraftComponentResolvers.GROUP &&
+                                it.moduleVersion.id.name == "forge" &&
+                                it.name == "mappings" &&
+                                it.extension == ArtifactTypeDefinition.ZIP_TYPE
+                    }
+                    ?.file
+                    ?.toPath()
 
-                                    for (field in type.fields) {
-                                        addedClass.field(field.getName(sourceNamespace), field.getName(targetNamespace))
-                                    }
+                if (mappingsArtifact != null) {
+                    val mappings = MemoryMappingTree()
 
-                                    for (method in type.methods) {
-                                        addedClass.method(method.getDesc(sourceNamespace), method.getName(sourceNamespace), method.getName(targetNamespace))
-                                    }
-                                }*/
+                    // Compiler doesn't like working with MemoryMappingTree for some reason
+                    val treeView: MappingTreeView = mappings
 
-                // TODO fix this, somehow
-                val path = project.layout.buildDirectory.dir("mcp-to-srg").get().file("mcp.srg").asFile.toPath()
+                    zipFileSystem(mappingsArtifact).use {
+                        it.getPath("mappings/mappings.tiny").reader().use { reader ->
+                            Tiny2Reader.read(reader, mappings)
+                        }
+
+                        val sourceNamespace = treeView.getNamespaceId(MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE)
+                        val targetNamespace = treeView.getNamespaceId(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
+
+                        for (type in treeView.classes) {
+                            val addedClass = srgMappings.addClass(type.getName(targetNamespace), type.getName(sourceNamespace))
+
+                            for (field in type.fields) {
+                                addedClass.field(field.getName(sourceNamespace), field.getName(targetNamespace))
+                            }
+
+                            for (method in type.methods) {
+                                addedClass.method(method.getDesc(sourceNamespace), method.getName(sourceNamespace), method.getName(targetNamespace))
+                            }
+                        }
+                    }
+                }
+
+                val path = project.layout.buildDirectory.dir("mcpToSrg").get().file("mcp.srg").asFile.toPath()
                 srgMappings.build().write(path, IMappingFile.Format.SRG)
                 path
             }
+
             "natives" -> project.tasks.withType(ExtractNatives::class.java).getByName(extractNativesName).destinationDirectory.get()
             else -> {
                 project.logger.warn("Unknown Forge userdev run configuration template $template")
@@ -139,24 +176,23 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
         }
     }
 
-    private fun MinecraftRunConfiguration.addData(type: String, caller: String, runType: (UserdevConfig.Runs) -> UserdevConfig.Run?) {
+    private fun MinecraftRunConfiguration.addData(caller: String, runType: (UserdevConfig.Runs) -> UserdevConfig.Run?, hasNatives: Boolean) {
         val configProvider = getUserdevData()
 
         @Suppress("UnstableApiUsage")
         val sourceSetName = sourceSet.get().takeUnless(SourceSet::isMain)?.name?.let(StringUtils::capitalize).orEmpty()
         val taskName = "extract${sourceSetName}Natives"
 
-        if (type == MinecraftComponentResolvers.CLIENT_MODULE) {
+        if (hasNatives) {
             beforeRunTasks.add(taskName)
         }
 
         val runProvider = configProvider.map {
-            runType(it.runs)
-                ?: throw UnsupportedOperationException("Attempted to get use run configuration which doesn't exist.")
+            runType(it.runs) ?: throw UnsupportedOperationException("Attempted to get use run configuration which doesn't exist.")
         }
 
         val configuration = getConfiguration()
-        val artifact = configuration.findMinecraft(type, caller)
+        val artifact = configuration.findMinecraft("forge", caller)
         val manifestProvider = getManifest(configuration, artifact)
 
         mainClass.set(runProvider.map(UserdevConfig.Run::main))
@@ -224,19 +260,19 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
 
     fun client(): ForgeRunsDefaultsContainer = apply {
         defaults.builder.action {
-            addData(MinecraftComponentResolvers.CLIENT_MODULE, ::client.name, UserdevConfig.Runs::client)
+            addData(::client.name, UserdevConfig.Runs::client, true)
         }
     }
 
     fun server(): ForgeRunsDefaultsContainer = apply {
         defaults.builder.action {
-            addData(MinecraftComponentResolvers.COMMON_MODULE, ::server.name, UserdevConfig.Runs::server)
+            addData(::server.name, UserdevConfig.Runs::server, false)
         }
     }
 
     fun data(): ForgeRunsDefaultsContainer = apply {
         defaults.builder.action {
-            addData(MinecraftComponentResolvers.COMMON_MODULE, ::data.name, UserdevConfig.Runs::data)
+            addData(::data.name, UserdevConfig.Runs::data, false)
         }
     }
 
@@ -248,7 +284,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
         }
 
         defaults.builder.action {
-            addData(MinecraftComponentResolvers.COMMON_MODULE, ::data.name, UserdevConfig.Runs::gameTestServer)
+            addData(::data.name, UserdevConfig.Runs::gameTestServer, false)
         }
     }
 

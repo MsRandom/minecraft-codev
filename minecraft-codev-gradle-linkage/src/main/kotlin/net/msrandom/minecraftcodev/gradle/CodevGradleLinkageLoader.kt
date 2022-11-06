@@ -63,8 +63,9 @@ object CodevGradleLinkageLoader {
         attributes: ImmutableAttributes,
         dependency: (DependencyMetadata) -> DependencyMetadata,
         artifact: (ComponentArtifactMetadata) -> ComponentArtifactMetadata,
+        extraArtifacts: List<ComponentArtifactMetadata>,
         objects: ObjectFactory
-    ): ConfigurationMetadata = objects.newInstance(delegatingConfigurationMetadata, this, describable, attributes, dependency, artifact)
+    ): ConfigurationMetadata = objects.newInstance(delegatingConfigurationMetadata, this, describable, attributes, dependency, artifact, extraArtifacts)
 
     fun getDelegate(metadata: ComponentResolveMetadata) = metadata
         .takeIf(delegatingComponentResolveMetadata::isInstance)

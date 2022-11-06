@@ -113,6 +113,7 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                         }
                     },
                     { artifact -> AccessWidenedComponentArtifactMetadata(artifact as ModuleComponentArtifactMetadata, identifier, namespace, project) },
+                    emptyList(),
                     objects
                 )
             } else {

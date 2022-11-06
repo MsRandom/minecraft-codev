@@ -8,6 +8,7 @@ import net.msrandom.minecraftcodev.core.*
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.addConfigurationResolutionDependencies
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
 import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
+import net.msrandom.minecraftcodev.core.dependency.MinecraftDependencyMetadataWrapper
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
 import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.resolveMojangFile
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.addNamed
@@ -119,8 +120,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
         requestMetaData: ComponentOverrideMetadata,
         result: BuildableComponentResolveResult,
         mappingsNamespace: String,
-        configuration: Configuration? = null,
-        dependencyFactory: (DependencyMetadata) -> DependencyMetadata,
+        configuration: Configuration
     ) {
         val versionList = getVersionList(
             moduleComponentIdentifier,
@@ -142,34 +142,148 @@ open class MinecraftMetadataGenerator @Inject constructor(
         )
 
         if (versionList != null && manifest != null) {
-            fun artifact(extension: String, classifier: String? = null) = if (configuration == null) {
-                DefaultModuleComponentArtifactMetadata(
-                    moduleComponentIdentifier,
-                    DefaultIvyArtifactName(
-                        moduleComponentIdentifier.module,
-                        extension,
-                        extension,
-                        classifier
-                    )
+            fun artifact(extension: String, classifier: String? = null) = object : DefaultModuleComponentArtifactMetadata(
+                moduleComponentIdentifier,
+                DefaultIvyArtifactName(
+                    moduleComponentIdentifier.module,
+                    extension,
+                    extension,
+                    classifier
                 )
-            } else {
-                object : DefaultModuleComponentArtifactMetadata(
-                    moduleComponentIdentifier,
-                    DefaultIvyArtifactName(
-                        moduleComponentIdentifier.module,
-                        extension,
-                        extension,
-                        classifier
-                    )
-                ) {
-                    override fun getBuildDependencies() = object : AbstractTaskDependency() {
-                        override fun visitDependencies(context: TaskDependencyResolveContext) =
-                            project.addConfigurationResolutionDependencies(context, configuration)
-                    }
+            ) {
+                override fun getBuildDependencies() = object : AbstractTaskDependency() {
+                    override fun visitDependencies(context: TaskDependencyResolveContext) =
+                        project.addConfigurationResolutionDependencies(context, configuration)
                 }
             }
 
             val defaultAttributes = ImmutableAttributes.EMPTY.addNamed(MappingsNamespace.attribute, mappingsNamespace)
+
+            val extractionResult = extractionState(
+                moduleComponentIdentifier,
+                repository,
+                manifest
+            )?.value
+
+            val libraries = collectLibraries(manifest, extractionResult?.libraries ?: emptyList())
+
+            val artifacts = listOf(artifact(ArtifactTypeDefinition.JAR_TYPE))
+
+            val variants = mutableListOf<ConfigurationMetadata>()
+
+            for ((system, platformLibraries) in libraries.client.asMap()) {
+                val osAttributes: ImmutableAttributes
+                val name: String
+                val dependencies: List<DependencyMetadata>
+
+                if (system == null) {
+                    osAttributes = ImmutableAttributes.EMPTY
+                    name = Dependency.DEFAULT_CONFIGURATION
+                    dependencies = (libraries.common + extraLibraries + platformLibraries).map(::mapLibrary)
+                } else {
+                    if (system.version == null) {
+                        osAttributes = ImmutableAttributes.EMPTY
+                            .addNamed(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE, DefaultOperatingSystem(system.name).toFamilyName())
+
+                        name = system.name.toString()
+                    } else {
+                        val version = system.version.replace(Regex("[$^\\\\]"), "").replace('.', '-')
+
+                        osAttributes = ImmutableAttributes.EMPTY
+                            .addNamed(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE, DefaultOperatingSystem(system.name).toFamilyName())
+                            .addNamed(MinecraftCodevPlugin.OPERATING_SYSTEM_VERSION_PATTERN_ATTRIBUTE, system.version)
+
+                        name = "${system.name}-${version}"
+                    }
+
+                    dependencies = (libraries.common + extraLibraries + libraries.client[null] + platformLibraries).map(::mapLibrary)
+                }
+
+                variants.add(
+                    CodevGradleLinkageLoader.ConfigurationMetadata(
+                        name,
+                        moduleComponentIdentifier,
+                        dependencies,
+                        artifacts,
+                        attributesFactory.concat(
+                            defaultAttributes(manifest, defaultAttributes).libraryAttributes(),
+                            osAttributes
+                        ),
+                        ImmutableCapabilities.EMPTY,
+                        setOf(name),
+                        objectFactory
+                    )
+                )
+            }
+
+            variants.add(
+                CodevGradleLinkageLoader.ConfigurationMetadata(
+                    JavaPlugin.SOURCES_ELEMENTS_CONFIGURATION_NAME,
+                    moduleComponentIdentifier,
+                    emptyList(),
+                    listOf(artifact(ArtifactTypeDefinition.JAR_TYPE, "sources")),
+                    defaultAttributes(manifest, defaultAttributes).runtimeAttributes().docsAttributes(DocsType.SOURCES),
+                    ImmutableCapabilities.EMPTY,
+                    setOf(JavaPlugin.SOURCES_ELEMENTS_CONFIGURATION_NAME),
+                    objectFactory
+                )
+            )
+
+            result.resolved(
+                CodevGradleLinkageLoader.ComponentResolveMetadata(
+                    attributesFactory.of(ProjectInternal.STATUS_ATTRIBUTE, manifest.type),
+                    moduleComponentIdentifier,
+                    DefaultModuleVersionIdentifier.newId(moduleComponentIdentifier.moduleIdentifier, moduleComponentIdentifier.version),
+                    variants,
+                    requestMetaData.isChanging,
+                    manifest.type,
+                    versionList.latest.keys.reversed(),
+                    objectFactory
+                )
+            )
+
+            return
+        }
+    }
+
+    fun resolveMetadata(
+        repository: MinecraftRepositoryImpl.Resolver,
+        resourceAccessor: CacheAwareExternalResourceAccessor,
+        moduleComponentIdentifier: ModuleComponentIdentifier,
+        requestMetaData: ComponentOverrideMetadata,
+        result: BuildableComponentResolveResult
+    ) {
+        val versionList = getVersionList(
+            moduleComponentIdentifier,
+            DefaultResolvedModuleVersion(DefaultModuleVersionIdentifier.newId(moduleComponentIdentifier)),
+            repository.url,
+            cacheManager,
+            cachePolicy,
+            resourceAccessor,
+            fileStoreAndIndexProvider,
+            null
+        )
+
+        val manifest = getVersionManifest(
+            moduleComponentIdentifier,
+            resourceAccessor,
+            fileStoreAndIndexProvider,
+            result::attempted,
+            versionList
+        )
+
+        if (versionList != null && manifest != null) {
+            fun artifact(extension: String, classifier: String? = null) = DefaultModuleComponentArtifactMetadata(
+                moduleComponentIdentifier,
+                DefaultIvyArtifactName(
+                    moduleComponentIdentifier.module,
+                    extension,
+                    extension,
+                    classifier
+                )
+            )
+
+            val defaultAttributes = ImmutableAttributes.EMPTY.addNamed(MappingsNamespace.attribute, MappingsNamespace.OBF)
             when (moduleComponentIdentifier.module) {
                 MinecraftComponentResolvers.COMMON_MODULE -> {
                     val extractionState = extractionState(
@@ -181,7 +295,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                     val library = CodevGradleLinkageLoader.ConfigurationMetadata(
                         Dependency.DEFAULT_CONFIGURATION,
                         moduleComponentIdentifier,
-                        (collectLibraries(manifest, extractionState.value.libraries).common + extraLibraries).map(::mapLibrary),
+                        collectLibraries(manifest, extractionState.value.libraries).common.map(::mapLibrary),
                         listOf(artifact(ArtifactTypeDefinition.JAR_TYPE)),
                         defaultAttributes(manifest, defaultAttributes).libraryAttributes().runtimeAttributes(),
                         ImmutableCapabilities.EMPTY,
@@ -223,14 +337,14 @@ open class MinecraftMetadataGenerator @Inject constructor(
                     )?.value
 
                     val commonDependency = extractionResult?.let {
-                        dependencyFactory(
+                        MinecraftDependencyMetadataWrapper(
                             GradleDependencyMetadata(
                                 DefaultModuleComponentSelector.withAttributes(
                                     DefaultModuleComponentSelector.newSelector(
                                         DefaultModuleIdentifier.newId(MinecraftComponentResolvers.GROUP, MinecraftComponentResolvers.COMMON_MODULE),
                                         DefaultImmutableVersionConstraint("", "", moduleComponentIdentifier.version, emptyList(), null)
                                     ),
-                                    attributesFactory.of(MappingsNamespace.attribute, objectFactory.named(mappingsNamespace))
+                                    attributesFactory.of(MappingsNamespace.attribute, objectFactory.named(MappingsNamespace.OBF))
                                 ),
                                 emptyList(),
                                 false,
@@ -393,7 +507,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                     )
                 }
 
-                else -> if (extraLibraries.isEmpty()) {
+                else -> {
                     val fixedName = moduleComponentIdentifier.module.asMinecraftDownload()
 
                     if (fixedName != MinecraftComponentResolvers.SERVER_DOWNLOAD) {

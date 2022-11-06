@@ -6,7 +6,6 @@ import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.getSourceSetConfigurationName
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
 import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.resolveMojangFile
-import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentIdentifier
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.hash
 import net.msrandom.minecraftcodev.core.resolve.MinecraftDependencyToComponentIdResolver
@@ -15,7 +14,6 @@ import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin
 import net.msrandom.minecraftcodev.forge.UserdevConfig
 import net.msrandom.minecraftcodev.forge.dependency.PatchedComponentIdentifier
 import net.msrandom.minecraftcodev.forge.dependency.PatchedMinecraftDependencyMetadata
-import net.msrandom.minecraftcodev.forge.dependency.PatchedMinecraftDependencyMetadataWrapper
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
 import org.gradle.api.artifacts.component.ComponentIdentifier
@@ -132,7 +130,8 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
         if (dependency is PatchedMinecraftDependencyMetadata) {
             componentIdResolver.resolveVersion(dependency, acceptor, rejector, result) { module, version ->
                 PatchedComponentIdentifier(
-                    MinecraftComponentIdentifier(module, version),
+                    module,
+                    version,
                     project.getSourceSetConfigurationName(dependency, MinecraftCodevForgePlugin.PATCHES_CONFIGURATION),
                     dependency.getModuleConfiguration()
                 )
@@ -141,7 +140,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
     }
 
     override fun resolve(identifier: ComponentIdentifier, componentOverrideMetadata: ComponentOverrideMetadata, result: BuildableComponentResolveResult) {
-        if (identifier is PatchedComponentIdentifier) {
+        if (identifier is PatchedComponentIdentifier && identifier.module == "forge") {
             val patches = project.unsafeResolveConfiguration(project.configurations.getByName(identifier.patches))
             val config = UserdevConfig.fromFile(patches.singleFile)
 
@@ -156,7 +155,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
                         result,
                         MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE,
                         patches
-                    ) { PatchedMinecraftDependencyMetadataWrapper(it, identifier.patches, identifier.moduleConfiguration) }
+                    )
 
                     if (result.hasResult()) {
                         return
@@ -189,7 +188,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
             null
         } else {
             // Force it to resolve here to allow it to resolve needed configurations
-            patchState.split
+            patchState.withAssets
 
             MetadataSourcedComponentArtifacts().getArtifactsFor(
                 component,
@@ -250,24 +249,11 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
                     ).isMustCheck
                 }
 
-                when (moduleComponentIdentifier.module) {
-                    MinecraftComponentResolvers.COMMON_MODULE -> {
-                        getPatchState(moduleComponentIdentifier, patches.singleFile, patchesHash, shouldRefresh)?.split?.common?.let {
-                            val file = it.toFile()
-                            result.resolved(file)
+                getPatchState(moduleComponentIdentifier, patches.singleFile, patchesHash, shouldRefresh)?.withAssets?.let {
+                    val file = it.toFile()
+                    result.resolved(file)
 
-                            artifactCache[urlId] = DefaultCachedArtifact(file, Instant.now().toEpochMilli(), artifact.hash())
-                        }
-                    }
-
-                    MinecraftComponentResolvers.CLIENT_MODULE -> {
-                        getPatchState(moduleComponentIdentifier, patches.singleFile, patchesHash, shouldRefresh)?.split?.client?.let {
-                            val file = it.toFile()
-                            result.resolved(file)
-
-                            artifactCache[urlId] = DefaultCachedArtifact(file, Instant.now().toEpochMilli(), artifact.hash())
-                        }
-                    }
+                    artifactCache[urlId] = DefaultCachedArtifact(file, Instant.now().toEpochMilli(), artifact.hash())
                 }
             } else if (!cached.isMissing) {
                 result.resolved(cached.cachedFile)

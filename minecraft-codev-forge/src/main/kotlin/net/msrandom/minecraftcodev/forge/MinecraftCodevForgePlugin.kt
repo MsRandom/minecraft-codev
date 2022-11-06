@@ -1,6 +1,7 @@
 package net.msrandom.minecraftcodev.forge
 
 import kotlinx.serialization.json.decodeFromStream
+import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.zipFileSystem
@@ -57,6 +58,7 @@ open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
                 it.to.attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, ArtifactTypeDefinition.JAR_TYPE).attribute(FORGE_TRANSFORMED_ATTRIBUTE, true)
             }
 
+            extensions.getByType(MinecraftCodevExtension::class.java).extensions.create("patched", PatchedMinecraftCodevExtension::class.java)
             setupForgeRemapperIntegration()
             setupForgeRunsIntegration()
         }

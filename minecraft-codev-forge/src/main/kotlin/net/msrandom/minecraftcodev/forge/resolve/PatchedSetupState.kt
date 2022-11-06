@@ -12,8 +12,10 @@ import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.walk
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.zipFileSystem
 import net.msrandom.minecraftcodev.core.ModuleLibraryIdentifier
 import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
-import net.msrandom.minecraftcodev.core.resolve.*
-import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter.useFileSystems
+import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
+import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
+import net.msrandom.minecraftcodev.core.resolve.getExtractionState
+import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter.withAssets
 import net.msrandom.minecraftcodev.forge.McpConfig
 import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin
 import net.msrandom.minecraftcodev.forge.PatchLibrary
@@ -137,7 +139,6 @@ open class PatchedSetupState @Inject constructor(
                     "patch" to patchesPath.toAbsolutePath(),
                 )
             )
-
 
             zipFileSystem(patched).use { patchedZip ->
                 // Add missing non-patched files
@@ -321,59 +322,47 @@ open class PatchedSetupState @Inject constructor(
         }
     })
 
-    val split: JarSplittingResult by lazy {
-        buildOperationExecutor.call(object : CallableBuildOperation<JarSplittingResult> {
+    val withAssets: Path by lazy {
+        buildOperationExecutor.call(object : CallableBuildOperation<Path> {
             val accessTransformed = accessTransformed()
-            val common = Files.createTempFile("split-common-", ".tmp.jar")
-            val client = Files.createTempFile("split-client-", ".tmp.jar")
+            val output = Files.createTempFile("forge-", ".tmp.jar")
 
             override fun description() = BuildOperationDescriptor
-                .displayName("Splitting $accessTransformed")
-                .progressDisplayName("Common: $common, Client: $client")
+                .displayName("Adding assets to $accessTransformed")
+                .progressDisplayName("Output: $output")
                 .metadata(BuildOperationCategory.TASK)
 
             override fun call(context: BuildOperationContext) = context.callWithStatus {
-                common.deleteExisting()
-                client.deleteExisting()
+                accessTransformed.copyTo(output, StandardCopyOption.REPLACE_EXISTING)
 
-                useFileSystems { handle ->
-                    val mergedFs = zipFileSystem(accessTransformed).also(handle)
-                    val obfClientFs = zipFileSystem(clientJar.toPath()).also(handle)
-                    val obfServerFs = zipFileSystem(serverJar.toPath()).also(handle)
-                    val commonFs = zipFileSystem(common, true).also(handle)
-                    val clientFs = zipFileSystem(client, true).also(handle)
-                    val mappings = mappings
-                    ForgeJarSplitter.splitJars(mergedFs, obfClientFs, obfServerFs, commonFs, clientFs, mappings.getMap(mappings.names[0], mappings.names[1]).reverse())
+                zipFileSystem(output).use { outputZip ->
+                    zipFileSystem(clientJar.toPath()).use { clientZip ->
+                        clientZip.withAssets { path ->
+                            val newPath = outputZip.getPath(path.toString())
+
+                            if (newPath.notExists()) {
+                                newPath.parent?.createDirectories()
+                                path.copyTo(newPath)
+                            }
+                        }
+                    }
                 }
 
-                val commonPath = cacheManager.fileStoreDirectory.resolve(patchesHash.toString())
-                    .resolve(MinecraftComponentResolvers.COMMON_MODULE)
+                val path = cacheManager.fileStoreDirectory.resolve(patchesHash.toString())
+                    .resolve("forge")
                     .resolve(manifest.id)
-                    .resolve(checksumService.sha1(common.toFile()).toString())
-                    .resolve("${MinecraftComponentResolvers.COMMON_MODULE}-${manifest.id}-patched.${ArtifactTypeDefinition.JAR_TYPE}")
+                    .resolve(checksumService.sha1(output.toFile()).toString())
+                    .resolve("forge-${manifest.id}.${ArtifactTypeDefinition.JAR_TYPE}")
 
-                val clientPath = cacheManager.fileStoreDirectory.resolve(patchesHash.toString())
-                    .resolve(MinecraftComponentResolvers.CLIENT_MODULE)
-                    .resolve(manifest.id)
-                    .resolve(checksumService.sha1(client.toFile()).toString())
-                    .resolve("${MinecraftComponentResolvers.CLIENT_MODULE}-${manifest.id}-patched.${ArtifactTypeDefinition.JAR_TYPE}")
-
-                if (commonPath.exists()) {
-                    commonPath.deleteExisting()
+                if (path.exists()) {
+                    path.deleteExisting()
                 } else {
-                    commonPath.parent.createDirectories()
+                    path.parent.createDirectories()
                 }
 
-                if (clientPath.exists()) {
-                    clientPath.deleteExisting()
-                } else {
-                    clientPath.parent.createDirectories()
-                }
+                output.copyTo(path)
 
-                common.copyTo(commonPath)
-                client.copyTo(clientPath)
-
-                JarSplittingResult(commonPath, clientPath)
+                path
             }
         })
     }

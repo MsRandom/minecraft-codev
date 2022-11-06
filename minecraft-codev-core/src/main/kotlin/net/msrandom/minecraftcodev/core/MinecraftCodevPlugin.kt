@@ -95,6 +95,8 @@ open class MinecraftCodevPlugin<T : PluginAware> : Plugin<T> {
         // FIXME This can cause deadlocks, should probably figure out a way around all of this.
         @Deprecated("In favor of artifact task dependencies")
         fun Project.unsafeResolveConfiguration(configuration: Configuration): Configuration {
+            logger.warn("$configuration is being resolved unsafely, the build may freeze at this point. If it does, restart it\nThis will be fixed in future versions of minecraft-codev\n")
+
             // Create new thread that can acquire a new binary store
             val thread = Thread {
                 val workerLeaseService = serviceOf<WorkerLeaseService>()

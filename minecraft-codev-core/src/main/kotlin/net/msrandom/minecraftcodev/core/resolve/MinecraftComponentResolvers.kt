@@ -1,8 +1,6 @@
 package net.msrandom.minecraftcodev.core.resolve
 
-import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
-import net.msrandom.minecraftcodev.core.dependency.MinecraftDependencyMetadataWrapper
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
 import org.gradle.api.artifacts.ModuleIdentifier
 import org.gradle.api.artifacts.component.ComponentIdentifier
@@ -63,7 +61,9 @@ open class MinecraftComponentResolvers @Inject constructor(
     override fun getArtifactResolver(): ArtifactResolver = artifactResolver
 
     override fun resolve(identifier: ComponentIdentifier, componentOverrideMetadata: ComponentOverrideMetadata, result: BuildableComponentResolveResult) {
-        if (identifier is MinecraftComponentIdentifier) {
+        if (identifier::class == MinecraftComponentIdentifier::class) {
+            identifier as MinecraftComponentIdentifier
+
             if (identifier.version.endsWith("-SNAPSHOT")) {
                 val realVersion = identifier.version.substring(0, identifier.version.length - "-SNAPSHOT".length)
 
@@ -78,13 +78,10 @@ open class MinecraftComponentResolvers @Inject constructor(
 
                 metadataGenerator.resolveMetadata(
                     repository,
-                    emptyList(),
                     repository.transport.resourceAccessor,
                     identifier,
                     componentOverrideMetadata,
-                    result,
-                    MappingsNamespace.OBF,
-                    dependencyFactory = ::MinecraftDependencyMetadataWrapper
+                    result
                 )
             }
         }
@@ -96,7 +93,10 @@ open class MinecraftComponentResolvers @Inject constructor(
         component: ComponentResolveMetadata, configuration: ConfigurationMetadata, artifactTypeRegistry: ArtifactTypeRegistry, exclusions: ExcludeSpec, overriddenAttributes: ImmutableAttributes
     ): ArtifactSet? {
         val componentIdentifier = component.id
-        return if (componentIdentifier is MinecraftComponentIdentifier) {
+
+        return if (componentIdentifier::class == MinecraftComponentIdentifier::class) {
+            componentIdentifier as MinecraftComponentIdentifier
+
             // Direct server downloads are not allowed, as the common dependency should be used for that instead
             val valid = if (componentIdentifier.module != SERVER_DOWNLOAD) {
                 if (componentIdentifier.module == CLIENT_MODULE) {
@@ -167,8 +167,11 @@ open class MinecraftComponentResolvers @Inject constructor(
     }
 }
 
-class MinecraftComponentIdentifier(module: String, private val version: String) : ModuleComponentIdentifier {
+open class MinecraftComponentIdentifier(module: String, private val version: String) : ModuleComponentIdentifier {
     private val moduleIdentifier = DefaultModuleIdentifier.newId(MinecraftComponentResolvers.GROUP, module)
+
+    open val isBase
+        get() = module == MinecraftComponentResolvers.COMMON_MODULE
 
     override fun getDisplayName() = "Minecraft $module $version"
     override fun getGroup(): String = moduleIdentifier.group

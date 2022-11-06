@@ -7,8 +7,8 @@ import org.gradle.api.plugins.JavaPlugin
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
 import org.jetbrains.kotlin.commonizer.util.transitiveClosure
-import org.jetbrains.kotlin.gradle.plugin.KotlinBasePluginWrapper
 import org.jetbrains.kotlin.gradle.plugin.KotlinCompilation
+import org.jetbrains.kotlin.gradle.plugin.KotlinMultiplatformPluginWrapper
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSetContainer
 import org.jetbrains.kotlin.gradle.plugin.KotlinTargetsContainer
 import org.jetbrains.kotlin.gradle.utils.extendsFrom
@@ -49,6 +49,10 @@ fun Project.getSourceSetConfigurationName(dependency: ConfiguredDependencyMetada
             }
         }
 
+        if (owningSourceSetName == SourceSet.MAIN_SOURCE_SET_NAME) {
+            owningSourceSetName = null
+        }
+
         // If no related source set/compilation was found, we can return the default configuration, and it will error later if it doesn't exist.
         owningSourceSetName?.let { it + StringUtils.capitalize(defaultConfiguration) } ?: defaultConfiguration
     }
@@ -66,7 +70,7 @@ fun Project.createSourceSetElements(action: (name: String, isSourceSet: Boolean)
         }
     }
 
-    plugins.withType(KotlinBasePluginWrapper::class.java) {
+    plugins.withType(KotlinMultiplatformPluginWrapper::class.java) {
         extensions.getByType(KotlinSourceSetContainer::class.java).sourceSets.all { sourceSet ->
             if (sourceSet.name == SourceSet.MAIN_SOURCE_SET_NAME) {
                 action("", true)
@@ -99,7 +103,7 @@ fun Project.createSourceSetConfigurations(name: String) {
 }
 
 fun Project.extendKotlinConfigurations(name: String) {
-    plugins.withType(KotlinBasePluginWrapper::class.java) {
+    plugins.withType(KotlinMultiplatformPluginWrapper::class.java) {
         afterEvaluate {
             extensions.getByType(KotlinTargetsContainer::class.java).targets.all { target ->
                 val capitalized = StringUtils.capitalize(name)

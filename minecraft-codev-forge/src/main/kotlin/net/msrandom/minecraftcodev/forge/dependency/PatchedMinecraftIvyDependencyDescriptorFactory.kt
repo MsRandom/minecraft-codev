@@ -2,10 +2,10 @@ package net.msrandom.minecraftcodev.forge.dependency
 
 import net.msrandom.minecraftcodev.core.dependency.DependencyFactory
 import net.msrandom.minecraftcodev.core.dependency.MinecraftDependencyImpl
+import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentIdentifier
 import org.gradle.api.Project
 import org.gradle.api.artifacts.ModuleDependency
 import org.gradle.api.artifacts.component.ComponentIdentifier
-import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.artifacts.component.ModuleComponentSelector
 import org.gradle.api.attributes.AttributeContainer
 import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
@@ -86,6 +86,8 @@ open class PatchedMinecraftDependencyFactory : DependencyFactory {
     override fun canConvert(descriptor: DependencyMetadata) = descriptor is PatchedMinecraftDependencyMetadata
 }
 
-class PatchedComponentIdentifier(val moduleComponentIdentifier: ModuleComponentIdentifier, val patches: String, val moduleConfiguration: String?) : ModuleComponentIdentifier by moduleComponentIdentifier {
-    override fun getDisplayName() = "Patched ${moduleComponentIdentifier.displayName}"
+class PatchedComponentIdentifier(module: String, version: String, val patches: String, val moduleConfiguration: String?) : MinecraftComponentIdentifier(module, version) {
+    override val isBase get() = true
+
+    override fun getDisplayName() = "Patched ${super.getDisplayName()}"
 }
