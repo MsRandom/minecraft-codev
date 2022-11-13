@@ -175,7 +175,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
         overriddenAttributes: ImmutableAttributes
     ) = if (component.id is PatchedComponentIdentifier) {
         val moduleComponentIdentifier = component.id as PatchedComponentIdentifier
-        val patches = project.configurations.getByName(moduleComponentIdentifier.patches)
+        val patches = project.unsafeResolveConfiguration(project.configurations.getByName(moduleComponentIdentifier.patches))
         val patchState = getPatchState(moduleComponentIdentifier, patches.singleFile, hash(patches)) { _, duration ->
             cachePolicy.moduleExpiry(
                 moduleComponentIdentifier,
@@ -212,52 +212,57 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
     private fun hash(patches: Configuration) = HashCode.fromBytes(patches.map(checksumService::sha1).flatMap { it.toByteArray().asList() }.toByteArray())
 
     override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactResolveResult) {
-        if (artifact.componentId is PatchedComponentIdentifier) {
-            val moduleComponentIdentifier = artifact.componentId as PatchedComponentIdentifier
-            val patches = project.unsafeResolveConfiguration(project.configurations.getByName(moduleComponentIdentifier.patches))
+        try {
+            if (artifact.componentId is PatchedComponentIdentifier) {
+                val moduleComponentIdentifier = artifact.componentId as PatchedComponentIdentifier
+                val patches = project.configurations.getByName(moduleComponentIdentifier.patches)
 
-            val id = artifact.id as ModuleComponentArtifactIdentifier
+                val id = artifact.id as ModuleComponentArtifactIdentifier
 
-            val patchesHash = hash(patches)
+                val patchesHash = hash(patches)
 
-            val urlId = PatchedArtifactIdentifier(
-                ModuleComponentFileArtifactIdentifier(
-                    DefaultModuleComponentIdentifier.newId(moduleComponentIdentifier.moduleIdentifier, moduleComponentIdentifier.version),
-                    id.fileName
-                ), patchesHash
-            )
+                val urlId = PatchedArtifactIdentifier(
+                    ModuleComponentFileArtifactIdentifier(
+                        DefaultModuleComponentIdentifier.newId(moduleComponentIdentifier.moduleIdentifier, moduleComponentIdentifier.version),
+                        id.fileName
+                    ), patchesHash
+                )
 
-            val cached = artifactCache[urlId]
+                val cached = artifactCache[urlId]
 
-            if (cached == null || cachePolicy.artifactExpiry(
-                    (artifact as ModuleComponentArtifactMetadata).toArtifactIdentifier(),
-                    if (cached.isMissing) null else cached.cachedFile,
-                    Duration.ofMillis(timeProvider.currentTime - cached.cachedAt),
-                    false,
-                    artifact.hash() == cached.descriptorHash
-                ).isMustCheck || cached.cachedFile?.exists() != true
-            ) {
-                val sources = artifact.name.classifier == "sources"
-
-                val shouldRefresh = { file: File, duration: Duration ->
-                    cachePolicy.artifactExpiry(
+                if (cached == null || cachePolicy.artifactExpiry(
                         (artifact as ModuleComponentArtifactMetadata).toArtifactIdentifier(),
-                        file,
-                        duration,
+                        if (cached.isMissing) null else cached.cachedFile,
+                        Duration.ofMillis(timeProvider.currentTime - cached.cachedAt),
                         false,
-                        true
-                    ).isMustCheck
-                }
+                        artifact.hash() == cached.descriptorHash
+                    ).isMustCheck || cached.cachedFile?.exists() != true
+                ) {
+                    val sources = artifact.name.classifier == "sources"
 
-                getPatchState(moduleComponentIdentifier, patches.singleFile, patchesHash, shouldRefresh)?.withAssets?.let {
-                    val file = it.toFile()
-                    result.resolved(file)
+                    val shouldRefresh = { file: File, duration: Duration ->
+                        cachePolicy.artifactExpiry(
+                            (artifact as ModuleComponentArtifactMetadata).toArtifactIdentifier(),
+                            file,
+                            duration,
+                            false,
+                            true
+                        ).isMustCheck
+                    }
 
-                    artifactCache[urlId] = DefaultCachedArtifact(file, Instant.now().toEpochMilli(), artifact.hash())
+                    getPatchState(moduleComponentIdentifier, patches.singleFile, patchesHash, shouldRefresh)?.withAssets?.let {
+                        val file = it.toFile()
+                        result.resolved(file)
+
+                        artifactCache[urlId] = DefaultCachedArtifact(file, Instant.now().toEpochMilli(), artifact.hash())
+                    }
+                } else if (!cached.isMissing) {
+                    result.resolved(cached.cachedFile)
                 }
-            } else if (!cached.isMissing) {
-                result.resolved(cached.cachedFile)
             }
+        } catch (exception: Throwable) {
+            exception.printStackTrace()
+            throw exception
         }
     }
 }

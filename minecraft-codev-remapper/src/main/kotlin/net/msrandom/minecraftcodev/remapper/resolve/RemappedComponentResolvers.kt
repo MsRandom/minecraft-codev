@@ -15,6 +15,7 @@ import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentIdentifier
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.addNamed
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.hash
+import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.allArtifacts
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.copy
 import net.msrandom.minecraftcodev.remapper.FieldAddDescVisitor
 import net.msrandom.minecraftcodev.remapper.JarRemapper
@@ -218,6 +219,18 @@ open class RemappedComponentResolvers @Inject constructor(
         exclusions: ExcludeSpec,
         overriddenAttributes: ImmutableAttributes
     ) = if (component.id is RemappedComponentIdentifier) {
+        for (artifact in configuration.allArtifacts) {
+            if (artifact is RemappedComponentArtifactMetadata) {
+                project.unsafeResolveConfiguration(artifact.classpath)
+            }
+        }
+
+        project.extensions
+            .getByType(MinecraftCodevExtension::class.java)
+            .extensions
+            .getByType(RemapperExtension::class.java)
+            .loadMappings(project.unsafeResolveConfiguration(project.configurations.getByName((component.id as RemappedComponentIdentifier).mappingsConfiguration)))
+
         MetadataSourcedComponentArtifacts().getArtifactsFor(
             component, configuration, artifactResolver, hashMapOf(), artifactTypeRegistry, exclusions, overriddenAttributes, calculatedValueContainerFactory
         )
@@ -233,8 +246,9 @@ open class RemappedComponentResolvers @Inject constructor(
     }
 
     override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactResolveResult) {
+        try {
         if (artifact is RemapperArtifact) {
-            val mappingFiles = project.unsafeResolveConfiguration(project.configurations.getByName(artifact.mappingsConfiguration))
+            val mappingFiles = project.unsafeResolveConfiguration(project.configurations.getByName(artifact.mappingsConfiguration), true)
 
             val remapper = project.extensions
                 .getByType(MinecraftCodevExtension::class.java)
@@ -284,7 +298,7 @@ open class RemappedComponentResolvers @Inject constructor(
                                             sourceNamespace,
                                             id.targetNamespace.name,
                                             newResult.result.toPath(),
-                                            project.unsafeResolveConfiguration(artifact.classpath)
+                                            project.unsafeResolveConfiguration(artifact.classpath, true)
                                         )
                                     }
                                 })
@@ -342,7 +356,10 @@ open class RemappedComponentResolvers @Inject constructor(
                     result.resolved(output.toFile())
                 }
             }
-        }
+        }        } catch (exception: Throwable) {
+        exception.printStackTrace()
+            throw exception
+    }
     }
 
     companion object {

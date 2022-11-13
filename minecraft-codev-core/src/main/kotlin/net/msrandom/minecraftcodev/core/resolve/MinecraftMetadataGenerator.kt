@@ -151,10 +151,10 @@ open class MinecraftMetadataGenerator @Inject constructor(
                     classifier
                 )
             ) {
-                override fun getBuildDependencies() = object : AbstractTaskDependency() {
+/*                override fun getBuildDependencies() = object : AbstractTaskDependency() {
                     override fun visitDependencies(context: TaskDependencyResolveContext) =
                         project.addConfigurationResolutionDependencies(context, configuration)
-                }
+                }*/
             }
 
             val defaultAttributes = ImmutableAttributes.EMPTY.addNamed(MappingsNamespace.attribute, mappingsNamespace)

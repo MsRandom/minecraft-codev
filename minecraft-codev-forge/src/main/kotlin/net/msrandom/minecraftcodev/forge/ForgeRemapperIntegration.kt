@@ -20,6 +20,7 @@ import org.cadixdev.lorenz.MappingSet
 import org.gradle.api.Project
 import java.io.InputStream
 import java.nio.file.Path
+import java.util.jar.Manifest
 import kotlin.io.path.deleteExisting
 import kotlin.io.path.exists
 import kotlin.io.path.inputStream
@@ -28,8 +29,8 @@ internal fun Project.setupForgeRemapperIntegration() {
     plugins.withType(MinecraftCodevRemapperPlugin::class.java) {
         val remapper = extensions.getByType(MinecraftCodevExtension::class.java).extensions.getByType(RemapperExtension::class.java)
 
-        remapper.zipMappingsResolution { visitor, decorate, _, _ ->
-            val configPath = getPath("config.json")
+        remapper.zipMappingsResolution.add { fileSystem, visitor, decorate, _, _ ->
+            val configPath = fileSystem.getPath("config.json")
             if (configPath.exists()) {
                 val mcpDependency = dependencies.create(configPath.inputStream().use { MinecraftCodevPlugin.json.decodeFromStream<UserdevConfig>(it) }.mcp)
                 val mcp = unsafeResolveConfiguration(configurations.detachedConfiguration(mcpDependency).setTransitive(false)).singleFile
@@ -64,13 +65,13 @@ internal fun Project.setupForgeRemapperIntegration() {
             }
         }
 
-        remapper.zipMappingsResolution { visitor, decorate, existingMappings, _ ->
-            val methods = getPath("methods.csv")
-            val fields = getPath("fields.csv")
+        remapper.zipMappingsResolution.add { fileSystem, visitor, decorate, existingMappings, _ ->
+            val methods = fileSystem.getPath("methods.csv")
+            val fields = fileSystem.getPath("fields.csv")
 
             // We just need one of those to assume these are MCP mappings.
             if (methods.exists() || fields.exists()) {
-                val params = getPath("params.csv")
+                val params = fileSystem.getPath("params.csv")
 
                 val methodsMap = readMcp(methods, "searge", decorate)
                 val fieldsMap = readMcp(fields, "searge", decorate)
@@ -148,13 +149,15 @@ internal fun Project.setupForgeRemapperIntegration() {
             }
         }
 
-        remapper.extraFileRemapper { directory, sourceNamespaceId, targetNamespaceId ->
-            val path = directory.resolve("META-INF/accesstransformer.cfg")
+        remapper.extraFileRemappers.add { mappings, directory, sourceNamespaceId, targetNamespaceId ->
+            val manifest = directory.resolve("META-INF/MANIFEST.MF").inputStream().use(::Manifest)
+            val accessTransformerName = manifest.mainAttributes.getValue("FMLAT") ?: "accesstransformer.cfg"
+            val path = directory.resolve("META-INF/$accessTransformerName")
 
             if (path.exists()) {
                 val mappingSet = MappingSet.create()
 
-                for (treeClass in classes) {
+                for (treeClass in mappings.classes) {
                     val mapping = mappingSet.getOrCreateClassMapping(treeClass.getName(sourceNamespaceId))
                         .setDeobfuscatedName(treeClass.getName(targetNamespaceId))
 

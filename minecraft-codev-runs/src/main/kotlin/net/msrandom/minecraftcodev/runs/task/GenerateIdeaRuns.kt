@@ -18,8 +18,7 @@ import kotlin.io.path.inputStream
 import kotlin.io.path.notExists
 
 open class GenerateIdeaRuns : GenerateRuns() {
-    private val projectPath
-        get() = project.layout.projectDirectory.asFile.toPath()
+    private val rootPath = project.rootProject.layout.projectDirectory.asFile.toPath()
 
     private fun configName(gradleName: String, run: MinecraftRunConfiguration) = when {
         run.name.isPresent -> run.name.get()
@@ -34,7 +33,7 @@ open class GenerateIdeaRuns : GenerateRuns() {
     }
 
     private fun relativize(path: Path): String {
-        val projectRelative = projectPath.relativize(path)
+        val projectRelative = rootPath.relativize(path)
         if (!projectRelative.startsWith("..")) {
             return Path("\$PROJECT_DIR$").resolve(projectRelative).toString()
         }
@@ -59,7 +58,6 @@ open class GenerateIdeaRuns : GenerateRuns() {
 
     override fun generateRuns(runs: List<Pair<String, MinecraftRunConfiguration>>) {
         // The main Intellij project could probably be something other than the root project, but that'd pain a pain to handle, so we don't.
-        val rootPath = project.rootProject.layout.projectDirectory.asFile.toPath()
         var workspacePath = rootPath.resolve(".idea").resolve("workspace.xml")
 
         if (workspacePath.notExists()) {
@@ -180,7 +178,7 @@ open class GenerateIdeaRuns : GenerateRuns() {
                                     setAttribute(NAME, "Gradle.BeforeRunTask")
                                     setAttribute(ENABLED, true.toString())
                                     setAttribute("tasks", run.beforeRunTasks.get().joinToString(" "))
-                                    setAttribute("externalProjectPath", relativize(projectPath))
+                                    setAttribute("externalProjectPath", relativize(this@GenerateIdeaRuns.project.layout.projectDirectory.asFile.toPath()))
                                 }
                             )
                         }

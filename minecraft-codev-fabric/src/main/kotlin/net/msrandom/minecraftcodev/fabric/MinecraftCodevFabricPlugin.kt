@@ -34,8 +34,8 @@ class MinecraftCodevFabricPlugin<T : PluginAware> : Plugin<T> {
                     }
                 }
 
-                remapper.zipMappingsResolution { visitor, decorate, _, _ ->
-                    val tiny = getPath("mappings/mappings.tiny")
+                remapper.zipMappingsResolution.add { fileSystem, visitor, decorate, _, _ ->
+                    val tiny = fileSystem.getPath("mappings/mappings.tiny")
                     if (tiny.exists()) {
                         // Assuming tiny
                         readTiny(visitor, tiny.inputStream().decorate())

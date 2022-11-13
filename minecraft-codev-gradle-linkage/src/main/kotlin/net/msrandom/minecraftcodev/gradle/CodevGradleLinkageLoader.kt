@@ -26,6 +26,9 @@ object CodevGradleLinkageLoader {
         MethodHandles.publicLookup().findVirtual(delegatingComponentResolveMetadata, "getDelegate", MethodType.methodType(ComponentResolveMetadata::class.java))
     }
 
+    val ConfigurationMetadata.allArtifacts: List<ComponentArtifactMetadata>
+        get() = artifacts
+
     @Suppress("UNCHECKED_CAST")
     private fun <T> loadClass(name: String): Class<out T> =
         Class.forName("net.msrandom.minecraftcodev.gradle.$name", true, classLoader) as Class<out T>

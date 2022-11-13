@@ -31,7 +31,6 @@ import org.gradle.api.internal.model.NamedObjectInstantiator
 import org.gradle.api.internal.provider.PropertyFactory
 import org.gradle.api.invocation.Gradle
 import org.gradle.api.model.ObjectFactory
-import org.gradle.api.specs.Spec
 import org.gradle.api.tasks.util.PatternSet
 import org.gradle.configurationcache.extensions.serviceOf
 import org.gradle.internal.Factory
@@ -72,9 +71,11 @@ fun Gradle.registerCustomDependency(
     val dependency = customDependencies.computeIfAbsent(gradle) {
         val dependency = DependencyData()
 
+/*
         val localEdgeOffset = unsafe.staticFieldOffset(IS_LOCAL_EDGE)
         val spec = unsafe.getObject(DefaultConfigurationResolver::class.java, localEdgeOffset) as Spec<DependencyMetadata>
         unsafe.putObject(DefaultConfigurationResolver::class.java, localEdgeOffset, Spec<DependencyMetadata> { spec.isSatisfiedBy(it) || dependency.edgeTypes.any { type -> type.isInstance(it) } })
+*/
 
         dependency
     }

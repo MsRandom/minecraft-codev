@@ -187,13 +187,14 @@ open class AccessWidenedComponentResolvers @Inject constructor(
     }
 
     override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactResolveResult) {
+        try {
         if (artifact is AccessWidenedComponentArtifactMetadata) {
             val id = artifact.componentId
             val newResult = DefaultBuildableArtifactResolveResult()
             resolvers.get().artifactResolver.resolveArtifact(artifact.delegate, moduleSources, newResult)
 
             if (newResult.isSuccessful) {
-                val accessWideners = project.unsafeResolveConfiguration(project.configurations.getByName(id.accessWidenersConfiguration))
+                val accessWideners = project.configurations.getByName(id.accessWidenersConfiguration)
                 val messageDigest = MessageDigest.getInstance("SHA1")
 
                 val accessWidener = AccessWidener().also { visitor ->
@@ -260,7 +261,10 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                     }
                 }
             }
-        }
+        }        } catch (exception: Throwable) {
+        exception.printStackTrace()
+            throw exception
+    }
     }
 
     companion object {
