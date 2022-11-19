@@ -212,57 +212,52 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
     private fun hash(patches: Configuration) = HashCode.fromBytes(patches.map(checksumService::sha1).flatMap { it.toByteArray().asList() }.toByteArray())
 
     override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactResolveResult) {
-        try {
-            if (artifact.componentId is PatchedComponentIdentifier) {
-                val moduleComponentIdentifier = artifact.componentId as PatchedComponentIdentifier
-                val patches = project.configurations.getByName(moduleComponentIdentifier.patches)
+        if (artifact.componentId is PatchedComponentIdentifier) {
+            val moduleComponentIdentifier = artifact.componentId as PatchedComponentIdentifier
+            val patches = project.configurations.getByName(moduleComponentIdentifier.patches)
 
-                val id = artifact.id as ModuleComponentArtifactIdentifier
+            val id = artifact.id as ModuleComponentArtifactIdentifier
 
-                val patchesHash = hash(patches)
+            val patchesHash = hash(patches)
 
-                val urlId = PatchedArtifactIdentifier(
-                    ModuleComponentFileArtifactIdentifier(
-                        DefaultModuleComponentIdentifier.newId(moduleComponentIdentifier.moduleIdentifier, moduleComponentIdentifier.version),
-                        id.fileName
-                    ), patchesHash
-                )
+            val urlId = PatchedArtifactIdentifier(
+                ModuleComponentFileArtifactIdentifier(
+                    DefaultModuleComponentIdentifier.newId(moduleComponentIdentifier.moduleIdentifier, moduleComponentIdentifier.version),
+                    id.fileName
+                ), patchesHash
+            )
 
-                val cached = artifactCache[urlId]
+            val cached = artifactCache[urlId]
 
-                if (cached == null || cachePolicy.artifactExpiry(
+            if (cached == null || cachePolicy.artifactExpiry(
+                    (artifact as ModuleComponentArtifactMetadata).toArtifactIdentifier(),
+                    if (cached.isMissing) null else cached.cachedFile,
+                    Duration.ofMillis(timeProvider.currentTime - cached.cachedAt),
+                    false,
+                    artifact.hash() == cached.descriptorHash
+                ).isMustCheck || cached.cachedFile?.exists() != true
+            ) {
+                val sources = artifact.name.classifier == "sources"
+
+                val shouldRefresh = { file: File, duration: Duration ->
+                    cachePolicy.artifactExpiry(
                         (artifact as ModuleComponentArtifactMetadata).toArtifactIdentifier(),
-                        if (cached.isMissing) null else cached.cachedFile,
-                        Duration.ofMillis(timeProvider.currentTime - cached.cachedAt),
+                        file,
+                        duration,
                         false,
-                        artifact.hash() == cached.descriptorHash
-                    ).isMustCheck || cached.cachedFile?.exists() != true
-                ) {
-                    val sources = artifact.name.classifier == "sources"
-
-                    val shouldRefresh = { file: File, duration: Duration ->
-                        cachePolicy.artifactExpiry(
-                            (artifact as ModuleComponentArtifactMetadata).toArtifactIdentifier(),
-                            file,
-                            duration,
-                            false,
-                            true
-                        ).isMustCheck
-                    }
-
-                    getPatchState(moduleComponentIdentifier, patches.singleFile, patchesHash, shouldRefresh)?.withAssets?.let {
-                        val file = it.toFile()
-                        result.resolved(file)
-
-                        artifactCache[urlId] = DefaultCachedArtifact(file, Instant.now().toEpochMilli(), artifact.hash())
-                    }
-                } else if (!cached.isMissing) {
-                    result.resolved(cached.cachedFile)
+                        true
+                    ).isMustCheck
                 }
+
+                getPatchState(moduleComponentIdentifier, patches.singleFile, patchesHash, shouldRefresh)?.withAssets?.let {
+                    val file = it.toFile()
+                    result.resolved(file)
+
+                    artifactCache[urlId] = DefaultCachedArtifact(file, Instant.now().toEpochMilli(), artifact.hash())
+                }
+            } else if (!cached.isMissing) {
+                result.resolved(cached.cachedFile)
             }
-        } catch (exception: Throwable) {
-            exception.printStackTrace()
-            throw exception
         }
     }
 }

@@ -18,6 +18,7 @@ import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.copy
 import org.gradle.api.Project
 import org.gradle.api.artifacts.component.ComponentIdentifier
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.attributes.Category
 import org.gradle.api.attributes.LibraryElements
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
@@ -112,7 +113,13 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                             dependency
                         }
                     },
-                    { artifact -> AccessWidenedComponentArtifactMetadata(artifact as ModuleComponentArtifactMetadata, identifier, namespace, project) },
+                    { artifact ->
+                        if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
+                            AccessWidenedComponentArtifactMetadata(artifact as ModuleComponentArtifactMetadata, identifier, namespace, project)
+                        } else {
+                            artifact
+                        }
+                    },
                     emptyList(),
                     objects
                 )
@@ -187,7 +194,6 @@ open class AccessWidenedComponentResolvers @Inject constructor(
     }
 
     override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactResolveResult) {
-        try {
         if (artifact is AccessWidenedComponentArtifactMetadata) {
             val id = artifact.componentId
             val newResult = DefaultBuildableArtifactResolveResult()
@@ -261,14 +267,19 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                     }
                 }
             }
-        }        } catch (exception: Throwable) {
-        exception.printStackTrace()
-            throw exception
-    }
+        } else {
+            if (!reentrantLock.isLocked) {
+                reentrantLock.withLock {
+                    resolvers.get().artifactResolver.resolveArtifact(artifact, moduleSources, result)
+                }
+            }
+        }
     }
 
     companion object {
         private val locks = ConcurrentHashMap<AccessWidenedArtifactIdentifier, Lock>()
+
+        private val reentrantLock = ReentrantLock()
     }
 }
 

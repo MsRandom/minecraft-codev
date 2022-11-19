@@ -137,21 +137,25 @@ open class RemappedComponentResolvers @Inject constructor(
                         }
                     },
                     { artifact ->
-                        val classpath = configuration.copy().apply {
-                            setExtendsFrom(emptySet())
-                            dependencies.clear()
-                            artifacts.clear()
+                        if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
+                            val classpath = configuration.copy().apply {
+                                setExtendsFrom(emptySet())
+                                dependencies.clear()
+                                artifacts.clear()
 
-                            dependencies.addAll(transitiveDependencies.map { project.convertDescriptor(it) })
+                                dependencies.addAll(transitiveDependencies.map { project.convertDescriptor(it) })
+                            }
+
+                            RemappedComponentArtifactMetadata(
+                                artifact as ModuleComponentArtifactMetadata,
+                                identifier,
+                                sourceNamespace,
+                                classpath,
+                                project
+                            )
+                        } else {
+                            artifact
                         }
-
-                        RemappedComponentArtifactMetadata(
-                            artifact as ModuleComponentArtifactMetadata,
-                            identifier,
-                            sourceNamespace,
-                            classpath,
-                            project
-                        )
                     },
 
                     if (identifier.original is MinecraftComponentIdentifier && identifier.original.isBase) {
@@ -246,7 +250,6 @@ open class RemappedComponentResolvers @Inject constructor(
     }
 
     override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactResolveResult) {
-        try {
         if (artifact is RemapperArtifact) {
             val mappingFiles = project.unsafeResolveConfiguration(project.configurations.getByName(artifact.mappingsConfiguration), true)
 
@@ -356,14 +359,19 @@ open class RemappedComponentResolvers @Inject constructor(
                     result.resolved(output.toFile())
                 }
             }
-        }        } catch (exception: Throwable) {
-        exception.printStackTrace()
-            throw exception
-    }
+        } else {
+            if (!reentrantLock.isLocked) {
+                reentrantLock.withLock {
+                    resolvers.get().artifactResolver.resolveArtifact(artifact, moduleSources, result)
+                }
+            }
+        }
     }
 
     companion object {
         private val locks = ConcurrentHashMap<RemappedArtifactIdentifier, Lock>()
+
+        private val reentrantLock = ReentrantLock()
     }
 }
 
