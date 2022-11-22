@@ -13,6 +13,7 @@ import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.getSourceSetConfigurationName
 import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
+import net.msrandom.minecraftcodev.core.resolve.MayNeedSources
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.hash
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.copy
 import org.gradle.api.Project
@@ -20,6 +21,7 @@ import org.gradle.api.artifacts.component.ComponentIdentifier
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.attributes.Category
+import org.gradle.api.attributes.DocsType
 import org.gradle.api.attributes.LibraryElements
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ComponentResolvers
@@ -91,8 +93,26 @@ open class AccessWidenedComponentResolvers @Inject constructor(
         {
             val namespace = attributes.findEntry(MappingsNamespace.attribute.name).takeIf(AttributeValue<*>::isPresent)?.get() as? String
             val category = attributes.findEntry(Category.CATEGORY_ATTRIBUTE.name)
-            val libraryElements = attributes.findEntry(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE.name)
-            if (category.isPresent && libraryElements.isPresent && category.get() == Category.LIBRARY && libraryElements.get() == LibraryElements.JAR) {
+
+            var sources = false
+
+            val shouldWrap = if (category.isPresent) {
+                if (category.get() == Category.LIBRARY) {
+                    val libraryElements = attributes.findEntry(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE.name)
+                    libraryElements.isPresent && libraryElements.get() == LibraryElements.JAR
+                } else if (category.get() == Category.DOCUMENTATION) {
+                    val docsType = attributes.findEntry(DocsType.DOCS_TYPE_ATTRIBUTE.name)
+                    sources = docsType.isPresent && docsType.get() == DocsType.SOURCES
+
+                    sources
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+
+            if (shouldWrap) {
                 copy(
                     { oldName ->
                         object : DisplayName {
@@ -144,7 +164,7 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                             result.id as ModuleComponentIdentifier,
                             accessWidenersConfiguration,
                             dependency.getModuleConfiguration()
-                        )
+                        ).mayHaveSources()
 
                         if (metadata == null) {
                             result.resolved(id, result.moduleVersionId)
@@ -188,7 +208,10 @@ open class AccessWidenedComponentResolvers @Inject constructor(
     }
 
     override fun resolveArtifactsWithType(component: ComponentResolveMetadata, artifactType: ArtifactType, result: BuildableArtifactSetResolveResult) {
-        if (component.id is AccessWidenedComponentIdentifier) {
+        val id = component.id
+        if (id is AccessWidenedComponentIdentifier) {
+            id.needsSources
+
             resolvers.get().artifactResolver.resolveArtifactsWithType(component, artifactType, result)
         }
     }
@@ -286,7 +309,20 @@ open class AccessWidenedComponentResolvers @Inject constructor(
 class AccessWidenedComponentIdentifier(
     val original: ModuleComponentIdentifier,
     val accessWidenersConfiguration: String,
-    val moduleConfiguration: String?
-) : ModuleComponentIdentifier by original {
+    val moduleConfiguration: String?,
+    private val needsSourcesOverride: Boolean? = null
+) : ModuleComponentIdentifier by original, MayNeedSources {
+    override val needsSources
+        get() = needsSourcesOverride ?: (original is MayNeedSources && original.needsSources)
+
+    override fun mayHaveSources() = if (original is MayNeedSources) {
+        AccessWidenedComponentIdentifier(original.withoutSources(), accessWidenersConfiguration, moduleConfiguration, this.needsSources)
+    } else {
+        this
+    }
+
+    override fun withoutSources() =
+        AccessWidenedComponentIdentifier(original, accessWidenersConfiguration, moduleConfiguration, false)
+
     override fun getDisplayName() = "Access Widened ${original.displayName}"
 }

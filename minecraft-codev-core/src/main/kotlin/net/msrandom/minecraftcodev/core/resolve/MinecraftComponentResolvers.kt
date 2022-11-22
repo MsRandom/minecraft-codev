@@ -167,15 +167,25 @@ open class MinecraftComponentResolvers @Inject constructor(
     }
 }
 
-open class MinecraftComponentIdentifier(module: String, private val version: String) : ModuleComponentIdentifier {
+open class MinecraftComponentIdentifier(module: String, private val version: String, override val needsSources: Boolean = true) : ModuleComponentIdentifier, MayNeedSources {
     private val moduleIdentifier = DefaultModuleIdentifier.newId(MinecraftComponentResolvers.GROUP, module)
 
     open val isBase
         get() = module == MinecraftComponentResolvers.COMMON_MODULE
+
+    override fun mayHaveSources() = this
+    override fun withoutSources() = MinecraftComponentIdentifier(module, version, false)
 
     override fun getDisplayName() = "Minecraft $module $version"
     override fun getGroup(): String = moduleIdentifier.group
     override fun getModule(): String = moduleIdentifier.name
     override fun getVersion() = version
     override fun getModuleIdentifier(): ModuleIdentifier = moduleIdentifier
+}
+
+interface MayNeedSources {
+    val needsSources: Boolean
+
+    fun mayHaveSources(): ModuleComponentIdentifier
+    fun withoutSources(): ModuleComponentIdentifier
 }

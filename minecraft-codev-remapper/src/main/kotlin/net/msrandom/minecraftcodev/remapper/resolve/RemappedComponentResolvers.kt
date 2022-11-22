@@ -12,6 +12,7 @@ import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.dependency.convertDescriptor
 import net.msrandom.minecraftcodev.core.getSourceSetConfigurationName
 import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
+import net.msrandom.minecraftcodev.core.resolve.MayNeedSources
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentIdentifier
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.addNamed
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.hash
@@ -190,7 +191,7 @@ open class RemappedComponentResolvers @Inject constructor(
                             dependency.targetNamespace,
                             mappingsConfiguration,
                             dependency.getModuleConfiguration()
-                        )
+                        ).mayHaveSources()
 
                         if (metadata == null) {
                             result.resolved(id, result.moduleVersionId)
@@ -380,7 +381,20 @@ class RemappedComponentIdentifier(
     val sourceNamespace: MappingsNamespace?,
     val targetNamespace: MappingsNamespace,
     val mappingsConfiguration: String,
-    val moduleConfiguration: String?
-) : ModuleComponentIdentifier by original {
+    val moduleConfiguration: String?,
+    private val needsSourcesOverride: Boolean? = null
+) : ModuleComponentIdentifier by original, MayNeedSources {
+    override val needsSources
+        get() = needsSourcesOverride ?: (original is MayNeedSources && original.needsSources)
+
+    override fun mayHaveSources() = if (original is MayNeedSources) {
+        RemappedComponentIdentifier(original.withoutSources(), sourceNamespace, targetNamespace, mappingsConfiguration, moduleConfiguration, this.needsSources)
+    } else {
+        this
+    }
+
+    override fun withoutSources() =
+        RemappedComponentIdentifier(original, sourceNamespace, targetNamespace, mappingsConfiguration, moduleConfiguration, false)
+
     override fun getDisplayName() = "Remapped ${original.displayName} -> $targetNamespace"
 }
