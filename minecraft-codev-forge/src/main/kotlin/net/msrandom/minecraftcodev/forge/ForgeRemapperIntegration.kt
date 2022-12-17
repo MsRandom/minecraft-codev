@@ -49,6 +49,7 @@ internal fun Project.setupForgeRemapperIntegration() {
                         clientMappingsFile.reader().use { ProGuardReader.read(it, clientMappings) }
                         ClassNameReplacer(namespaceCompleter, clientMappings, MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE, MappingUtil.NS_TARGET_FALLBACK)
                     } else {
+                        getPatchState
                         namespaceCompleter
                     }
 

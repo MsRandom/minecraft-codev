@@ -13,8 +13,11 @@ import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.getSourceSetConfigurationName
 import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
+import net.msrandom.minecraftcodev.core.resolve.MainArtifact
 import net.msrandom.minecraftcodev.core.resolve.MayNeedSources
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.hash
+import net.msrandom.minecraftcodev.core.resolve.SourcesArtifactComponentMetadata
+import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.allArtifacts
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.copy
 import org.gradle.api.Project
 import org.gradle.api.artifacts.component.ComponentIdentifier
@@ -135,7 +138,11 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                     },
                     { artifact ->
                         if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
-                            AccessWidenedComponentArtifactMetadata(artifact as ModuleComponentArtifactMetadata, identifier, namespace, project)
+                            if (sources) {
+                                SourcesArtifactComponentMetadata(artifactMetadata)
+                            } else {
+                                AccessWidenedComponentArtifactMetadata(artifact as ModuleComponentArtifactMetadata, identifier, namespace, project)
+                            }
                         } else {
                             artifact
                         }
@@ -210,8 +217,6 @@ open class AccessWidenedComponentResolvers @Inject constructor(
     override fun resolveArtifactsWithType(component: ComponentResolveMetadata, artifactType: ArtifactType, result: BuildableArtifactSetResolveResult) {
         val id = component.id
         if (id is AccessWidenedComponentIdentifier) {
-            id.needsSources
-
             resolvers.get().artifactResolver.resolveArtifactsWithType(component, artifactType, result)
         }
     }

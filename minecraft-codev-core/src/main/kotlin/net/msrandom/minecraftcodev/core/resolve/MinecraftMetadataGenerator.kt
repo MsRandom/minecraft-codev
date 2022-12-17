@@ -5,7 +5,6 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.encodeToStream
 import net.msrandom.minecraftcodev.core.*
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.addConfigurationResolutionDependencies
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
 import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
 import net.msrandom.minecraftcodev.core.dependency.MinecraftDependencyMetadataWrapper
@@ -34,8 +33,6 @@ import org.gradle.api.internal.attributes.ImmutableAttributes
 import org.gradle.api.internal.attributes.ImmutableAttributesFactory
 import org.gradle.api.internal.model.NamedObjectInstantiator
 import org.gradle.api.internal.project.ProjectInternal
-import org.gradle.api.internal.tasks.AbstractTaskDependency
-import org.gradle.api.internal.tasks.TaskDependencyResolveContext
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.plugins.JavaPlugin
 import org.gradle.initialization.layout.GlobalCacheDir
@@ -142,19 +139,26 @@ open class MinecraftMetadataGenerator @Inject constructor(
         )
 
         if (versionList != null && manifest != null) {
-            fun artifact(extension: String, classifier: String? = null) = object : DefaultModuleComponentArtifactMetadata(
-                moduleComponentIdentifier,
-                DefaultIvyArtifactName(
-                    moduleComponentIdentifier.module,
-                    extension,
-                    extension,
-                    classifier
+            fun artifact(extension: String, classifier: String? = null) = if (classifier == null) {
+                object : MainArtifact, DefaultModuleComponentArtifactMetadata(
+                    moduleComponentIdentifier,
+                    DefaultIvyArtifactName(
+                        moduleComponentIdentifier.module,
+                        extension,
+                        extension,
+                        null
+                    )
+                ) {}
+            } else {
+                DefaultModuleComponentArtifactMetadata(
+                    moduleComponentIdentifier,
+                    DefaultIvyArtifactName(
+                        moduleComponentIdentifier.module,
+                        extension,
+                        extension,
+                        classifier
+                    )
                 )
-            ) {
-/*                override fun getBuildDependencies() = object : AbstractTaskDependency() {
-                    override fun visitDependencies(context: TaskDependencyResolveContext) =
-                        project.addConfigurationResolutionDependencies(context, configuration)
-                }*/
             }
 
             val defaultAttributes = ImmutableAttributes.EMPTY.addNamed(MappingsNamespace.attribute, mappingsNamespace)
@@ -273,15 +277,27 @@ open class MinecraftMetadataGenerator @Inject constructor(
         )
 
         if (versionList != null && manifest != null) {
-            fun artifact(extension: String, classifier: String? = null) = DefaultModuleComponentArtifactMetadata(
-                moduleComponentIdentifier,
-                DefaultIvyArtifactName(
-                    moduleComponentIdentifier.module,
-                    extension,
-                    extension,
-                    classifier
+            fun artifact(extension: String, classifier: String? = null) = if (classifier == null) {
+                object : MainArtifact, DefaultModuleComponentArtifactMetadata(
+                    moduleComponentIdentifier,
+                    DefaultIvyArtifactName(
+                        moduleComponentIdentifier.module,
+                        extension,
+                        extension,
+                        null
+                    )
+                ) {}
+            } else {
+                DefaultModuleComponentArtifactMetadata(
+                    moduleComponentIdentifier,
+                    DefaultIvyArtifactName(
+                        moduleComponentIdentifier.module,
+                        extension,
+                        extension,
+                        classifier
+                    )
                 )
-            )
+            }S
 
             val defaultAttributes = ImmutableAttributes.EMPTY.addNamed(MappingsNamespace.attribute, MappingsNamespace.OBF)
             when (moduleComponentIdentifier.module) {

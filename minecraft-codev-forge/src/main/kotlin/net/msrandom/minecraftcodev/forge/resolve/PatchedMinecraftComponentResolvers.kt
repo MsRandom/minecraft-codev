@@ -117,7 +117,6 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
                 )
 
                 if (clientJar != null && serverJar != null) {
-                    // TODO use generic injected logger rather than project one
                     return PatchedSetupState.getPatchedState(manifest, clientJar, serverJar, patches, patchesHash, patchedCacheManager, objectFactory)
                 }
             }

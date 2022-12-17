@@ -18,7 +18,6 @@ import org.gradle.api.internal.attributes.ImmutableAttributes
 import org.gradle.api.internal.attributes.ImmutableAttributesFactory
 import org.gradle.api.internal.model.NamedObjectInstantiator
 import org.gradle.api.model.ObjectFactory
-import org.gradle.cache.scopes.GlobalScopedCache
 import org.gradle.internal.component.external.model.MetadataSourcedComponentArtifacts
 import org.gradle.internal.component.model.ComponentArtifactMetadata
 import org.gradle.internal.component.model.ComponentOverrideMetadata
@@ -37,9 +36,6 @@ import javax.inject.Inject
 open class MinecraftComponentResolvers @Inject constructor(
     private val cachePolicy: CachePolicy,
     private val objects: ObjectFactory,
-    private val attributesFactory: ImmutableAttributesFactory,
-    private val instantiator: NamedObjectInstantiator,
-    private val globalScopedCache: GlobalScopedCache,
     private val calculatedValueContainerFactory: CalculatedValueContainerFactory,
     private val fileStoreAndIndexProvider: FileStoreAndIndexProvider,
     cacheProvider: CodevCacheProvider,
@@ -189,3 +185,5 @@ interface MayNeedSources {
     fun mayHaveSources(): ModuleComponentIdentifier
     fun withoutSources(): ModuleComponentIdentifier
 }
+
+interface MainArtifact
