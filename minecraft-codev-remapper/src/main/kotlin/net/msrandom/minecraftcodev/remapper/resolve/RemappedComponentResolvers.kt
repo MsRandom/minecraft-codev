@@ -206,11 +206,10 @@ open class RemappedComponentResolvers @Inject constructor(
 
     override fun resolve(identifier: ComponentIdentifier, componentOverrideMetadata: ComponentOverrideMetadata, result: BuildableComponentResolveResult) {
         if (identifier is RemappedComponentIdentifier) {
-            val newResult = DefaultBuildableComponentResolveResult()
-            resolvers.get().componentResolver.resolve(identifier.original, componentOverrideMetadata, newResult)
+            resolvers.get().componentResolver.resolve(identifier.original, componentOverrideMetadata, result)
 
-            if (newResult.hasResult() && newResult.failure == null) {
-                result.resolved(wrapMetadata(newResult.metadata, identifier))
+            if (result.hasResult() && result.failure == null) {
+                result.resolved(wrapMetadata(result.metadata, identifier))
             }
         }
     }
@@ -234,7 +233,7 @@ open class RemappedComponentResolvers @Inject constructor(
             .getByType(MinecraftCodevExtension::class.java)
             .extensions
             .getByType(RemapperExtension::class.java)
-            .loadMappings(project.unsafeResolveConfiguration(project.configurations.getByName((component.id as RemappedComponentIdentifier).mappingsConfiguration)))
+            .loadMappings(project.unsafeResolveConfiguration(project.configurations.getByName((component.id as RemappedComponentIdentifier).mappingsConfiguration)), objects)
 
         MetadataSourcedComponentArtifacts().getArtifactsFor(
             component, configuration, artifactResolver, hashMapOf(), artifactTypeRegistry, exclusions, overriddenAttributes, calculatedValueContainerFactory
@@ -259,23 +258,22 @@ open class RemappedComponentResolvers @Inject constructor(
                 .extensions
                 .getByType(RemapperExtension::class.java)
 
-            val mappings = remapper.loadMappings(mappingFiles)
+            val mappings = remapper.loadMappings(mappingFiles, objects)
 
             when (artifact) {
                 is RemappedComponentArtifactMetadata -> {
                     val id = artifact.componentId
 
-                    val newResult = DefaultBuildableArtifactResolveResult()
-                    resolvers.get().artifactResolver.resolveArtifact(artifact.delegate, moduleSources, newResult)
+                    resolvers.get().artifactResolver.resolveArtifact(artifact.delegate, moduleSources, result)
 
                     val sourceNamespace = id.sourceNamespace?.name ?: artifact.namespace ?: MappingsNamespace.OBF
 
-                    if (newResult.isSuccessful) {
+                    if (result.isSuccessful) {
                         val urlId = RemappedArtifactIdentifier(
-                            ModuleComponentFileArtifactIdentifier(DefaultModuleComponentIdentifier.newId(id.moduleIdentifier, id.version), newResult.result.name),
+                            ModuleComponentFileArtifactIdentifier(DefaultModuleComponentIdentifier.newId(id.moduleIdentifier, id.version), result.result.name),
                             id.targetNamespace.name,
                             mappings.hash,
-                            checksumService.sha1(newResult.result)
+                            checksumService.sha1(result.result)
                         )
 
                         locks.computeIfAbsent(urlId) { ReentrantLock() }.withLock {
@@ -291,7 +289,7 @@ open class RemappedComponentResolvers @Inject constructor(
                             ) {
                                 val file = buildOperationExecutor.call(object : CallableBuildOperation<Path> {
                                     override fun description() = BuildOperationDescriptor
-                                        .displayName("Remapping ${newResult.result} from $sourceNamespace to ${id.targetNamespace}")
+                                        .displayName("Remapping ${result.result} from $sourceNamespace to ${id.targetNamespace}")
                                         .progressDisplayName("Mappings: ${mappingFiles.joinToString()}")
                                         .metadata(BuildOperationCategory.TASK)
 
@@ -301,7 +299,7 @@ open class RemappedComponentResolvers @Inject constructor(
                                             mappings.tree,
                                             sourceNamespace,
                                             id.targetNamespace.name,
-                                            newResult.result.toPath(),
+                                            result.result.toPath(),
                                             project.unsafeResolveConfiguration(artifact.classpath, true)
                                         )
                                     }
@@ -313,7 +311,7 @@ open class RemappedComponentResolvers @Inject constructor(
                                     .resolve(id.module)
                                     .resolve(id.version)
                                     .resolve(checksumService.sha1(file.toFile()).toString())
-                                    .resolve("${newResult.result.nameWithoutExtension}-${id.targetNamespace.name}.${newResult.result.extension}")
+                                    .resolve("${result.result.nameWithoutExtension}-${id.targetNamespace.name}.${result.result.extension}")
 
                                 output.parent.createDirectories()
                                 file.copyTo(output)

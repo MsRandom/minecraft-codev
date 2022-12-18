@@ -10,6 +10,7 @@ import net.msrandom.minecraftcodev.core.createSourceSetConfigurations
 import net.msrandom.minecraftcodev.core.dependency.registerCustomDependency
 import net.msrandom.minecraftcodev.forge.dependency.PatchedMinecraftDependencyFactory
 import net.msrandom.minecraftcodev.forge.dependency.PatchedMinecraftIvyDependencyDescriptorFactory
+import net.msrandom.minecraftcodev.forge.mappings.setupForgeRemapperIntegration
 import net.msrandom.minecraftcodev.forge.resolve.PatchedMinecraftComponentResolvers
 import org.gradle.api.Plugin
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition

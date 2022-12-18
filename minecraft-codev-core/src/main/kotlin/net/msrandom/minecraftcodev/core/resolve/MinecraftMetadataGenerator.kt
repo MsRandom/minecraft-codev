@@ -297,7 +297,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                         classifier
                     )
                 )
-            }S
+            }
 
             val defaultAttributes = ImmutableAttributes.EMPTY.addNamed(MappingsNamespace.attribute, MappingsNamespace.OBF)
             when (moduleComponentIdentifier.module) {

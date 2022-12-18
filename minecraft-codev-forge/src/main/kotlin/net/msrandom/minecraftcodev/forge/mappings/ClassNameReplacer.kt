@@ -1,4 +1,4 @@
-package net.msrandom.minecraftcodev.forge
+package net.msrandom.minecraftcodev.forge.mappings
 
 import net.fabricmc.mappingio.MappedElementKind
 import net.fabricmc.mappingio.MappingVisitor
@@ -13,17 +13,7 @@ class ClassNameReplacer(next: MappingVisitor, private val tree: MappingTreeView,
 
     override fun visitNamespaces(srcNamespace: String, dstNamespaces: List<String>) {
         sourceNamespace = tree.getNamespaceId(srcNamespace)
-
-        targetNamespaceId = if (targetNamespace == srcNamespace) {
-            MappingTreeView.SRC_NAMESPACE_ID
-        } else {
-            val id = dstNamespaces.indexOf(targetNamespace)
-            if (id == -1) {
-                MappingTreeView.NULL_NAMESPACE_ID
-            } else {
-                id
-            }
-        }
+        targetNamespaceId = targetNamespace.getNamespaceId(srcNamespace, dstNamespaces)
 
         super.visitNamespaces(srcNamespace, dstNamespaces)
     }

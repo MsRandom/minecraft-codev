@@ -16,19 +16,44 @@ import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
-typealias MappingResolutionRule = (path: Path, extension: String, visitor: MappingVisitor, decorate: InputStream.() -> InputStream, existingMappings: MappingTreeView) -> Boolean
+fun interface MappingResolutionRule {
+    operator fun invoke(
+        path: Path,
+        extension: String,
+        visitor: MappingVisitor,
+        configuration: Configuration,
+        decorate: InputStream.() -> InputStream,
+        existingMappings: MappingTreeView,
+        objects: ObjectFactory
+    ): Boolean
+}
 
 fun interface ZipMappingResolutionRule {
-    operator fun invoke(fileSystem: FileSystem, visitor: MappingVisitor, decorate: InputStream.() -> InputStream, existingMappings: MappingTreeView, isJar: Boolean): Boolean
+    operator fun invoke(
+        path: Path,
+        fileSystem: FileSystem,
+        visitor: MappingVisitor,
+        configuration: Configuration,
+        decorate: InputStream.() -> InputStream,
+        existingMappings: MappingTreeView,
+        isJar: Boolean,
+        objects: ObjectFactory
+    ): Boolean
 }
 
 fun interface ExtraFileRemapper {
     operator fun invoke(mappings: MappingTreeView, directory: Path, sourceNamespaceId: Int, targetNamespaceId: Int)
 }
 
-open class RemapperExtension @Inject constructor(objects: ObjectFactory) {
-    private val mappingResolutionRules = mutableListOf<MappingResolutionRule>(
-        { path, extension, visitor, decorate, existingMappings ->
+open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory) {
+    val mappingsResolution: ListProperty<MappingResolutionRule> = objectFactory.listProperty(MappingResolutionRule::class.java)
+    val zipMappingsResolution: ListProperty<ZipMappingResolutionRule> = objectFactory.listProperty(ZipMappingResolutionRule::class.java)
+    val extraFileRemappers: ListProperty<ExtraFileRemapper> = objectFactory.listProperty(ExtraFileRemapper::class.java)
+
+    private val mappingsCache = ConcurrentHashMap<Configuration, Mappings>()
+
+    init {
+        mappingsResolution.add { path, extension, visitor, configuration, decorate, existingMappings, objects ->
             val isJar = extension == "jar"
 
             var result = false
@@ -36,7 +61,7 @@ open class RemapperExtension @Inject constructor(objects: ObjectFactory) {
             if (isJar || extension == "zip") {
                 MinecraftCodevPlugin.zipFileSystem(path).use {
                     for (rule in zipMappingsResolution.get()) {
-                        if (rule(it, visitor, decorate, existingMappings, isJar)) {
+                        if (rule(path, it, visitor, configuration, decorate, existingMappings, isJar, objects)) {
                             result = true
                             break
                         }
@@ -46,21 +71,16 @@ open class RemapperExtension @Inject constructor(objects: ObjectFactory) {
 
             result
         }
-    )
+    }
 
-    val zipMappingsResolution: ListProperty<ZipMappingResolutionRule> = objects.listProperty(ZipMappingResolutionRule::class.java)
-    val extraFileRemappers: ListProperty<ExtraFileRemapper> = objects.listProperty(ExtraFileRemapper::class.java)
-
-    private val mappingsCache = ConcurrentHashMap<Configuration, Mappings>()
-
-    fun loadMappings(files: Configuration) = mappingsCache.computeIfAbsent(files) {
+    fun loadMappings(files: Configuration, objects: ObjectFactory) = mappingsCache.computeIfAbsent(files) {
         val tree = MemoryMappingTree()
         val md = MessageDigest.getInstance("SHA1")
 
         for (dependency in it.dependencies) {
             for (file in it.files(dependency)) {
-                for (rule in mappingResolutionRules) {
-                    if (rule(file.toPath(), file.extension, tree, { DigestInputStream(this, md) }, tree)) {
+                for (rule in mappingsResolution.get()) {
+                    if (rule(file.toPath(), file.extension, tree, files, { DigestInputStream(this, md) }, tree, objects)) {
                         break
                     }
                 }
@@ -71,10 +91,6 @@ open class RemapperExtension @Inject constructor(objects: ObjectFactory) {
             tree,
             HashCode.fromBytes(md.digest())
         )
-    }
-
-    fun mappingsResolution(action: MappingResolutionRule) {
-        mappingResolutionRules.add(action)
     }
 
     fun remapFiles(mappings: MappingTreeView, directory: Path, sourceNamespaceId: Int, targetNamespaceId: Int) {

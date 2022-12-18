@@ -13,11 +13,8 @@ import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.getSourceSetConfigurationName
 import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
-import net.msrandom.minecraftcodev.core.resolve.MainArtifact
 import net.msrandom.minecraftcodev.core.resolve.MayNeedSources
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.hash
-import net.msrandom.minecraftcodev.core.resolve.SourcesArtifactComponentMetadata
-import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.allArtifacts
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.copy
 import org.gradle.api.Project
 import org.gradle.api.artifacts.component.ComponentIdentifier
@@ -138,11 +135,11 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                     },
                     { artifact ->
                         if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
-                            if (sources) {
+/*                            if (sources) {
                                 SourcesArtifactComponentMetadata(artifactMetadata)
-                            } else {
+                            } else {*/
                                 AccessWidenedComponentArtifactMetadata(artifact as ModuleComponentArtifactMetadata, identifier, namespace, project)
-                            }
+//                             }
                         } else {
                             artifact
                         }
@@ -186,11 +183,10 @@ open class AccessWidenedComponentResolvers @Inject constructor(
 
     override fun resolve(identifier: ComponentIdentifier, componentOverrideMetadata: ComponentOverrideMetadata, result: BuildableComponentResolveResult) {
         if (identifier is AccessWidenedComponentIdentifier) {
-            val newResult = DefaultBuildableComponentResolveResult()
-            resolvers.get().componentResolver.resolve(identifier.original, componentOverrideMetadata, newResult)
+            resolvers.get().componentResolver.resolve(identifier.original, componentOverrideMetadata, result)
 
-            if (newResult.hasResult() && newResult.failure == null) {
-                result.resolved(wrapMetadata(newResult.metadata, identifier))
+            if (result.hasResult() && result.failure == null) {
+                result.resolved(wrapMetadata(result.metadata, identifier))
             }
         }
     }
@@ -224,10 +220,9 @@ open class AccessWidenedComponentResolvers @Inject constructor(
     override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactResolveResult) {
         if (artifact is AccessWidenedComponentArtifactMetadata) {
             val id = artifact.componentId
-            val newResult = DefaultBuildableArtifactResolveResult()
-            resolvers.get().artifactResolver.resolveArtifact(artifact.delegate, moduleSources, newResult)
+            resolvers.get().artifactResolver.resolveArtifact(artifact.delegate, moduleSources, result)
 
-            if (newResult.isSuccessful) {
+            if (result.isSuccessful) {
                 val accessWideners = project.configurations.getByName(id.accessWidenersConfiguration)
                 val messageDigest = MessageDigest.getInstance("SHA1")
 
@@ -247,9 +242,9 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                 val hash = HashCode.fromBytes(messageDigest.digest())
 
                 val urlId = AccessWidenedArtifactIdentifier(
-                    ModuleComponentFileArtifactIdentifier(DefaultModuleComponentIdentifier.newId(id.moduleIdentifier, id.version), newResult.result.name),
+                    ModuleComponentFileArtifactIdentifier(DefaultModuleComponentIdentifier.newId(id.moduleIdentifier, id.version), result.result.name),
                     hash,
-                    checksumService.sha1(newResult.result)
+                    checksumService.sha1(result.result)
                 )
 
                 locks.computeIfAbsent(urlId) { ReentrantLock() }.withLock {
@@ -265,12 +260,12 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                     ) {
                         val file = buildOperationExecutor.call(object : CallableBuildOperation<Path> {
                             override fun description() = BuildOperationDescriptor
-                                .displayName("Access Widening ${newResult.result}")
+                                .displayName("Access Widening ${result.result}")
                                 .progressDisplayName("Access Wideners: ${accessWideners.joinToString()}")
                                 .metadata(BuildOperationCategory.TASK)
 
                             override fun call(context: BuildOperationContext) = context.callWithStatus {
-                                JarAccessWidener.accessWiden(accessWidener, newResult.result.toPath())
+                                JarAccessWidener.accessWiden(accessWidener, result.result.toPath())
                             }
                         })
 
@@ -280,7 +275,7 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                             .resolve(id.module)
                             .resolve(id.version)
                             .resolve(checksumService.sha1(file.toFile()).toString())
-                            .resolve("${newResult.result.nameWithoutExtension}-access-widened.${newResult.result.extension}")
+                            .resolve("${result.result.nameWithoutExtension}-access-widened.${result.result.extension}")
 
                         output.parent.createDirectories()
                         file.copyTo(output)

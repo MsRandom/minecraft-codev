@@ -2,6 +2,7 @@ package net.msrandom.minecraftcodev.forge.resolve
 
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.unsafeResolveConfiguration
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
+import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.getSourceSetConfigurationName
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
@@ -85,45 +86,20 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
     override fun getArtifactSelector() = this
     override fun getArtifactResolver() = this
 
-    private fun getPatchState(moduleComponentIdentifier: ModuleComponentIdentifier, patches: File, patchesHash: HashCode, shouldRefresh: (File, Duration) -> Boolean): PatchedSetupState? {
-        for (repository in repositories) {
-            val manifest = MinecraftMetadataGenerator.getVersionManifest(
-                moduleComponentIdentifier,
-                repository.url,
-                minecraftCacheManager,
-                cachePolicy,
-                repository.transport.resourceAccessor,
-                fileStoreAndIndexProvider,
-                null
-            )
-
-            if (manifest != null) {
-                val clientJar = resolveMojangFile(
-                    manifest,
-                    minecraftCacheManager,
-                    checksumService,
-                    repository,
-                    MinecraftComponentResolvers.CLIENT_DOWNLOAD,
-                    shouldRefresh
-                )
-
-                val serverJar = resolveMojangFile(
-                    manifest,
-                    minecraftCacheManager,
-                    checksumService,
-                    repository,
-                    MinecraftComponentResolvers.SERVER_DOWNLOAD,
-                    shouldRefresh
-                )
-
-                if (clientJar != null && serverJar != null) {
-                    return PatchedSetupState.getPatchedState(manifest, clientJar, serverJar, patches, patchesHash, patchedCacheManager, objectFactory)
-                }
-            }
-        }
-
-        return null
-    }
+    private fun getPatchState(moduleComponentIdentifier: ModuleComponentIdentifier, patches: File, patchesHash: HashCode, shouldRefresh: (File, Duration) -> Boolean) =
+        getPatchState(
+            moduleComponentIdentifier,
+            repositories,
+            minecraftCacheManager,
+            patchedCacheManager,
+            cachePolicy,
+            fileStoreAndIndexProvider,
+            checksumService,
+            patches,
+            patchesHash,
+            objectFactory,
+            shouldRefresh
+        )
 
     override fun resolve(dependency: DependencyMetadata, acceptor: VersionSelector?, rejector: VersionSelector?, result: BuildableComponentIdResolveResult) {
         if (dependency is PatchedMinecraftDependencyMetadata) {
@@ -175,7 +151,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
     ) = if (component.id is PatchedComponentIdentifier) {
         val moduleComponentIdentifier = component.id as PatchedComponentIdentifier
         val patches = project.unsafeResolveConfiguration(project.configurations.getByName(moduleComponentIdentifier.patches))
-        val patchState = getPatchState(moduleComponentIdentifier, patches.singleFile, hash(patches)) { _, duration ->
+        val patchState = getPatchState(moduleComponentIdentifier, patches.singleFile, hash(patches, checksumService)) { _, duration ->
             cachePolicy.moduleExpiry(
                 moduleComponentIdentifier,
                 DefaultResolvedModuleVersion(DefaultModuleVersionIdentifier.newId(moduleComponentIdentifier.moduleIdentifier, moduleComponentIdentifier.version)),
@@ -207,9 +183,6 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
     override fun resolveArtifactsWithType(component: ComponentResolveMetadata, artifactType: ArtifactType, result: BuildableArtifactSetResolveResult) {
     }
 
-    // Not the most efficient hashing, but works.
-    private fun hash(patches: Configuration) = HashCode.fromBytes(patches.map(checksumService::sha1).flatMap { it.toByteArray().asList() }.toByteArray())
-
     override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactResolveResult) {
         if (artifact.componentId is PatchedComponentIdentifier) {
             val moduleComponentIdentifier = artifact.componentId as PatchedComponentIdentifier
@@ -217,7 +190,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
 
             val id = artifact.id as ModuleComponentArtifactIdentifier
 
-            val patchesHash = hash(patches)
+            val patchesHash = hash(patches, checksumService)
 
             val urlId = PatchedArtifactIdentifier(
                 ModuleComponentFileArtifactIdentifier(
@@ -257,6 +230,87 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
             } else if (!cached.isMissing) {
                 result.resolved(cached.cachedFile)
             }
+        }
+    }
+
+    companion object {
+        // Not the most efficient hashing, but works.
+        private fun hash(patches: Configuration, checksumService: ChecksumService) = HashCode.fromBytes(patches.map(checksumService::sha1).flatMap { it.toByteArray().asList() }.toByteArray())
+
+        fun getPatchState(
+            moduleComponentIdentifier: ModuleComponentIdentifier,
+            repositories: List<MinecraftRepositoryImpl.Resolver>,
+            cacheProvider: CodevCacheProvider,
+            cachePolicy: CachePolicy,
+            fileStoreAndIndexProvider: FileStoreAndIndexProvider,
+            checksumService: ChecksumService,
+            patches: File,
+            objectFactory: ObjectFactory,
+            shouldRefresh: (File, Duration) -> Boolean
+        ) = getPatchState(
+            moduleComponentIdentifier,
+            repositories,
+            cacheProvider.manager("minecraft"),
+            cacheProvider.manager("patched"),
+            cachePolicy,
+            fileStoreAndIndexProvider,
+            checksumService,
+            patches,
+            checksumService.sha1(patches),
+            objectFactory,
+            shouldRefresh
+        )
+
+        private fun getPatchState(
+            moduleComponentIdentifier: ModuleComponentIdentifier,
+            repositories: List<MinecraftRepositoryImpl.Resolver>,
+            minecraftCacheManager: CodevCacheManager,
+            patchedCacheManager: CodevCacheManager,
+            cachePolicy: CachePolicy,
+            fileStoreAndIndexProvider: FileStoreAndIndexProvider,
+            checksumService: ChecksumService,
+            patches: File,
+            patchesHash: HashCode,
+            objectFactory: ObjectFactory,
+            shouldRefresh: (File, Duration) -> Boolean
+        ): PatchedSetupState? {
+            for (repository in repositories) {
+                val manifest = MinecraftMetadataGenerator.getVersionManifest(
+                    moduleComponentIdentifier,
+                    repository.url,
+                    minecraftCacheManager,
+                    cachePolicy,
+                    repository.transport.resourceAccessor,
+                    fileStoreAndIndexProvider,
+                    null
+                )
+
+                if (manifest != null) {
+                    val clientJar = resolveMojangFile(
+                        manifest,
+                        minecraftCacheManager,
+                        checksumService,
+                        repository,
+                        MinecraftComponentResolvers.CLIENT_DOWNLOAD,
+                        shouldRefresh
+                    )
+
+                    val serverJar = resolveMojangFile(
+                        manifest,
+                        minecraftCacheManager,
+                        checksumService,
+                        repository,
+                        MinecraftComponentResolvers.SERVER_DOWNLOAD,
+                        shouldRefresh
+                    )
+
+                    if (clientJar != null && serverJar != null) {
+                        return PatchedSetupState.getPatchedState(manifest, clientJar, serverJar, patches, patchesHash, patchedCacheManager, objectFactory)
+                    }
+                }
+            }
+
+            return null
         }
     }
 }

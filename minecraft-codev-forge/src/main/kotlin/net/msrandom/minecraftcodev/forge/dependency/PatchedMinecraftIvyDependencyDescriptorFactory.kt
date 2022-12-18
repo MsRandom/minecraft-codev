@@ -86,8 +86,10 @@ open class PatchedMinecraftDependencyFactory : DependencyFactory {
     override fun canConvert(descriptor: DependencyMetadata) = descriptor is PatchedMinecraftDependencyMetadata
 }
 
-class PatchedComponentIdentifier(module: String, version: String, val patches: String, val moduleConfiguration: String?) : MinecraftComponentIdentifier(module, version) {
+class PatchedComponentIdentifier(module: String, version: String, val patches: String, val moduleConfiguration: String?, needsSources: Boolean = false) :
+    MinecraftComponentIdentifier(module, version, needsSources) {
     override val isBase get() = true
 
+    override fun withoutSources() = PatchedComponentIdentifier(module, version, patches, moduleConfiguration, false)
     override fun getDisplayName() = "Patched ${super.getDisplayName()}"
 }

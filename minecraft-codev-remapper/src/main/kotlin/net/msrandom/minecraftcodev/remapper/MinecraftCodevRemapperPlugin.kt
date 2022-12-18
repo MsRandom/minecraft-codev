@@ -30,7 +30,7 @@ class MinecraftCodevRemapperPlugin<T : PluginAware> : Plugin<T> {
 
             createSourceSetConfigurations(MAPPINGS_CONFIGURATION)
 
-            remapper.mappingsResolution { path, extension, visitor, decorate, _ ->
+            remapper.mappingsResolution.add { path, extension, visitor, _, decorate, _, _ ->
                 if (extension == "txt") {
                     path.inputStream().decorate().reader().use {
                         ProGuardReader.read(it, NAMED_MAPPINGS_NAMESPACE, MappingsNamespace.OBF, MappingSourceNsSwitch(visitor, MappingsNamespace.OBF))

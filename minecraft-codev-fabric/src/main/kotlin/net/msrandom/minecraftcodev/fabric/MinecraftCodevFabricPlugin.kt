@@ -25,7 +25,7 @@ class MinecraftCodevFabricPlugin<T : PluginAware> : Plugin<T> {
             plugins.withType(MinecraftCodevRemapperPlugin::class.java) {
                 val remapper = extensions.getByType(MinecraftCodevExtension::class.java).extensions.getByType(RemapperExtension::class.java)
 
-                remapper.mappingsResolution { path, extension, visitor, decorate, _ ->
+                remapper.mappingsResolution.add { path, extension, visitor, _, decorate, _, _ ->
                     if (extension == "tiny") {
                         readTiny(visitor, path.inputStream().decorate())
                         true
@@ -34,7 +34,7 @@ class MinecraftCodevFabricPlugin<T : PluginAware> : Plugin<T> {
                     }
                 }
 
-                remapper.zipMappingsResolution.add { fileSystem, visitor, decorate, _, _ ->
+                remapper.zipMappingsResolution.add { _, fileSystem, visitor, _, decorate, _, _, _ ->
                     val tiny = fileSystem.getPath("mappings/mappings.tiny")
                     if (tiny.exists()) {
                         // Assuming tiny

@@ -17,4 +17,15 @@ class PatchedMinecraftTests {
             .withDebug(true)
             .build()
     }
+
+    @Test
+    fun `Test remapped patched Minecraft`() {
+        GradleRunner.create()
+            .withProjectDir(File("remapped-patched-test"))
+            .withPluginClasspath()
+            .withArguments("jar", "printCompileClasspath", "-s")
+            .forwardOutput()
+            .withDebug(true)
+            .build()
+    }
 }
