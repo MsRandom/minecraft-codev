@@ -9,12 +9,15 @@ import net.msrandom.minecraftcodev.accesswidener.dependency.AccessWidenedDepende
 import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.callWithStatus
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.unsafeResolveConfiguration
+import net.msrandom.minecraftcodev.core.SourcesGenerator
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.getSourceSetConfigurationName
 import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
 import net.msrandom.minecraftcodev.core.resolve.MayNeedSources
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.hash
+import net.msrandom.minecraftcodev.core.resolve.SourcesArtifactComponentMetadata
+import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.copy
 import org.gradle.api.Project
 import org.gradle.api.artifacts.component.ComponentIdentifier
@@ -34,10 +37,7 @@ import org.gradle.api.internal.attributes.ImmutableAttributes
 import org.gradle.api.internal.component.ArtifactType
 import org.gradle.api.model.ObjectFactory
 import org.gradle.internal.DisplayName
-import org.gradle.internal.component.external.model.DefaultModuleComponentIdentifier
-import org.gradle.internal.component.external.model.MetadataSourcedComponentArtifacts
-import org.gradle.internal.component.external.model.ModuleComponentArtifactMetadata
-import org.gradle.internal.component.external.model.ModuleComponentFileArtifactIdentifier
+import org.gradle.internal.component.external.model.*
 import org.gradle.internal.component.model.*
 import org.gradle.internal.hash.ChecksumService
 import org.gradle.internal.hash.HashCode
@@ -133,13 +133,14 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                             dependency
                         }
                     },
-                    { artifact ->
+                    { artifact, artifacts ->
                         if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
-/*                            if (sources) {
-                                SourcesArtifactComponentMetadata(artifactMetadata)
-                            } else {*/
+                            if (sources) {
+                                val library = artifacts.first { it.name.type == ArtifactTypeDefinition.JAR_TYPE }
+                                SourcesArtifactComponentMetadata(library as ModuleComponentArtifactMetadata, artifact.id as ModuleComponentArtifactIdentifier)
+                            } else {
                                 AccessWidenedComponentArtifactMetadata(artifact as ModuleComponentArtifactMetadata, identifier, namespace, project)
-//                             }
+                            }
                         } else {
                             artifact
                         }
@@ -149,6 +150,13 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                 )
             } else {
                 this
+            }
+        },
+        { artifact ->
+            if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
+                AccessWidenedComponentArtifactMetadata(artifact, identifier, null, project)
+            } else {
+                artifact
             }
         },
         objects
@@ -213,12 +221,20 @@ open class AccessWidenedComponentResolvers @Inject constructor(
     override fun resolveArtifactsWithType(component: ComponentResolveMetadata, artifactType: ArtifactType, result: BuildableArtifactSetResolveResult) {
         val id = component.id
         if (id is AccessWidenedComponentIdentifier) {
-            resolvers.get().artifactResolver.resolveArtifactsWithType(component, artifactType, result)
+            val defaultArtifact = CodevGradleLinkageLoader.getDefaultArtifact(component)
+            result.resolved(listOf(SourcesArtifactComponentMetadata(defaultArtifact, defaultArtifact.id)))
         }
     }
 
     override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactResolveResult) {
-        if (artifact is AccessWidenedComponentArtifactMetadata) {
+        if (artifact is SourcesArtifactComponentMetadata) {
+            resolveArtifact(artifact.libraryArtifact, moduleSources, result)
+
+            if (result.isSuccessful) {
+                val sources = SourcesGenerator.decompile(result.result.toPath(), emptyList(), buildOperationExecutor)
+                result.resolved(sources.toFile())
+            }
+        } else if (artifact is AccessWidenedComponentArtifactMetadata) {
             val id = artifact.componentId
             resolvers.get().artifactResolver.resolveArtifact(artifact.delegate, moduleSources, result)
 

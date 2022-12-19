@@ -137,12 +137,12 @@ open class RemappedComponentResolvers @Inject constructor(
                             dependency
                         }
                     },
-                    { artifact ->
+                    { artifact, artifacts ->
                         if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
                             val classpath = configuration.copy().apply {
                                 setExtendsFrom(emptySet())
                                 dependencies.clear()
-                                artifacts.clear()
+                                this.artifacts.clear()
 
                                 dependencies.addAll(transitiveDependencies.map { project.convertDescriptor(it) })
                             }
@@ -170,6 +170,13 @@ open class RemappedComponentResolvers @Inject constructor(
                 )
             } else {
                 this
+            }
+        },
+        { artifact ->
+            if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
+                RemappedComponentArtifactMetadata(artifact, identifier, null, project.configurations.detachedConfiguration(), project)
+            } else {
+                artifact
             }
         },
         objects

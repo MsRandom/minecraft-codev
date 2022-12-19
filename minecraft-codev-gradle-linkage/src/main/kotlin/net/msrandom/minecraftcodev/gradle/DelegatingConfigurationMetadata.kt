@@ -11,17 +11,17 @@ internal open class DelegatingConfigurationMetadata @Inject constructor(
     private val describable: (DisplayName) -> DisplayName,
     private val attributes: ImmutableAttributes,
     private val dependency: (DependencyMetadata) -> DependencyMetadata,
-    private val artifact: (ComponentArtifactMetadata) -> ComponentArtifactMetadata,
+    private val artifact: (ComponentArtifactMetadata, List<ComponentArtifactMetadata>) -> ComponentArtifactMetadata,
     private val extraArtifacts: List<ComponentArtifactMetadata>
 ) : ConfigurationMetadata by delegate {
     override fun asDescribable() = describable(delegate.asDescribable())
     override fun getAttributes() = attributes
     override fun getDependencies() = delegate.dependencies.map(dependency)
-    override fun getArtifacts(): ImmutableList<ComponentArtifactMetadata> = ImmutableList.copyOf(delegate.artifacts.map(artifact) + extraArtifacts)
+    override fun getArtifacts(): ImmutableList<ComponentArtifactMetadata> = ImmutableList.copyOf(delegate.artifacts.map { artifact(it, delegate.artifacts) } + extraArtifacts)
 
     override fun getVariants() = delegate.variants.mapTo(mutableSetOf()) {
         DefaultVariantMetadata(it.name, it.identifier, asDescribable(), attributes, artifacts, it.capabilities)
     }
 
-    override fun artifact(artifact: IvyArtifactName) = this.artifact(delegate.artifact(artifact))
+    override fun artifact(artifact: IvyArtifactName) = artifact(delegate.artifact(artifact), delegate.artifacts)
 }

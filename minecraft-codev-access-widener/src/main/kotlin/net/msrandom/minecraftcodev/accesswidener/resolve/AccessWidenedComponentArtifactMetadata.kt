@@ -1,6 +1,7 @@
 package net.msrandom.minecraftcodev.accesswidener.resolve
 
 import org.gradle.api.Project
+import org.gradle.internal.component.external.model.ModuleComponentArtifactIdentifier
 import org.gradle.internal.component.external.model.ModuleComponentArtifactMetadata
 
 class AccessWidenedComponentArtifactMetadata(
@@ -9,6 +10,10 @@ class AccessWidenedComponentArtifactMetadata(
     val namespace: String?,
     private val project: Project
 ) : ModuleComponentArtifactMetadata by delegate {
+    override fun getId() = object : ModuleComponentArtifactIdentifier by delegate.id {
+        override fun getComponentIdentifier() = id
+    }
+
     override fun getComponentId() = id
 
 /*    override fun getBuildDependencies(): TaskDependency = object : AbstractTaskDependency() {

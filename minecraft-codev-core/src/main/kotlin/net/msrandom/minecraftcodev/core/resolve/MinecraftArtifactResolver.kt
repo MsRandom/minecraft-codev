@@ -57,7 +57,6 @@ open class MinecraftArtifactResolver @Inject constructor(
     }
 
     override fun resolveArtifactsWithType(component: ComponentResolveMetadata, artifactType: ArtifactType, result: BuildableArtifactSetResolveResult) {
-        TODO("Not yet implemented")
     }
 
     override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactResolveResult) {

@@ -9,6 +9,7 @@ import org.gradle.api.internal.artifacts.DefaultModuleVersionIdentifier
 import org.gradle.api.internal.tasks.DefaultTaskDependency
 import org.gradle.api.tasks.TaskDependency
 import org.gradle.internal.component.external.model.DefaultModuleComponentArtifactIdentifier
+import org.gradle.internal.component.external.model.ModuleComponentArtifactIdentifier
 import org.gradle.internal.component.external.model.ModuleComponentArtifactMetadata
 import org.gradle.internal.component.model.DefaultIvyArtifactName
 
@@ -51,6 +52,10 @@ class RemappedComponentArtifactMetadata(
 ) : RemapperArtifact, ModuleComponentArtifactMetadata by delegate {
     override val mappingsConfiguration
         get() = id.mappingsConfiguration
+
+    override fun getId() = object : ModuleComponentArtifactIdentifier by delegate.id {
+        override fun getComponentIdentifier() = id
+    }
 
     override fun getComponentId() = id
 

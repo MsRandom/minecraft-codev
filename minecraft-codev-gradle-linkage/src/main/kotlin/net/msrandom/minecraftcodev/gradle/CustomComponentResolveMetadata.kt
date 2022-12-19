@@ -4,6 +4,7 @@ import org.gradle.api.artifacts.ModuleVersionIdentifier
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.internal.attributes.AttributesSchemaInternal
 import org.gradle.api.internal.attributes.ImmutableAttributes
+import org.gradle.internal.component.external.model.ModuleComponentArtifactMetadata
 import org.gradle.internal.component.external.model.VirtualComponentIdentifier
 import org.gradle.internal.component.model.ComponentResolveMetadata
 import org.gradle.internal.component.model.ConfigurationMetadata
@@ -21,9 +22,10 @@ internal open class CustomComponentResolveMetadata @Inject constructor(
     private val status: String,
     private val statusScheme: List<String>,
     private val sources: ModuleSources,
+    override val defaultArtifact: ModuleComponentArtifactMetadata,
 
-    private val attributesSchema: AttributesSchemaInternal,
-) : ComponentResolveMetadata {
+    private val attributesSchema: AttributesSchemaInternal
+) : ComponentResolveMetadata, DefaultArtifactProvider {
     override fun getAttributes() = attributes
     override fun getId() = id
     override fun getModuleVersionId() = moduleVersionId
@@ -38,6 +40,7 @@ internal open class CustomComponentResolveMetadata @Inject constructor(
         status,
         statusScheme,
         sources,
+        defaultArtifact,
         attributesSchema
     )
 

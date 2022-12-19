@@ -110,7 +110,8 @@ internal fun Project.setupForgeRemapperIntegration() {
 
                                                     if (methodMapping == null) {
                                                         return if (visitor.visitMethod(name, descriptor)) {
-                                                            visitor.visitDstName(MappedElementKind.METHOD, 0, name)
+                                                            visitor.visitDstName(MappedElementKind.METHOD, srgNamespace, name)
+                                                            visitor.visitDstName(MappedElementKind.METHOD, namedNamespace, name)
 
                                                             object : MethodVisitor(Opcodes.ASM9, super.visitMethod(access, name, descriptor, signature, exceptions)) {
                                                                 override fun visitLocalVariable(name: String?, descriptor: String, signature: String?, start: Label, end: Label, index: Int) {
@@ -131,6 +132,9 @@ internal fun Project.setupForgeRemapperIntegration() {
                                                         }
                                                     } else {
                                                         return if (visitor.visitMethod(methodMapping.getName(obfNamespace), methodMapping.getDesc(obfNamespace))) {
+                                                            visitor.visitDstName(MappedElementKind.METHOD, srgNamespace, name)
+                                                            visitor.visitDstName(MappedElementKind.METHOD, namedNamespace, name)
+
                                                             object : MethodVisitor(Opcodes.ASM9, super.visitMethod(access, name, descriptor, signature, exceptions)) {
                                                                 override fun visitLocalVariable(name: String?, descriptor: String, signature: String?, start: Label, end: Label, index: Int) {
                                                                     if (argumentStack.isEmpty() || name == null) {

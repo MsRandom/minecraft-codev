@@ -14,6 +14,8 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
 import org.gradle.api.attributes.Attribute
+import org.gradle.api.internal.artifacts.dsl.dependencies.DefaultDependencyHandler
+import org.gradle.api.internal.artifacts.query.ArtifactResolutionQueryFactory
 import org.gradle.api.internal.project.ProjectInternal
 import org.gradle.api.internal.project.taskfactory.ITaskFactory
 import org.gradle.api.internal.project.taskfactory.TaskIdentity
@@ -25,6 +27,7 @@ import org.gradle.internal.operations.BuildOperationContext
 import org.gradle.internal.os.OperatingSystem
 import org.gradle.internal.work.WorkerLeaseService
 import org.gradle.nativeplatform.OperatingSystemFamily
+import sun.misc.Unsafe
 import java.net.URI
 import java.nio.file.*
 import kotlin.streams.asSequence
@@ -38,6 +41,13 @@ open class MinecraftCodevPlugin<T : PluginAware> : Plugin<T> {
     )
 
     override fun apply(target: T) = applyPlugin(target, ::applyGradle) {
+        // Patching artifact resolution queries to allow sources/javadoc artifact types from custom resolvers
+        (Unsafe::class.java.getDeclaredField("theUnsafe").apply { isAccessible = true }[null] as Unsafe).apply {
+            putObject(dependencies, objectFieldOffset(DefaultDependencyHandler::class.java.getDeclaredField("resolutionQueryFactory")), ArtifactResolutionQueryFactory {
+                objects.newInstance(CodevArtifactResolutionQuery::class.java)
+            })
+        }
+
         extensions.create("minecraft", MinecraftCodevExtension::class.java)
 
         project.dependencies.attributesSchema { schema ->
@@ -90,10 +100,9 @@ open class MinecraftCodevPlugin<T : PluginAware> : Plugin<T> {
         }
 
         // FIXME This can cause deadlocks, should probably figure out a way around all of this.
-        @Deprecated("In favor of artifact task dependencies")
         fun Project.unsafeResolveConfiguration(configuration: Configuration, warn: Boolean = false): Configuration {
             if (warn) {
-                logger.warn("$configuration is being resolved unsafely, the build may freeze at this point. If it does, restart it\nThis will be fixed in future versions of minecraft-codev\n")
+                logger.debug("$configuration is being resolved unsafely, the build may freeze at this point. If it does, restart it\nThis will be fixed in future versions of minecraft-codev\n")
             }
 
             // Create new thread that can acquire a new binary store
