@@ -231,8 +231,61 @@ open class AccessWidenedComponentResolvers @Inject constructor(
             resolveArtifact(artifact.libraryArtifact, moduleSources, result)
 
             if (result.isSuccessful) {
-                val sources = SourcesGenerator.decompile(result.result.toPath(), emptyList(), buildOperationExecutor)
-                result.resolved(sources.toFile())
+                val id = artifact.id.componentIdentifier as AccessWidenedComponentIdentifier
+                val accessWideners = project.configurations.getByName(id.accessWidenersConfiguration)
+                val messageDigest = MessageDigest.getInstance("SHA1")
+
+                for (accessWidener in accessWideners) {
+                    val stream = DigestInputStream(accessWidener.inputStream().buffered(), messageDigest)
+
+                    while (true) {
+                        if (stream.read() < 0) {
+                            break
+                        }
+                    }
+                }
+
+                val hash = HashCode.fromBytes(messageDigest.digest())
+
+                val urlId = AccessWidenedArtifactIdentifier(
+                    ModuleComponentFileArtifactIdentifier(DefaultModuleComponentIdentifier.newId(id.moduleIdentifier, id.version), artifact.name.toString()),
+                    hash,
+                    checksumService.sha1(result.result)
+                )
+
+                locks.computeIfAbsent(urlId) { ReentrantLock() }.withLock {
+                    val cached = artifactCache[urlId]
+
+                    if (cached == null || cachePolicy.artifactExpiry(
+                            artifact.toArtifactIdentifier(),
+                            if (cached.isMissing) null else cached.cachedFile,
+                            Duration.ofMillis(timeProvider.currentTime - cached.cachedAt),
+                            false,
+                            artifact.hash() == cached.descriptorHash
+                        ).isMustCheck || cached.cachedFile?.exists() != true
+                    ) {
+                        val sources = SourcesGenerator.decompile(result.result.toPath(), emptyList(), buildOperationExecutor)
+
+                        val output = cacheManager.fileStoreDirectory
+                            .resolve(hash.toString())
+                            .resolve(id.group)
+                            .resolve(id.module)
+                            .resolve(id.version)
+                            .resolve(checksumService.sha1(sources.toFile()).toString())
+                            .resolve("${result.result.nameWithoutExtension}-access-widened-sources.${result.result.extension}")
+
+                        output.parent.createDirectories()
+                        sources.copyTo(output)
+
+                        val outputFile = output.toFile()
+
+                        result.resolved(outputFile)
+
+                        artifactCache[urlId] = DefaultCachedArtifact(outputFile, Instant.now().toEpochMilli(), artifact.hash())
+                    } else if (!cached.isMissing) {
+                        result.resolved(cached.cachedFile)
+                    }
+                }
             }
         } else if (artifact is AccessWidenedComponentArtifactMetadata) {
             val id = artifact.componentId
@@ -258,7 +311,7 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                 val hash = HashCode.fromBytes(messageDigest.digest())
 
                 val urlId = AccessWidenedArtifactIdentifier(
-                    ModuleComponentFileArtifactIdentifier(DefaultModuleComponentIdentifier.newId(id.moduleIdentifier, id.version), result.result.name),
+                    ModuleComponentFileArtifactIdentifier(DefaultModuleComponentIdentifier.newId(id.moduleIdentifier, id.version), artifact.name.toString()),
                     hash,
                     checksumService.sha1(result.result)
                 )

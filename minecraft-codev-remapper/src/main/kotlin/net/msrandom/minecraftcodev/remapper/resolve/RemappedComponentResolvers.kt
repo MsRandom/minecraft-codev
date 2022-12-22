@@ -251,9 +251,6 @@ open class RemappedComponentResolvers @Inject constructor(
     }
 
     override fun resolveArtifactsWithType(component: ComponentResolveMetadata, artifactType: ArtifactType, result: BuildableArtifactSetResolveResult) {
-        if (component.id is RemappedComponentIdentifier) {
-            resolvers.get().artifactResolver.resolveArtifactsWithType(component, artifactType, result)
-        }
     }
 
     override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactResolveResult) {
