@@ -182,6 +182,24 @@ open class GenerateIdeaRuns : GenerateRuns() {
                                 }
                             )
                         }
+
+
+                        if (run.beforeRunConfigs.get().isNotEmpty()) {
+                            for (config in run.beforeRunConfigs.get()) {
+                                val dependency = runs.firstOrNull { it.first == config.name }
+
+                                if (dependency != null) {
+                                    appendChild(
+                                        document.createElement(OPTION).apply {
+                                            setAttribute(NAME, "RunConfigurationTask")
+                                            setAttribute(ENABLED, true.toString())
+                                            setAttribute("run_configuration_name", configName(dependency.first, dependency.second))
+                                            setAttribute("run_configuration_type", "Application")
+                                        }
+                                    )
+                                }
+                            }
+                        }
                     }
                 )
 

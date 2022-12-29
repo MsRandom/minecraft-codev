@@ -73,6 +73,10 @@ abstract class MinecraftRunConfigurationBuilder @Inject constructor(private val 
         action { beforeRunTasks.addAll(taskNames.toList()) }
     }
 
+    fun dependsOn(vararg runConfigurations: MinecraftRunConfigurationBuilder) = apply {
+        action { beforeRunConfigs.addAll(runConfigurations.toList()) }
+    }
+
     fun args(vararg args: Any?) = arguments(*args)
 
     fun arguments(vararg args: Any?) = apply {

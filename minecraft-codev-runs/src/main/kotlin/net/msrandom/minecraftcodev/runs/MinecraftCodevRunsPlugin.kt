@@ -29,6 +29,8 @@ class MinecraftCodevRunsPlugin<T : PluginAware> @Inject constructor(cacheDir: Gl
     val logging: Path = cache.resolve("logging")
 
     override fun apply(target: T) = applyPlugin(target) {
+        // plugins.apply(IdeaExtPlugin::class.java)
+
         val capitalizedNatives = StringUtils.capitalize(NATIVES_CONFIGURATION)
 
         createSourceSetElements { name, isSourceSet ->
@@ -56,8 +58,11 @@ class MinecraftCodevRunsPlugin<T : PluginAware> @Inject constructor(cacheDir: Gl
 
         tasks.register("generateIdeaRuns", GenerateIdeaRuns::class.java)
 
+        // val ideaRunConfigurations = extensions.getByType(RunConfigurationContainer::class.java)
+
         runs.all { builder ->
-            tasks.register("${ApplicationPlugin.TASK_RUN_NAME}${StringUtils.capitalize(builder.name)}", JavaExec::class.java) { javaExec ->
+            val name = "${ApplicationPlugin.TASK_RUN_NAME}${StringUtils.capitalize(builder.name)}"
+            tasks.register(name, JavaExec::class.java) { javaExec ->
                 val configuration = builder.build(project)
 
                 javaExec.doFirst { task ->
@@ -73,6 +78,21 @@ class MinecraftCodevRunsPlugin<T : PluginAware> @Inject constructor(cacheDir: Gl
 
                 javaExec.dependsOn(*configuration.beforeRunTasks.get().toTypedArray())
             }
+
+/*            ideaRunConfigurations.register(name, Application::class.java) { application ->
+                val configuration = builder.build(project)
+
+                application.envs.putAll(configuration.environment.get().mapValues { it.value.parts.joinToString("") })
+                application.programParameters = configuration.arguments.map { arguments -> arguments.map { it.parts.joinToString("") } }.get().joinToString(" ")
+                application.jvmArgs = configuration.jvmArguments.map { arguments -> arguments.map { it.parts.joinToString("") } }.get().joinToString(" ")
+                application.workingDirectory = configuration.workingDirectory.asFile.get().absolutePath
+                application.mainClass = configuration.mainClass.get()
+                application.moduleName = configuration.sourceSet.map(SourceSet::getName).orElse(configuration.kotlinSourceSet.map(KotlinSourceSet::getName)).get()
+
+                for (task in configuration.beforeRunTasks.get()) {
+                    application.beforeRun.create(task, GradleTask::class.java).task = tasks.getByName(task)
+                }
+            }*/
         }
     }
 

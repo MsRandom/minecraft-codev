@@ -23,6 +23,7 @@ abstract class MinecraftRunConfiguration @Inject constructor(val project: Projec
 
     // TODO Use tasks directly here?
     val beforeRunTasks: ListProperty<String> = project.objects.listProperty(String::class.java)
+    val beforeRunConfigs: ListProperty<MinecraftRunConfigurationBuilder> = project.objects.listProperty(MinecraftRunConfigurationBuilder::class.java)
     val arguments: SetProperty<Argument> = project.objects.setProperty(Argument::class.java)
     val jvmArguments: SetProperty<Argument> = project.objects.setProperty(Argument::class.java)
     val environment: MapProperty<String, Argument> = project.objects.mapProperty(String::class.java, Argument::class.java)

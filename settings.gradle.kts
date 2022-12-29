@@ -8,6 +8,7 @@ dependencyResolutionManagement {
 
     repositories {
         mavenCentral()
+        gradlePluginPortal()
         maven(url = "https://maven.msrandom.net/repository/root/")
         maven(url = "https://maven.fabricmc.net/")
         maven(url = "https://maven.quiltmc.org/repository/release/") // Used for decompilation
