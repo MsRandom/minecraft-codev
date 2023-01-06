@@ -183,7 +183,6 @@ open class GenerateIdeaRuns : GenerateRuns() {
                             )
                         }
 
-
                         if (run.beforeRunConfigs.get().isNotEmpty()) {
                             for (config in run.beforeRunConfigs.get()) {
                                 val dependency = runs.firstOrNull { it.first == config.name }

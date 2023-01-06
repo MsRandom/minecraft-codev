@@ -77,7 +77,7 @@ open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory) {
         val tree = MemoryMappingTree()
         val md = MessageDigest.getInstance("SHA1")
 
-        for (dependency in it.dependencies) {
+        for (dependency in it.allDependencies) {
             for (file in it.files(dependency)) {
                 for (rule in mappingsResolution.get()) {
                     if (rule(file.toPath(), file.extension, tree, files, { DigestInputStream(this, md) }, tree, objects)) {
