@@ -11,6 +11,7 @@ import org.gradle.api.tasks.TaskDependency
 import org.gradle.internal.component.external.model.DefaultModuleComponentArtifactIdentifier
 import org.gradle.internal.component.external.model.ModuleComponentArtifactIdentifier
 import org.gradle.internal.component.external.model.ModuleComponentArtifactMetadata
+import org.gradle.internal.component.external.model.ModuleComponentFileArtifactIdentifier
 import org.gradle.internal.component.model.DefaultIvyArtifactName
 
 sealed interface RemapperArtifact {
@@ -53,8 +54,12 @@ class RemappedComponentArtifactMetadata(
     override val mappingsConfiguration
         get() = id.mappingsConfiguration
 
-    override fun getId() = object : ModuleComponentArtifactIdentifier by delegate.id {
-        override fun getComponentIdentifier() = id
+    override fun getId(): ModuleComponentArtifactIdentifier = delegate.id.let {
+        if (it is DefaultModuleComponentArtifactIdentifier) {
+            DefaultModuleComponentArtifactIdentifier(id, it.name)
+        } else {
+            ModuleComponentFileArtifactIdentifier(id, delegate.id.fileName)
+        }
     }
 
     override fun getComponentId() = id

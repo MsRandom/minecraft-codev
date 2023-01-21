@@ -35,7 +35,6 @@ import org.gradle.api.attributes.LibraryElements
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ComponentResolvers
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionSelector
-import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionSelectorScheme
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.artifacts.DefaultCachedArtifact
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.excludes.specs.ExcludeSpec
 import org.gradle.api.internal.artifacts.type.ArtifactTypeRegistry
@@ -61,8 +60,6 @@ import org.gradle.util.internal.BuildCommencedTimeProvider
 import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.locks.Lock
 import java.util.concurrent.locks.ReentrantLock
 import javax.inject.Inject
 import kotlin.concurrent.withLock
@@ -80,7 +77,6 @@ open class RemappedComponentResolvers @Inject constructor(
     private val buildOperationExecutor: BuildOperationExecutor,
     private val attributesFactory: ImmutableAttributesFactory,
     private val instantiator: NamedObjectInstantiator,
-    private val versionSelectorSchema: VersionSelectorScheme,
 
     cacheProvider: CodevCacheProvider
 ) : ComponentResolvers, DependencyToComponentIdResolver, ComponentMetaDataResolver, OriginArtifactSelector, ArtifactResolver {
@@ -274,61 +270,63 @@ open class RemappedComponentResolvers @Inject constructor(
 
                     if (result.isSuccessful) {
                         val urlId = RemappedArtifactIdentifier(
-                            ModuleComponentFileArtifactIdentifier(DefaultModuleComponentIdentifier.newId(id.moduleIdentifier, id.version), result.result.name),
+                            artifact.id,
                             id.targetNamespace.name,
                             mappings.hash,
                             checksumService.sha1(result.result)
                         )
 
-                        locks.computeIfAbsent(urlId) { ReentrantLock() }.withLock {
-                            val cached = artifactCache[urlId]
+                        val cached = artifactCache[urlId]
 
-                            if (cached == null || cachePolicy.artifactExpiry(
-                                    artifact.delegate.toArtifactIdentifier(),
-                                    if (cached.isMissing) null else cached.cachedFile,
-                                    Duration.ofMillis(timeProvider.currentTime - cached.cachedAt),
-                                    false,
-                                    artifact.hash() == cached.descriptorHash
-                                ).isMustCheck || cached.cachedFile?.exists() != true
-                            ) {
-                                val file = buildOperationExecutor.call(object : CallableBuildOperation<Path> {
-                                    override fun description() = BuildOperationDescriptor
-                                        .displayName("Remapping ${result.result} from $sourceNamespace to ${id.targetNamespace}")
-                                        .progressDisplayName("Mappings: ${mappingFiles.joinToString()}")
-                                        .metadata(BuildOperationCategory.TASK)
-
-                                    override fun call(context: BuildOperationContext) = context.callWithStatus {
-                                        JarRemapper.remap(
-                                            remapper,
-                                            mappings.tree,
-                                            sourceNamespace,
-                                            id.targetNamespace.name,
-                                            result.result.toPath(),
-                                            project.unsafeResolveConfiguration(artifact.classpath, true)
-                                        )
-                                    }
-                                })
-
-                                val output = cacheManager.fileStoreDirectory
-                                    .resolve(mappings.hash.toString())
-                                    .resolve(id.group)
-                                    .resolve(id.module)
-                                    .resolve(id.version)
-                                    .resolve(checksumService.sha1(file.toFile()).toString())
-                                    .resolve("${result.result.nameWithoutExtension}-${id.targetNamespace.name}.${result.result.extension}")
-
-                                output.parent.createDirectories()
-                                file.copyTo(output)
-
-                                val outputFile = output.toFile()
-
-                                result.resolved(outputFile)
-
-                                artifactCache[urlId] = DefaultCachedArtifact(outputFile, Instant.now().toEpochMilli(), artifact.hash())
-                            } else if (!cached.isMissing) {
+                        if (cached != null && !cachePolicy.artifactExpiry(
+                                artifact.delegate.toArtifactIdentifier(),
+                                if (cached.isMissing) null else cached.cachedFile,
+                                Duration.ofMillis(timeProvider.currentTime - cached.cachedAt),
+                                false,
+                                artifact.hash() == cached.descriptorHash
+                            ).isMustCheck && cached.cachedFile?.exists() == true
+                        ) {
+                            if (!cached.isMissing) {
                                 result.resolved(cached.cachedFile)
                             }
+
+                            return
                         }
+
+                        val file = buildOperationExecutor.call(object : CallableBuildOperation<Path> {
+                            override fun description() = BuildOperationDescriptor
+                                .displayName("Remapping ${result.result} from $sourceNamespace to ${id.targetNamespace}")
+                                .progressDisplayName("Mappings: ${mappingFiles.joinToString()}")
+                                .metadata(BuildOperationCategory.TASK)
+
+                            override fun call(context: BuildOperationContext) = context.callWithStatus {
+                                JarRemapper.remap(
+                                    remapper,
+                                    mappings.tree,
+                                    sourceNamespace,
+                                    id.targetNamespace.name,
+                                    result.result.toPath(),
+                                    project.unsafeResolveConfiguration(artifact.classpath, true)
+                                )
+                            }
+                        })
+
+                        val output = cacheManager.fileStoreDirectory
+                            .resolve(mappings.hash.toString())
+                            .resolve(id.group)
+                            .resolve(id.module)
+                            .resolve(id.version)
+                            .resolve(checksumService.sha1(file.toFile()).toString())
+                            .resolve("${result.result.nameWithoutExtension}-${id.targetNamespace.name}.${result.result.extension}")
+
+                        output.parent.createDirectories()
+                        file.copyTo(output)
+
+                        val outputFile = output.toFile()
+
+                        result.resolved(outputFile)
+
+                        artifactCache[urlId] = DefaultCachedArtifact(outputFile, Instant.now().toEpochMilli(), artifact.hash())
                     }
                 }
 
@@ -372,8 +370,6 @@ open class RemappedComponentResolvers @Inject constructor(
     }
 
     companion object {
-        private val locks = ConcurrentHashMap<RemappedArtifactIdentifier, Lock>()
-
         private val reentrantLock = ReentrantLock()
     }
 }

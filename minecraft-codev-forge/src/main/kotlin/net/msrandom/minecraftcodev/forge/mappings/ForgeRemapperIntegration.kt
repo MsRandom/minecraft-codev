@@ -270,12 +270,12 @@ internal fun Project.setupForgeRemapperIntegration() {
                 val mappingSet = MappingSet.create()
 
                 for (treeClass in mappings.classes) {
-                    val className = treeClass.getName(sourceNamespaceId)
+                    val className = treeClass.getName(sourceNamespaceId) ?: continue
                     val mapping = mappingSet.getOrCreateClassMapping(className)
                         .setDeobfuscatedName(treeClass.getName(targetNamespaceId))
 
                     for (field in treeClass.fields) {
-                        val name = field.getName(sourceNamespaceId)
+                        val name = field.getName(sourceNamespaceId) ?: continue
                         val descriptor = field.getDesc(sourceNamespaceId)
 
                         val fieldMapping = if (descriptor == null) {
@@ -288,7 +288,7 @@ internal fun Project.setupForgeRemapperIntegration() {
                     }
 
                     for (method in treeClass.methods) {
-                        val name = method.getName(sourceNamespaceId)
+                        val name = method.getName(sourceNamespaceId) ?: continue
                         val methodMapping = mapping.getOrCreateMethodMapping(name, method.getDesc(sourceNamespaceId))
                             .setDeobfuscatedName(method.getName(targetNamespaceId))
 

@@ -63,6 +63,7 @@ val Gradle.resolverFactories: List<ResolverProviderFactory>
         return resolvers
     }
 
+
 @Suppress("UNCHECKED_CAST")
 private fun Gradle.addResolvers(resolverProviderFactories: MutableList<ResolverProviderFactory>, componentResolvers: Class<out ComponentResolvers>) {
     val gradle = gradle as GradleInternal

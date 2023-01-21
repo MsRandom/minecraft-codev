@@ -54,8 +54,6 @@ import java.security.DigestInputStream
 import java.security.MessageDigest
 import java.time.Duration
 import java.time.Instant
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.locks.Lock
 import java.util.concurrent.locks.ReentrantLock
 import javax.inject.Inject
 import kotlin.concurrent.withLock
@@ -248,44 +246,46 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                 val hash = HashCode.fromBytes(messageDigest.digest())
 
                 val urlId = AccessWidenedArtifactIdentifier(
-                    ModuleComponentFileArtifactIdentifier(DefaultModuleComponentIdentifier.newId(id.moduleIdentifier, id.version), artifact.name.toString()),
+                    artifact.id,
                     hash,
                     checksumService.sha1(result.result)
                 )
 
-                locks.computeIfAbsent(urlId) { ReentrantLock() }.withLock {
-                    val cached = artifactCache[urlId]
+                val cached = artifactCache[urlId]
 
-                    if (cached == null || cachePolicy.artifactExpiry(
-                            artifact.toArtifactIdentifier(),
-                            if (cached.isMissing) null else cached.cachedFile,
-                            Duration.ofMillis(timeProvider.currentTime - cached.cachedAt),
-                            false,
-                            artifact.hash() == cached.descriptorHash
-                        ).isMustCheck || cached.cachedFile?.exists() != true
-                    ) {
-                        val sources = SourcesGenerator.decompile(result.result.toPath(), emptyList(), buildOperationExecutor)
-
-                        val output = cacheManager.fileStoreDirectory
-                            .resolve(hash.toString())
-                            .resolve(id.group)
-                            .resolve(id.module)
-                            .resolve(id.version)
-                            .resolve(checksumService.sha1(sources.toFile()).toString())
-                            .resolve("${result.result.nameWithoutExtension}-access-widened-sources.${result.result.extension}")
-
-                        output.parent.createDirectories()
-                        sources.copyTo(output)
-
-                        val outputFile = output.toFile()
-
-                        result.resolved(outputFile)
-
-                        artifactCache[urlId] = DefaultCachedArtifact(outputFile, Instant.now().toEpochMilli(), artifact.hash())
-                    } else if (!cached.isMissing) {
+                if (cached != null && !cachePolicy.artifactExpiry(
+                        artifact.toArtifactIdentifier(),
+                        if (cached.isMissing) null else cached.cachedFile,
+                        Duration.ofMillis(timeProvider.currentTime - cached.cachedAt),
+                        false,
+                        artifact.hash() == cached.descriptorHash
+                    ).isMustCheck && cached.cachedFile?.exists() == true
+                ) {
+                    if (!cached.isMissing) {
                         result.resolved(cached.cachedFile)
                     }
+
+                    return
                 }
+
+                val sources = SourcesGenerator.decompile(result.result.toPath(), emptyList(), buildOperationExecutor)
+
+                val output = cacheManager.fileStoreDirectory
+                    .resolve(hash.toString())
+                    .resolve(id.group)
+                    .resolve(id.module)
+                    .resolve(id.version)
+                    .resolve(checksumService.sha1(sources.toFile()).toString())
+                    .resolve("${result.result.nameWithoutExtension}-access-widened-sources.${result.result.extension}")
+
+                output.parent.createDirectories()
+                sources.copyTo(output)
+
+                val outputFile = output.toFile()
+
+                result.resolved(outputFile)
+
+                artifactCache[urlId] = DefaultCachedArtifact(outputFile, Instant.now().toEpochMilli(), artifact.hash())
             }
         } else if (artifact is AccessWidenedComponentArtifactMetadata) {
             val id = artifact.componentId
@@ -311,53 +311,55 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                 val hash = HashCode.fromBytes(messageDigest.digest())
 
                 val urlId = AccessWidenedArtifactIdentifier(
-                    ModuleComponentFileArtifactIdentifier(DefaultModuleComponentIdentifier.newId(id.moduleIdentifier, id.version), artifact.name.toString()),
+                    artifact.id,
                     hash,
                     checksumService.sha1(result.result)
                 )
 
-                locks.computeIfAbsent(urlId) { ReentrantLock() }.withLock {
-                    val cached = artifactCache[urlId]
+                val cached = artifactCache[urlId]
 
-                    if (cached == null || cachePolicy.artifactExpiry(
-                            artifact.delegate.toArtifactIdentifier(),
-                            if (cached.isMissing) null else cached.cachedFile,
-                            Duration.ofMillis(timeProvider.currentTime - cached.cachedAt),
-                            false,
-                            artifact.hash() == cached.descriptorHash
-                        ).isMustCheck || cached.cachedFile?.exists() != true
-                    ) {
-                        val file = buildOperationExecutor.call(object : CallableBuildOperation<Path> {
-                            override fun description() = BuildOperationDescriptor
-                                .displayName("Access Widening ${result.result}")
-                                .progressDisplayName("Access Wideners: ${accessWideners.joinToString()}")
-                                .metadata(BuildOperationCategory.TASK)
-
-                            override fun call(context: BuildOperationContext) = context.callWithStatus {
-                                JarAccessWidener.accessWiden(accessWidener, result.result.toPath())
-                            }
-                        })
-
-                        val output = cacheManager.fileStoreDirectory
-                            .resolve(hash.toString())
-                            .resolve(id.group)
-                            .resolve(id.module)
-                            .resolve(id.version)
-                            .resolve(checksumService.sha1(file.toFile()).toString())
-                            .resolve("${result.result.nameWithoutExtension}-access-widened.${result.result.extension}")
-
-                        output.parent.createDirectories()
-                        file.copyTo(output)
-
-                        val outputFile = output.toFile()
-
-                        result.resolved(outputFile)
-
-                        artifactCache[urlId] = DefaultCachedArtifact(outputFile, Instant.now().toEpochMilli(), artifact.hash())
-                    } else if (!cached.isMissing) {
+                if (cached != null && !cachePolicy.artifactExpiry(
+                        artifact.delegate.toArtifactIdentifier(),
+                        if (cached.isMissing) null else cached.cachedFile,
+                        Duration.ofMillis(timeProvider.currentTime - cached.cachedAt),
+                        false,
+                        artifact.hash() == cached.descriptorHash
+                    ).isMustCheck && cached.cachedFile?.exists() == true
+                ) {
+                    if (!cached.isMissing) {
                         result.resolved(cached.cachedFile)
                     }
+
+                    return
                 }
+
+                val file = buildOperationExecutor.call(object : CallableBuildOperation<Path> {
+                    override fun description() = BuildOperationDescriptor
+                        .displayName("Access Widening ${result.result}")
+                        .progressDisplayName("Access Wideners: ${accessWideners.joinToString()}")
+                        .metadata(BuildOperationCategory.TASK)
+
+                    override fun call(context: BuildOperationContext) = context.callWithStatus {
+                        JarAccessWidener.accessWiden(accessWidener, result.result.toPath())
+                    }
+                })
+
+                val output = cacheManager.fileStoreDirectory
+                    .resolve(hash.toString())
+                    .resolve(id.group)
+                    .resolve(id.module)
+                    .resolve(id.version)
+                    .resolve(checksumService.sha1(file.toFile()).toString())
+                    .resolve("${result.result.nameWithoutExtension}-access-widened.${result.result.extension}")
+
+                output.parent.createDirectories()
+                file.copyTo(output)
+
+                val outputFile = output.toFile()
+
+                result.resolved(outputFile)
+
+                artifactCache[urlId] = DefaultCachedArtifact(outputFile, Instant.now().toEpochMilli(), artifact.hash())
             }
         } else {
             if (!reentrantLock.isLocked) {
@@ -369,8 +371,6 @@ open class AccessWidenedComponentResolvers @Inject constructor(
     }
 
     companion object {
-        private val locks = ConcurrentHashMap<AccessWidenedArtifactIdentifier, Lock>()
-
         private val reentrantLock = ReentrantLock()
     }
 }

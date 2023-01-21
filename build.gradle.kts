@@ -10,7 +10,7 @@ subprojects {
     apply(plugin = "java")
 
     java {
-        toolchain.languageVersion.set(JavaLanguageVersion.of(8))
+        toolchain.languageVersion.set(JavaLanguageVersion.of(11))
         withSourcesJar()
         withJavadocJar()
     }
@@ -61,6 +61,8 @@ childProjects.values.forEach { project ->
         }
 
         tasks.test {
+            maxHeapSize = "3G"
+
             useJUnitPlatform()
 
             testLogging {

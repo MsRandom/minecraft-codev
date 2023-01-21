@@ -1,6 +1,5 @@
-package org.gradle.kotlin.dsl
+package net.msrandom.minecraftcodev.core.dependency
 
-import net.msrandom.minecraftcodev.core.MinecraftType
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepository
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
@@ -38,6 +37,3 @@ fun DependencyConstraintHandler.minecraft(name: Any) =
 
 fun DependencyConstraintHandler.minecraft(notation: Map<String, Any>) =
     minecraft(notation.getValue("name"), notation["version"]?.toString())
-
-@Suppress("unused")
-typealias MinecraftType = MinecraftType

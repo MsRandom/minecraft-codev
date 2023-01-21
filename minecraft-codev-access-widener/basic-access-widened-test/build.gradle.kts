@@ -1,3 +1,7 @@
+import net.msrandom.minecraftcodev.accesswidener.dependency.accessWidened
+import net.msrandom.minecraftcodev.core.MinecraftType
+import net.msrandom.minecraftcodev.core.dependency.minecraft
+
 plugins {
     java
     id("minecraft-codev-access-widener")

@@ -33,7 +33,8 @@ import org.gradle.api.internal.attributes.ImmutableAttributes
 import org.gradle.api.internal.component.ArtifactType
 import org.gradle.api.model.ObjectFactory
 import org.gradle.cache.scopes.GlobalScopedCache
-import org.gradle.internal.component.external.model.*
+import org.gradle.internal.component.external.model.MetadataSourcedComponentArtifacts
+import org.gradle.internal.component.external.model.ModuleComponentArtifactMetadata
 import org.gradle.internal.component.model.*
 import org.gradle.internal.hash.ChecksumService
 import org.gradle.internal.hash.HashCode
@@ -188,16 +189,9 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
             val moduleComponentIdentifier = artifact.componentId as PatchedComponentIdentifier
             val patches = project.configurations.getByName(moduleComponentIdentifier.patches)
 
-            val id = artifact.id as ModuleComponentArtifactIdentifier
-
             val patchesHash = hash(patches, checksumService)
 
-            val urlId = PatchedArtifactIdentifier(
-                ModuleComponentFileArtifactIdentifier(
-                    DefaultModuleComponentIdentifier.newId(moduleComponentIdentifier.moduleIdentifier, moduleComponentIdentifier.version),
-                    id.fileName
-                ), patchesHash
-            )
+            val urlId = PatchedArtifactIdentifier(artifact.id, patchesHash)
 
             val cached = artifactCache[urlId]
 

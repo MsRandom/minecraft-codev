@@ -26,9 +26,11 @@ object CodevGradleLinkageLoader {
 
     private val getDelegateHandle = MethodHandles.publicLookup().findVirtual(delegatingComponentResolveMetadata, "getDelegate", MethodType.methodType(ComponentResolveMetadata::class.java))
     private val getDefaultArtifactHandle = MethodHandles.publicLookup().findVirtual(defaultArtifactProvider, "getDefaultArtifact", MethodType.methodType(ModuleComponentArtifactMetadata::class.java))
+    private val getArtifactsHandle = ConfigurationMetadata::class.java.getMethod("getArtifacts").let { MethodHandles.lookup().unreflect(it) }
 
     val ConfigurationMetadata.allArtifacts: List<ComponentArtifactMetadata>
-        get() = artifacts
+        @Suppress("UNCHECKED_CAST")
+        get() = getArtifactsHandle(this) as List<ComponentArtifactMetadata>
 
     @Suppress("UNCHECKED_CAST")
     private fun <T> loadClass(name: String): Class<out T> =

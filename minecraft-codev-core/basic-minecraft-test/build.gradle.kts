@@ -1,3 +1,6 @@
+import net.msrandom.minecraftcodev.core.dependency.minecraft
+import net.msrandom.minecraftcodev.core.MinecraftType
+
 plugins {
     java
     id("minecraft-codev")

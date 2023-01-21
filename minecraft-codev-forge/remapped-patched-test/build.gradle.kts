@@ -1,3 +1,7 @@
+import net.msrandom.minecraftcodev.core.dependency.minecraft
+import net.msrandom.minecraftcodev.core.MinecraftType
+import net.msrandom.minecraftcodev.remapper.dependency.remapped
+
 plugins {
     java
     id("minecraft-codev-forge")

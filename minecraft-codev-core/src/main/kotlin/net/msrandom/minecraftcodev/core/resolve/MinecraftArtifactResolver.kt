@@ -6,13 +6,15 @@ import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.asMinecraftDownload
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.hash
+import org.gradle.api.artifacts.component.ComponentArtifactIdentifier
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.FileStoreAndIndexProvider
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.artifacts.DefaultCachedArtifact
+import org.gradle.api.internal.artifacts.metadata.ComponentArtifactIdentifierSerializer
 import org.gradle.api.internal.artifacts.metadata.ModuleComponentFileArtifactIdentifierSerializer
 import org.gradle.api.internal.component.ArtifactType
 import org.gradle.cache.scopes.GlobalScopedCache
-import org.gradle.internal.component.external.model.DefaultModuleComponentIdentifier
+import org.gradle.internal.component.external.model.DefaultModuleComponentArtifactIdentifier
 import org.gradle.internal.component.external.model.ModuleComponentArtifactIdentifier
 import org.gradle.internal.component.external.model.ModuleComponentArtifactMetadata
 import org.gradle.internal.component.external.model.ModuleComponentFileArtifactIdentifier
@@ -27,6 +29,8 @@ import org.gradle.internal.resolve.result.BuildableArtifactResolveResult
 import org.gradle.internal.resolve.result.BuildableArtifactSetResolveResult
 import org.gradle.internal.resource.ExternalResourceName
 import org.gradle.internal.resource.local.LazyLocallyAvailableResourceCandidates
+import org.gradle.internal.serialize.DefaultSerializerRegistry
+import org.gradle.internal.serialize.Serializer
 import org.gradle.util.internal.BuildCommencedTimeProvider
 import java.io.File
 import java.nio.file.Path
@@ -51,7 +55,7 @@ open class MinecraftArtifactResolver @Inject constructor(
 
     private val artifactCache by lazy {
         // TODO make this more space efficient by removing the group
-        cacheManager.getMetadataCache(Path("module-artifact"), { ModuleComponentFileArtifactIdentifierSerializer() }) {
+        cacheManager.getMetadataCache(Path("module-artifact"), ::artifactIdSerializer) {
             CachedArtifactSerializer(cacheManager.fileStoreDirectory)
         }.asFile
     }
@@ -66,9 +70,7 @@ open class MinecraftArtifactResolver @Inject constructor(
             if (artifact is LocalComponentArtifactMetadata) {
                 result.resolved(artifact.file)
             } else {
-                val id = artifact.id as ModuleComponentArtifactIdentifier
-                val urlId = ModuleComponentFileArtifactIdentifier(DefaultModuleComponentIdentifier.newId(componentIdentifier.moduleIdentifier, componentIdentifier.version), id.fileName)
-                val cached = artifactCache[urlId]
+                val cached = artifactCache[artifact.id]
 
                 if (cached == null || cachePolicy.artifactExpiry(
                         (artifact as ModuleComponentArtifactMetadata).toArtifactIdentifier(),
@@ -89,8 +91,6 @@ open class MinecraftArtifactResolver @Inject constructor(
                     }
 
                     for (repository in repositories) {
-                        val sources = artifact.name.classifier == "sources"
-
                         when (componentIdentifier.module) {
                             MinecraftComponentResolvers.COMMON_MODULE -> {
                                 val manifest = getManifest(componentIdentifier, repository)
@@ -104,7 +104,7 @@ open class MinecraftArtifactResolver @Inject constructor(
 
                                         result.resolved(splitCommonJar.toFile())
 
-                                        artifactCache[urlId] = DefaultCachedArtifact(splitCommonJar.toFile(), Instant.now().toEpochMilli(), artifact.hash())
+                                        artifactCache[artifact.id] = DefaultCachedArtifact(splitCommonJar.toFile(), Instant.now().toEpochMilli(), artifact.hash())
                                         return
                                     }
                                 }
@@ -127,7 +127,7 @@ open class MinecraftArtifactResolver @Inject constructor(
                                         client?.let {
                                             result.resolved(it)
 
-                                            artifactCache[urlId] = DefaultCachedArtifact(it, Instant.now().toEpochMilli(), artifact.hash())
+                                            artifactCache[artifact.id] = DefaultCachedArtifact(it, Instant.now().toEpochMilli(), artifact.hash())
                                             return
                                         }
                                     }
@@ -158,7 +158,7 @@ open class MinecraftArtifactResolver @Inject constructor(
                                             if (resource != null) {
                                                 result.resolved(resource.file)
 
-                                                artifactCache[urlId] = DefaultCachedArtifact(resource.file, Instant.now().toEpochMilli(), artifact.hash())
+                                                artifactCache[artifact.id] = DefaultCachedArtifact(resource.file, Instant.now().toEpochMilli(), artifact.hash())
                                                 return
                                             }
                                         }
@@ -196,6 +196,13 @@ open class MinecraftArtifactResolver @Inject constructor(
         .resolve(artifact.fileName)
 
     companion object {
+        val artifactIdSerializer: Serializer<ComponentArtifactIdentifier> = DefaultSerializerRegistry().run {
+            register(DefaultModuleComponentArtifactIdentifier::class.java, ComponentArtifactIdentifierSerializer())
+            register(ModuleComponentFileArtifactIdentifier::class.java, ModuleComponentFileArtifactIdentifierSerializer())
+
+            build(ComponentArtifactIdentifier::class.java)
+        }
+
         fun resolveMojangFile(
             manifest: MinecraftVersionMetadata,
             cacheManager: CodevCacheManager,

@@ -29,7 +29,5 @@ dependencies {
 }
 
 tasks.test {
-    maxHeapSize = "3G"
-
     dependsOn(tasks.pluginUnderTestMetadata)
 }
