@@ -1,6 +1,6 @@
 package net.msrandom.minecraftcodev.core.repository
 
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.cacheProvider
+import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.getCacheProvider
 import org.gradle.api.Action
 import org.gradle.api.InvalidUserCodeException
 import org.gradle.api.artifacts.ComponentMetadataSupplierDetails
@@ -20,6 +20,7 @@ import org.gradle.api.internal.artifacts.repositories.transport.RepositoryTransp
 import org.gradle.api.internal.artifacts.repositories.transport.RepositoryTransportFactory
 import org.gradle.api.internal.component.ArtifactType
 import org.gradle.api.internal.file.FileResolver
+import org.gradle.api.invocation.Gradle
 import org.gradle.api.model.ObjectFactory
 import org.gradle.internal.action.InstantiatingAction
 import org.gradle.internal.component.external.model.ModuleDependencyMetadata
@@ -56,7 +57,8 @@ open class MinecraftRepositoryImpl @Inject constructor(
     private val objectFactory: ObjectFactory,
     private val fileResolver: FileResolver,
     private val transportFactory: RepositoryTransportFactory,
-    private val instantiatorFactory: InstantiatorFactory
+    private val instantiatorFactory: InstantiatorFactory,
+    private val gradle: Gradle
 ) : AbstractArtifactRepository(objectFactory), MinecraftRepository, ResolutionAwareRepository {
     private var url: Any = MinecraftRepository.URL
     private var allowInsecureProtocol = false
@@ -87,6 +89,7 @@ open class MinecraftRepositoryImpl @Inject constructor(
             redirectVerifier()
         ),
         createInjectorForMetadataSuppliers(),
+        gradle,
         objectFactory
     )
 
@@ -137,8 +140,8 @@ open class MinecraftRepositoryImpl @Inject constructor(
         override fun isUpToDate(s: String, oldValue: Long?) = true
     }
 
-    class Resolver(private val name: String, val url: URI, val transport: RepositoryTransport, private val injector: Instantiator, objectFactory: ObjectFactory) : ConfiguredModuleComponentRepository {
-        val resourceAccessor: DefaultCacheAwareExternalResourceAccessor = objectFactory.newInstance(DefaultCacheAwareExternalResourceAccessor::class.java, transport.repository, cacheProvider)
+    class Resolver(private val name: String, val url: URI, val transport: RepositoryTransport, private val injector: Instantiator, gradle: Gradle, objectFactory: ObjectFactory) : ConfiguredModuleComponentRepository {
+        val resourceAccessor: DefaultCacheAwareExternalResourceAccessor = objectFactory.newInstance(DefaultCacheAwareExternalResourceAccessor::class.java, transport.repository, getCacheProvider(gradle))
 
         private val access = NoOpAccess()
 

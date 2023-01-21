@@ -30,6 +30,7 @@ import org.gradle.nativeplatform.OperatingSystemFamily
 import sun.misc.Unsafe
 import java.net.URI
 import java.nio.file.*
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.streams.asSequence
 
 open class MinecraftCodevPlugin<T : PluginAware> : Plugin<T> {
@@ -75,15 +76,9 @@ open class MinecraftCodevPlugin<T : PluginAware> : Plugin<T> {
             ignoreUnknownKeys = true
         }
 
-        internal lateinit var cacheProvider: CodevCacheProvider
+        private val cacheProviders = ConcurrentHashMap<Gradle, CodevCacheProvider>()
 
-        fun getCacheProvider(gradle: Gradle): CodevCacheProvider {
-            if (!::cacheProvider.isInitialized) {
-                cacheProvider = CodevCacheProvider(gradle)
-            }
-
-            return cacheProvider
-        }
+        fun getCacheProvider(gradle: Gradle) = cacheProviders.computeIfAbsent(gradle, ::CodevCacheProvider)
 
         fun Project.addConfigurationResolutionDependencies(context: TaskDependencyResolveContext, configuration: Configuration) {
             context.add(configuration.buildDependencies)

@@ -40,15 +40,15 @@ import org.gradle.internal.service.DefaultServiceRegistry
 
 private val customDependencies = hashMapOf<Gradle, DependencyData>()
 
-private val dependencyDescriptorFactories = DefaultDependencyDescriptorFactory::class.java.getDeclaredField("dependencyDescriptorFactories").apply {
+private val dependencyDescriptorFactoriesField = DefaultDependencyDescriptorFactory::class.java.getDeclaredField("dependencyDescriptorFactories").apply {
     isAccessible = true
 }
 
-private val resolverFactories = DefaultArtifactDependencyResolver::class.java.getDeclaredField("resolverFactories").apply {
+private val resolverFactoriesField = DefaultArtifactDependencyResolver::class.java.getDeclaredField("resolverFactories").apply {
     isAccessible = true
 }
 
-private val domainObjectContext = DefaultConfiguration::class.java.getDeclaredField("domainObjectContext").apply {
+private val domainObjectContextField = DefaultConfiguration::class.java.getDeclaredField("domainObjectContext").apply {
     isAccessible = true
 }
 
@@ -65,24 +65,36 @@ val Gradle.resolverFactories: List<ResolverProviderFactory>
 
 
 @Suppress("UNCHECKED_CAST")
-private fun Gradle.addResolvers(resolverProviderFactories: MutableList<ResolverProviderFactory>, componentResolvers: Class<out ComponentResolvers>) {
-    val gradle = gradle as GradleInternal
-    val instantiatorFactory = gradle.serviceOf<InstantiatorFactory>()
-    val directoryFileTreeFactory = gradle.serviceOf<DirectoryFileTreeFactory>()
-    val patternSetFactory = gradle.serviceOf<Factory<PatternSet>>()
-    val propertyFactory = gradle.serviceOf<PropertyFactory>()
-    val filePropertyFactory = gradle.serviceOf<FilePropertyFactory>()
-    val fileCollectionFactory = gradle.serviceOf<FileCollectionFactory>()
-    val domainObjectCollectionFactory = gradle.serviceOf<DomainObjectCollectionFactory>()
-    val instantiator = gradle.serviceOf<NamedObjectInstantiator>()
-    val startParameterResolutionOverride = gradle.serviceOf<StartParameterResolutionOverride>()
-
+private fun addResolvers(resolverProviderFactories: MutableList<ResolverProviderFactory>, componentResolvers: Class<out ComponentResolvers>) {
     resolverProviderFactories.add(ResolverProviderFactory { context, resolvers ->
         val configuration = context as? DefaultConfiguration
-        val project = configuration?.let { (domainObjectContext[it] as DomainObjectContext).project }
+        val project = configuration?.let { (domainObjectContextField[it] as DomainObjectContext).project }
 
         if (project != null) {
+            val instantiatorFactory = project.serviceOf<InstantiatorFactory>()
+            val directoryFileTreeFactory = project.serviceOf<DirectoryFileTreeFactory>()
+            val patternSetFactory = project.gradle.serviceOf<Factory<PatternSet>>()
+            val propertyFactory = project.serviceOf<PropertyFactory>()
+            val filePropertyFactory = project.serviceOf<FilePropertyFactory>()
+            val fileCollectionFactory = project.serviceOf<FileCollectionFactory>()
+            val domainObjectCollectionFactory = project.serviceOf<DomainObjectCollectionFactory>()
+            val instantiator = project.serviceOf<NamedObjectInstantiator>()
+            val startParameterResolutionOverride = project.serviceOf<StartParameterResolutionOverride>()
+
             val newServices = DefaultServiceRegistry(project.services)
+
+            val cachePolicy = context.resolutionStrategy.cachePolicy
+
+            startParameterResolutionOverride.applyToCachePolicy(cachePolicy)
+
+            val resolversProvider by lazy {
+                ComponentResolversChain(resolvers as List<ComponentResolvers>, project.serviceOf(), project.serviceOf())
+            }
+
+            newServices.add(ConfigurationInternal::class.java, configuration)
+            newServices.add(CachePolicy::class.java, cachePolicy)
+            newServices.add(CodevCacheProvider::class.java, MinecraftCodevPlugin.getCacheProvider(project.gradle))
+            newServices.add(ComponentResolversChainProvider::class.java, ComponentResolversChainProvider { resolversProvider })
 
             val projectObjectFactory = DefaultObjectFactory(
                 instantiatorFactory.decorate(newServices),
@@ -95,20 +107,7 @@ private fun Gradle.addResolvers(resolverProviderFactories: MutableList<ResolverP
                 domainObjectCollectionFactory
             )
 
-            val cachePolicy = context.resolutionStrategy.cachePolicy
-
-            startParameterResolutionOverride.applyToCachePolicy(cachePolicy)
-
-            val resolversProvider by lazy {
-                ComponentResolversChain(resolvers as List<ComponentResolvers>, project.serviceOf(), project.serviceOf())
-            }
-
-            newServices.add(ConfigurationInternal::class.java, configuration)
-            newServices.add(CachePolicy::class.java, cachePolicy)
             newServices.add(ObjectFactory::class.java, projectObjectFactory)
-            newServices.add(CodevCacheProvider::class.java, MinecraftCodevPlugin.getCacheProvider(gradle))
-
-            newServices.add(ComponentResolversChainProvider::class.java, ComponentResolversChainProvider { resolversProvider })
 
             resolvers.add(projectObjectFactory.newInstance(componentResolvers))
         }
@@ -132,8 +131,8 @@ fun Gradle.registerCustomDependency(
         val artifactDependencyResolver = gradle.serviceOf<ArtifactDependencyResolver>()
         val objectFactory = gradle.serviceOf<ObjectFactory>()
 
-        val ivyDependencyDescriptorFactories = dependencyDescriptorFactories[dependencyDescriptorFactory] as MutableList<IvyDependencyDescriptorFactory>
-        val resolverProviderFactories = net.msrandom.minecraftcodev.core.dependency.resolverFactories[artifactDependencyResolver] as MutableList<ResolverProviderFactory>
+        val ivyDependencyDescriptorFactories = dependencyDescriptorFactoriesField[dependencyDescriptorFactory] as MutableList<IvyDependencyDescriptorFactory>
+        val resolverProviderFactories = resolverFactoriesField[artifactDependencyResolver] as MutableList<ResolverProviderFactory>
 
         ivyDependencyDescriptorFactories.add(objectFactory.newInstance(descriptorFactory))
 
