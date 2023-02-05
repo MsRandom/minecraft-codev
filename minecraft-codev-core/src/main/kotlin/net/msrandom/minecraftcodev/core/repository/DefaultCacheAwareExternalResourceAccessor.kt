@@ -31,7 +31,6 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
-import java.time.Duration
 import java.time.Instant
 import javax.inject.Inject
 import kotlin.io.path.Path
@@ -63,8 +62,7 @@ open class DefaultCacheAwareExternalResourceAccessor @Inject constructor(
         location: ExternalResourceName,
         sha1: String?,
         destination: Path,
-        additionalCandidates: LocallyAvailableResourceCandidates?,
-        shouldRefresh: (File, Duration) -> Boolean
+        additionalCandidates: LocallyAvailableResourceCandidates?
     ): LocallyAvailableExternalResource? {
         return producerGuard.guardByKey(location) {
             LOGGER.debug("Constructing external resource: {}", location)
@@ -76,10 +74,7 @@ open class DefaultCacheAwareExternalResourceAccessor @Inject constructor(
             }
 
             // We might be able to use a cached/locally available version
-            if (cached != null && (!shouldRefresh(cached.cachedFile!!, Duration.ofMillis(timeProvider.currentTime - cached.cachedAt)) || !externalResourceCachePolicy.mustRefreshExternalResource(
-                    timeProvider.currentTime - cached.cachedAt
-                ))
-            ) {
+            if (cached != null && !externalResourceCachePolicy.mustRefreshExternalResource(timeProvider.currentTime - cached.cachedAt)) {
                 return@guardByKey fileResourceRepository.resource(cached.cachedFile, location.uri, cached.externalResourceMetaData)
             }
 

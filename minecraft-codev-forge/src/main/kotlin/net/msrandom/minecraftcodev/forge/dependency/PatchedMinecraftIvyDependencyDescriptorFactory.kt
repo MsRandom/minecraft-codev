@@ -16,6 +16,7 @@ import org.gradle.internal.component.external.model.DefaultModuleComponentSelect
 import org.gradle.internal.component.model.DependencyMetadata
 import org.gradle.internal.component.model.LocalComponentDependencyMetadata
 import org.gradle.internal.component.model.LocalOriginDependencyMetadata
+import java.util.*
 import javax.inject.Inject
 
 open class PatchedMinecraftIvyDependencyDescriptorFactory @Inject constructor(excludeRuleConverter: ExcludeRuleConverter) :
@@ -86,10 +87,15 @@ open class PatchedMinecraftDependencyFactory : DependencyFactory {
     override fun canConvert(descriptor: DependencyMetadata) = descriptor is PatchedMinecraftDependencyMetadata
 }
 
-class PatchedComponentIdentifier(module: String, version: String, val patches: String, val moduleConfiguration: String?, needsSources: Boolean = false) :
-    MinecraftComponentIdentifier(module, version, needsSources) {
+class PatchedComponentIdentifier(version: String, val patches: String, val moduleConfiguration: String?, needsSources: Boolean = false) :
+    MinecraftComponentIdentifier("forge", version, needsSources) {
     override val isBase get() = true
 
-    override fun withoutSources() = PatchedComponentIdentifier(module, version, patches, moduleConfiguration, false)
+    override fun withoutSources() = PatchedComponentIdentifier(version, patches, moduleConfiguration, false)
     override fun getDisplayName() = "Patched ${super.getDisplayName()}"
+
+    override fun hashCode() = Objects.hash(version, patches, moduleConfiguration)
+    override fun equals(other: Any?) = other is PatchedComponentIdentifier &&
+            version == other.version &&
+            moduleConfiguration == other.moduleConfiguration
 }

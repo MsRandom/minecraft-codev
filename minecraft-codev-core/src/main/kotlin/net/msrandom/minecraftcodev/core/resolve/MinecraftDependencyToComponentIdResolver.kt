@@ -17,20 +17,20 @@ import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePoli
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionParser
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionRangeSelector
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionSelector
-import org.gradle.api.internal.artifacts.ivyservice.modulecache.FileStoreAndIndexProvider
 import org.gradle.api.internal.attributes.AttributeContainerInternal
 import org.gradle.api.internal.attributes.AttributesSchemaInternal
 import org.gradle.api.internal.attributes.ImmutableAttributesFactory
 import org.gradle.api.internal.project.ProjectInternal
-import org.gradle.cache.scopes.GlobalScopedCache
 import org.gradle.internal.component.external.model.DefaultModuleComponentIdentifier
 import org.gradle.internal.component.model.DependencyMetadata
+import org.gradle.internal.hash.ChecksumService
 import org.gradle.internal.resolve.RejectedByAttributesVersion
 import org.gradle.internal.resolve.RejectedByRuleVersion
 import org.gradle.internal.resolve.RejectedBySelectorVersion
 import org.gradle.internal.resolve.RejectedVersion
 import org.gradle.internal.resolve.resolver.DependencyToComponentIdResolver
 import org.gradle.internal.resolve.result.BuildableComponentIdResolveResult
+import org.gradle.util.internal.BuildCommencedTimeProvider
 import org.slf4j.LoggerFactory
 import javax.inject.Inject
 
@@ -39,9 +39,9 @@ open class MinecraftDependencyToComponentIdResolver @Inject constructor(
     private val resolveContext: ResolveContext,
     private val cachePolicy: CachePolicy,
     private val project: Project,
-    private val fileStoreAndIndexProvider: FileStoreAndIndexProvider,
+    private val checksumService: ChecksumService,
+    private val timeProvider: BuildCommencedTimeProvider,
     private val versionParser: VersionParser,
-    private val globalScopedCache: GlobalScopedCache,
     private val attributesFactory: ImmutableAttributesFactory,
     cacheProvider: CodevCacheProvider
 ) : DependencyToComponentIdResolver {
@@ -73,8 +73,9 @@ open class MinecraftDependencyToComponentIdResolver @Inject constructor(
                             repository.url,
                             cacheManager,
                             cachePolicy,
-                            repository.transport.resourceAccessor,
-                            fileStoreAndIndexProvider,
+                            repository.resourceAccessor,
+                            checksumService,
+                            timeProvider,
                             null
                         )
 

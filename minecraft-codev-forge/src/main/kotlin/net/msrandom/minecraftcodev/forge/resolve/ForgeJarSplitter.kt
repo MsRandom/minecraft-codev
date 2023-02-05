@@ -1,10 +1,10 @@
 package net.msrandom.minecraftcodev.forge.resolve
 
 import net.minecraftforge.srgutils.IMappingFile
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.walk
 import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter.collectTypeReferences
 import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter.copyAssets
 import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter.withAssets
+import net.msrandom.minecraftcodev.core.utils.walk
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.Type
 import org.objectweb.asm.tree.AnnotationNode
@@ -264,15 +264,15 @@ object ForgeJarSplitter {
         val clientPaths = merged.getPath("/").walk { filter(Path::isRegularFile).filter { it.toString().endsWith(".class") && !it.toString().contains('-') && !commonPaths.contains(it) }.toList() }
 
         for (path in commonPaths) {
-            val path1 = commonOut.getPath(path.toString())
-            path1.parent?.createDirectories()
-            path.copyTo(path1)
+            val commonPath = commonOut.getPath(path.toString())
+            commonPath.parent?.createDirectories()
+            path.copyTo(commonPath, StandardCopyOption.COPY_ATTRIBUTES)
         }
 
         for (path in clientPaths) {
-            val path1 = clientOut.getPath(path.toString())
-            path1.parent?.createDirectories()
-            path.copyTo(path1)
+            val clientPath = clientOut.getPath(path.toString())
+            clientPath.parent?.createDirectories()
+            path.copyTo(clientPath, StandardCopyOption.COPY_ATTRIBUTES)
         }
 
         copyAssets(client, server, commonOut, clientOut)

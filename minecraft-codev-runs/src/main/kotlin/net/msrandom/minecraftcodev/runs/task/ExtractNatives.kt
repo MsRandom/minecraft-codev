@@ -3,8 +3,8 @@ package net.msrandom.minecraftcodev.runs.task
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import net.msrandom.minecraftcodev.core.LibraryData
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.walk
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.zipFileSystem
+import net.msrandom.minecraftcodev.core.utils.walk
+import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.gradle.api.DefaultTask
 import org.gradle.api.artifacts.Configuration
 import org.gradle.api.file.Directory

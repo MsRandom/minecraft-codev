@@ -1,4 +1,4 @@
-package net.msrandom.minecraftcodev.core
+package net.msrandom.minecraftcodev.core.utils
 
 import org.gradle.api.Named
 import org.gradle.api.model.ObjectFactory

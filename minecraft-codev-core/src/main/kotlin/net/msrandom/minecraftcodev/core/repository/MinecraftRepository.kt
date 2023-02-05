@@ -1,6 +1,6 @@
 package net.msrandom.minecraftcodev.core.repository
 
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.getCacheProvider
+import net.msrandom.minecraftcodev.core.utils.getCacheProvider
 import org.gradle.api.Action
 import org.gradle.api.InvalidUserCodeException
 import org.gradle.api.artifacts.ComponentMetadataSupplierDetails

@@ -10,7 +10,6 @@ import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
 import org.gradle.api.internal.artifacts.RepositoriesSupplier
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ComponentResolvers
-import org.gradle.api.internal.artifacts.ivyservice.modulecache.FileStoreAndIndexProvider
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.artifact.ArtifactSet
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.excludes.specs.ExcludeSpec
 import org.gradle.api.internal.artifacts.type.ArtifactTypeRegistry
@@ -23,6 +22,7 @@ import org.gradle.internal.component.model.ComponentArtifactMetadata
 import org.gradle.internal.component.model.ComponentOverrideMetadata
 import org.gradle.internal.component.model.ComponentResolveMetadata
 import org.gradle.internal.component.model.ConfigurationMetadata
+import org.gradle.internal.hash.ChecksumService
 import org.gradle.internal.hash.HashCode
 import org.gradle.internal.model.CalculatedValueContainerFactory
 import org.gradle.internal.resolve.resolver.ArtifactResolver
@@ -31,13 +31,16 @@ import org.gradle.internal.resolve.resolver.DependencyToComponentIdResolver
 import org.gradle.internal.resolve.resolver.OriginArtifactSelector
 import org.gradle.internal.resolve.result.BuildableComponentResolveResult
 import org.gradle.internal.snapshot.impl.CoercingStringValueSnapshot
+import org.gradle.util.internal.BuildCommencedTimeProvider
+import java.util.*
 import javax.inject.Inject
 
 open class MinecraftComponentResolvers @Inject constructor(
     private val cachePolicy: CachePolicy,
     private val objects: ObjectFactory,
     private val calculatedValueContainerFactory: CalculatedValueContainerFactory,
-    private val fileStoreAndIndexProvider: FileStoreAndIndexProvider,
+    private val checksumService: ChecksumService,
+    private val timeProvider: BuildCommencedTimeProvider,
     cacheProvider: CodevCacheProvider,
 
     repositoriesSupplier: RepositoriesSupplier
@@ -74,7 +77,7 @@ open class MinecraftComponentResolvers @Inject constructor(
 
                 metadataGenerator.resolveMetadata(
                     repository,
-                    repository.transport.resourceAccessor,
+                    repository.resourceAccessor,
                     identifier,
                     componentOverrideMetadata,
                     result
@@ -102,7 +105,7 @@ open class MinecraftComponentResolvers @Inject constructor(
 
                     for (repository in repositories) {
                         val manifest = MinecraftMetadataGenerator.getVersionManifest(
-                            componentIdentifier, repository.url, cacheManager, cachePolicy, repository.transport.resourceAccessor, fileStoreAndIndexProvider, null
+                            componentIdentifier, repository.url, cacheManager, cachePolicy, repository.resourceAccessor, checksumService, timeProvider, null
                         )
 
                         if (manifest != null) {
@@ -177,6 +180,11 @@ open class MinecraftComponentIdentifier(module: String, private val version: Str
     override fun getModule(): String = moduleIdentifier.name
     override fun getVersion() = version
     override fun getModuleIdentifier(): ModuleIdentifier = moduleIdentifier
+
+    override fun hashCode() = Objects.hash(module, version)
+    override fun equals(other: Any?) = other is MinecraftComponentIdentifier &&
+            module == other.module &&
+            version == other.version
 }
 
 interface MayNeedSources {

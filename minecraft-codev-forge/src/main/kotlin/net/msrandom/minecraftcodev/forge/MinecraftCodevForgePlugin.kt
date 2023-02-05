@@ -4,10 +4,10 @@ import kotlinx.serialization.json.decodeFromStream
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.zipFileSystem
-import net.msrandom.minecraftcodev.core.applyPlugin
-import net.msrandom.minecraftcodev.core.createSourceSetConfigurations
+import net.msrandom.minecraftcodev.core.utils.applyPlugin
+import net.msrandom.minecraftcodev.core.utils.createSourceSetConfigurations
 import net.msrandom.minecraftcodev.core.dependency.registerCustomDependency
+import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.forge.dependency.PatchedMinecraftDependencyFactory
 import net.msrandom.minecraftcodev.forge.dependency.PatchedMinecraftIvyDependencyDescriptorFactory
 import net.msrandom.minecraftcodev.forge.mappings.setupForgeRemapperIntegration

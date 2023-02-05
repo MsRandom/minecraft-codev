@@ -1,14 +1,15 @@
 package net.msrandom.minecraftcodev.core.resolve.bundled
 
-import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter.useFileSystems
-import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter.withAssets
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.walk
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.zipFileSystem
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
 import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter
+import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter.useFileSystems
+import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter.withAssets
+import net.msrandom.minecraftcodev.core.utils.walk
+import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.gradle.internal.component.external.model.ModuleComponentArtifactIdentifier
 import org.gradle.internal.hash.ChecksumService
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import kotlin.io.path.*
 
 object BundledClientJarSplitter {
@@ -35,7 +36,7 @@ object BundledClientJarSplitter {
                     if (serverEntry.notExists()) {
                         val output = newClientFs.getPath(name)
                         output.parent?.createDirectories()
-                        clientEntry.copyTo(output)
+                        clientEntry.copyTo(output, StandardCopyOption.COPY_ATTRIBUTES)
                     }
                 }
             }
@@ -46,7 +47,7 @@ object BundledClientJarSplitter {
             if (serverFs.getPath(name).notExists() || ("lang" in name || (path.parent.name == "assets" && path.name.startsWith('.')))) {
                 val newPath = newClientFs.getPath(name)
                 newPath.parent?.createDirectories()
-                path.copyTo(newPath)
+                path.copyTo(newPath, StandardCopyOption.COPY_ATTRIBUTES)
             }
         }
 

@@ -9,6 +9,7 @@ import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Comp
 import org.gradle.api.artifacts.component.ComponentArtifactIdentifier
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.FileStoreAndIndexProvider
+import org.gradle.api.internal.artifacts.ivyservice.modulecache.artifacts.CachedArtifact
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.artifacts.DefaultCachedArtifact
 import org.gradle.api.internal.artifacts.metadata.ComponentArtifactIdentifierSerializer
 import org.gradle.api.internal.artifacts.metadata.ModuleComponentFileArtifactIdentifierSerializer
@@ -70,42 +71,21 @@ open class MinecraftArtifactResolver @Inject constructor(
             if (artifact is LocalComponentArtifactMetadata) {
                 result.resolved(artifact.file)
             } else {
-                val cached = artifactCache[artifact.id]
-
-                if (cached == null || cachePolicy.artifactExpiry(
-                        (artifact as ModuleComponentArtifactMetadata).toArtifactIdentifier(),
-                        if (cached.isMissing) null else cached.cachedFile,
-                        Duration.ofMillis(timeProvider.currentTime - cached.cachedAt),
-                        false,
-                        artifact.hash() == cached.descriptorHash
-                    ).isMustCheck || cached.cachedFile?.exists() != true
-                ) {
-                    val shouldRefresh = { file: File, duration: Duration ->
-                        cachePolicy.artifactExpiry(
-                            (artifact as ModuleComponentArtifactMetadata).toArtifactIdentifier(),
-                            file,
-                            duration,
-                            false,
-                            true
-                        ).isMustCheck
-                    }
-
+                getOrResolve(artifact as ModuleComponentArtifactMetadata, artifact.id, artifactCache, cachePolicy, timeProvider, result) {
                     for (repository in repositories) {
                         when (componentIdentifier.module) {
                             MinecraftComponentResolvers.COMMON_MODULE -> {
                                 val manifest = getManifest(componentIdentifier, repository)
                                 if (manifest != null) {
-                                    val serverJar = resolveMojangFile(manifest, cacheManager, checksumService, repository, MinecraftComponentResolvers.SERVER_DOWNLOAD, shouldRefresh)
+                                    val serverJar = resolveMojangFile(manifest, cacheManager, checksumService, repository, MinecraftComponentResolvers.SERVER_DOWNLOAD)
 
                                     if (serverJar != null) {
                                         val splitCommonJar by getCommonJar(buildOperationExecutor, checksumService, ::getArtifactPath, manifest, serverJar) {
-                                            resolveMojangFile(manifest, cacheManager, checksumService, repository, MinecraftComponentResolvers.CLIENT_DOWNLOAD, shouldRefresh)!!
+                                            resolveMojangFile(manifest, cacheManager, checksumService, repository, MinecraftComponentResolvers.CLIENT_DOWNLOAD)!!
                                         }
 
                                         result.resolved(splitCommonJar.toFile())
-
-                                        artifactCache[artifact.id] = DefaultCachedArtifact(splitCommonJar.toFile(), Instant.now().toEpochMilli(), artifact.hash())
-                                        return
+                                        return@getOrResolve splitCommonJar.toFile()
                                     }
                                 }
                             }
@@ -113,8 +93,8 @@ open class MinecraftArtifactResolver @Inject constructor(
                             MinecraftComponentResolvers.CLIENT_MODULE -> {
                                 val manifest = getManifest(componentIdentifier, repository)
                                 if (manifest != null) {
-                                    val clientJar = resolveMojangFile(manifest, cacheManager, checksumService, repository, MinecraftComponentResolvers.CLIENT_DOWNLOAD, shouldRefresh)
-                                    val serverJar = resolveMojangFile(manifest, cacheManager, checksumService, repository, MinecraftComponentResolvers.SERVER_DOWNLOAD, shouldRefresh)
+                                    val clientJar = resolveMojangFile(manifest, cacheManager, checksumService, repository, MinecraftComponentResolvers.CLIENT_DOWNLOAD)
+                                    val serverJar = resolveMojangFile(manifest, cacheManager, checksumService, repository, MinecraftComponentResolvers.SERVER_DOWNLOAD)
 
                                     if (clientJar != null) {
                                         // This being null means that we have no server Jar, which means that we could just use the actual client Jar provided.
@@ -124,12 +104,7 @@ open class MinecraftArtifactResolver @Inject constructor(
                                             getClientJar(buildOperationExecutor, checksumService, ::getArtifactPath, manifest, clientJar, serverJar).toFile()
                                         }
 
-                                        client?.let {
-                                            result.resolved(it)
-
-                                            artifactCache[artifact.id] = DefaultCachedArtifact(it, Instant.now().toEpochMilli(), artifact.hash())
-                                            return
-                                        }
+                                        return@getOrResolve client
                                     }
                                 }
                             }
@@ -151,26 +126,17 @@ open class MinecraftArtifactResolver @Inject constructor(
                                                 location,
                                                 download.sha1,
                                                 path,
-                                                getAdditionalCandidates(path, checksumService),
-                                                shouldRefresh
+                                                getAdditionalCandidates(path, checksumService)
                                             )
 
-                                            if (resource != null) {
-                                                result.resolved(resource.file)
-
-                                                artifactCache[artifact.id] = DefaultCachedArtifact(resource.file, Instant.now().toEpochMilli(), artifact.hash())
-                                                return
-                                            }
+                                            return@getOrResolve resource?.file
                                         }
                                     }
                                 }
                             }
                         }
                     }
-                } else {
-                    if (!cached.isMissing) {
-                        result.resolved(cached.cachedFile)
-                    }
+                    null
                 }
             }
         }
@@ -184,8 +150,9 @@ open class MinecraftArtifactResolver @Inject constructor(
         repository.url,
         cacheManager,
         cachePolicy,
-        repository.transport.resourceAccessor,
-        fileStoreAndIndexProvider,
+        repository.resourceAccessor,
+        checksumService,
+        timeProvider,
         null
     )
 
@@ -208,16 +175,47 @@ open class MinecraftArtifactResolver @Inject constructor(
             cacheManager: CodevCacheManager,
             checksumService: ChecksumService,
             repository: MinecraftRepositoryImpl.Resolver,
-            download: String,
-            shouldRefresh: (File, Duration) -> Boolean
+            download: String
         ): File? {
             return manifest.downloads[download]?.let {
                 val path = cacheManager.rootPath.resolve("download-cache").resolve(it.sha1).resolve("$download.jar")
-                repository.resourceAccessor.getResource(ExternalResourceName(it.url), it.sha1, path, getAdditionalCandidates(path, checksumService), shouldRefresh)?.file
+                repository.resourceAccessor.getResource(ExternalResourceName(it.url), it.sha1, path, getAdditionalCandidates(path, checksumService))?.file
             }
         }
 
-        private fun getAdditionalCandidates(path: Path, checksumService: ChecksumService) =
+        fun <T> getOrResolve(
+            artifact: ModuleComponentArtifactMetadata,
+            id: T,
+            artifactCache: CodevCacheManager.CachedPath<T, CachedArtifact>.CachedFile,
+            cachePolicy: CachePolicy,
+            timeProvider: BuildCommencedTimeProvider,
+            result: BuildableArtifactResolveResult,
+            generate: () -> File?
+        ) {
+            val cached = artifactCache[id]
+
+            if (cached == null || cachePolicy.artifactExpiry(
+                    artifact.toArtifactIdentifier(),
+                    if (cached.isMissing) null else cached.cachedFile,
+                    Duration.ofMillis(timeProvider.currentTime - cached.cachedAt),
+                    false,
+                    artifact.hash() == cached.descriptorHash
+                ).isMustCheck || cached.cachedFile?.exists() != true
+            ) {
+                val file = generate()
+
+                if (file != null) {
+                    result.resolved(file)
+                    artifactCache[id] = DefaultCachedArtifact(file, Instant.now().toEpochMilli(), artifact.hash())
+                }
+            } else {
+                if (!cached.isMissing) {
+                    result.resolved(cached.cachedFile)
+                }
+            }
+        }
+
+        fun getAdditionalCandidates(path: Path, checksumService: ChecksumService) =
             LazyLocallyAvailableResourceCandidates({ if (path.exists()) listOf(path.toFile()) else emptyList() }, checksumService)
     }
 }

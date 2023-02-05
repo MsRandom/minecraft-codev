@@ -1,8 +1,9 @@
 package net.msrandom.minecraftcodev.core.resolve
 
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.callWithStatus
 import net.msrandom.minecraftcodev.core.resolve.bundled.BundledClientJarSplitter
 import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter
+import net.msrandom.minecraftcodev.core.utils.callWithStatus
+import net.msrandom.minecraftcodev.core.utils.createDeterministicCopy
 import org.gradle.internal.component.external.model.ModuleComponentArtifactIdentifier
 import org.gradle.internal.hash.ChecksumService
 import org.gradle.internal.operations.*
@@ -94,8 +95,8 @@ private fun getLegacySplitJarsState(
 ): Lazy<JarSplittingResult> = legacySplitJarStates.computeIfAbsent(clientJar to serverJar) {
     lazy {
         buildOperationExecutor.call(object : CallableBuildOperation<JarSplittingResult> {
-            val common = Files.createTempFile("split-common-", ".tmp.jar")
-            val client = Files.createTempFile("split-client-", ".tmp.jar")
+            val common = serverJar.createDeterministicCopy("split-common-", ".tmp.jar")
+            val client = clientJar.createDeterministicCopy("split-client-", ".tmp.jar")
 
             override fun description() = BuildOperationDescriptor
                 .displayName("Splitting $clientJar and $serverJar")

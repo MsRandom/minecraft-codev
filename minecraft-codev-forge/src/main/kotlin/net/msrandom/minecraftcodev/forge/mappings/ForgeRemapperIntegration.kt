@@ -11,12 +11,13 @@ import net.fabricmc.mappingio.tree.MemoryMappingTree
 import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.unsafeResolveConfiguration
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.zipFileSystem
 import net.msrandom.minecraftcodev.core.MinecraftType
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
+import net.msrandom.minecraftcodev.core.utils.getCacheProvider
+import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.forge.McpConfig
 import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin
+import net.msrandom.minecraftcodev.forge.PatchedMinecraftCodevExtension
 import net.msrandom.minecraftcodev.forge.UserdevConfig
 import net.msrandom.minecraftcodev.forge.dependency.PatchedComponentIdentifier
 import net.msrandom.minecraftcodev.forge.resolve.PatchedMinecraftComponentResolvers
@@ -28,9 +29,9 @@ import org.gradle.api.Project
 import org.gradle.api.internal.artifacts.RepositoriesSupplier
 import org.gradle.api.internal.artifacts.configurations.ResolutionStrategyInternal
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.StartParameterResolutionOverride
-import org.gradle.api.internal.artifacts.ivyservice.modulecache.FileStoreAndIndexProvider
 import org.gradle.configurationcache.extensions.serviceOf
 import org.gradle.internal.hash.ChecksumService
+import org.gradle.util.internal.BuildCommencedTimeProvider
 import org.objectweb.asm.*
 import java.io.InputStream
 import java.nio.file.Path
@@ -42,8 +43,8 @@ import kotlin.io.path.notExists
 
 internal fun Project.setupForgeRemapperIntegration() {
     plugins.withType(MinecraftCodevRemapperPlugin::class.java) {
-        val fileStoreAndIndexProvider = serviceOf<FileStoreAndIndexProvider>()
         val checksumService = serviceOf<ChecksumService>()
+        val timeProvider = serviceOf<BuildCommencedTimeProvider>()
         val repositoriesSupplier = serviceOf<RepositoriesSupplier>()
         val startParameterResolutionOverride = serviceOf<StartParameterResolutionOverride>()
         val remapper = extensions.getByType(MinecraftCodevExtension::class.java).extensions.getByType(RemapperExtension::class.java)
@@ -78,16 +79,19 @@ internal fun Project.setupForgeRemapperIntegration() {
                     }
 
                     if (!config.official) {
+                        val clientMappingsDependency =
+                            extensions.getByType(MinecraftCodevExtension::class.java).extensions.getByType(PatchedMinecraftCodevExtension::class.java)(config.version)
+
                         val patchState = PatchedMinecraftComponentResolvers.getPatchState(
-                            PatchedComponentIdentifier("forge", config.version, "", null),
+                            PatchedComponentIdentifier(config.version, "", null),
                             repositoriesSupplier.get().filterIsInstance<MinecraftRepositoryImpl>().map(MinecraftRepositoryImpl::createResolver),
-                            MinecraftCodevPlugin.getCacheProvider(gradle),
+                            getCacheProvider(gradle),
                             (configuration.resolutionStrategy as ResolutionStrategyInternal).cachePolicy.also(startParameterResolutionOverride::applyToCachePolicy),
-                            fileStoreAndIndexProvider,
                             checksumService,
+                            timeProvider,
                             path.toFile(),
                             objects
-                        ) { _, _ -> false } ?: return@add false
+                        ) ?: return@add false
 
                         zipFileSystem(patchState.withAssets).use { patchedJar ->
                             if (visitor.visitHeader()) {

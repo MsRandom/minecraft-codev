@@ -4,19 +4,18 @@ import net.fabricmc.mappingio.adapter.MappingNsRenamer
 import net.fabricmc.mappingio.format.Tiny2Writer
 import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.callWithStatus
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.unsafeResolveConfiguration
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.zipFileSystem
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.dependency.convertDescriptor
-import net.msrandom.minecraftcodev.core.getSourceSetConfigurationName
 import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
 import net.msrandom.minecraftcodev.core.resolve.MayNeedSources
+import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.getOrResolve
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentIdentifier
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.addNamed
-import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.hash
-import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.allArtifacts
+import net.msrandom.minecraftcodev.core.utils.callWithStatus
+import net.msrandom.minecraftcodev.core.utils.computeByNameIfAbsent
+import net.msrandom.minecraftcodev.core.utils.getSourceSetConfigurationName
+import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.copy
 import net.msrandom.minecraftcodev.remapper.FieldAddDescVisitor
 import net.msrandom.minecraftcodev.remapper.JarRemapper
@@ -35,7 +34,6 @@ import org.gradle.api.attributes.LibraryElements
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ComponentResolvers
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionSelector
-import org.gradle.api.internal.artifacts.ivyservice.modulecache.artifacts.DefaultCachedArtifact
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.excludes.specs.ExcludeSpec
 import org.gradle.api.internal.artifacts.type.ArtifactTypeRegistry
 import org.gradle.api.internal.attributes.AttributeContainerInternal
@@ -58,8 +56,6 @@ import org.gradle.internal.resolve.resolver.OriginArtifactSelector
 import org.gradle.internal.resolve.result.*
 import org.gradle.util.internal.BuildCommencedTimeProvider
 import java.nio.file.Path
-import java.time.Duration
-import java.time.Instant
 import java.util.concurrent.locks.ReentrantLock
 import javax.inject.Inject
 import kotlin.concurrent.withLock
@@ -135,12 +131,9 @@ open class RemappedComponentResolvers @Inject constructor(
                     },
                     { artifact, artifacts ->
                         if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
-                            val classpath = configuration.copy().apply {
-                                setExtendsFrom(emptySet())
-                                dependencies.clear()
-                                this.artifacts.clear()
-
-                                dependencies.addAll(transitiveDependencies.map { project.convertDescriptor(it) })
+                            val classpath = project.configurations.computeByNameIfAbsent("artifactClasspath-${identifier.hashCode().toString(16)}") {
+                                it.dependencies.addAll(transitiveDependencies.map { project.convertDescriptor(it) })
+                                it.isVisible = false
                             }
 
                             RemappedComponentArtifactMetadata(
@@ -226,17 +219,11 @@ open class RemappedComponentResolvers @Inject constructor(
         exclusions: ExcludeSpec,
         overriddenAttributes: ImmutableAttributes
     ) = if (component.id is RemappedComponentIdentifier) {
-        for (artifact in configuration.allArtifacts) {
-            if (artifact is RemappedComponentArtifactMetadata) {
-                project.unsafeResolveConfiguration(artifact.classpath)
-            }
-        }
-
         project.extensions
             .getByType(MinecraftCodevExtension::class.java)
             .extensions
             .getByType(RemapperExtension::class.java)
-            .loadMappings(project.unsafeResolveConfiguration(project.configurations.getByName((component.id as RemappedComponentIdentifier).mappingsConfiguration)), objects)
+            .loadMappings(project.configurations.getByName((component.id as RemappedComponentIdentifier).mappingsConfiguration), objects)
 
         MetadataSourcedComponentArtifacts().getArtifactsFor(
             component, configuration, artifactResolver, hashMapOf(), artifactTypeRegistry, exclusions, overriddenAttributes, calculatedValueContainerFactory
@@ -251,7 +238,7 @@ open class RemappedComponentResolvers @Inject constructor(
 
     override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactResolveResult) {
         if (artifact is RemapperArtifact) {
-            val mappingFiles = project.unsafeResolveConfiguration(project.configurations.getByName(artifact.mappingsConfiguration), true)
+            val mappingFiles = project.configurations.getByName(artifact.mappingsConfiguration)
 
             val remapper = project.extensions
                 .getByType(MinecraftCodevExtension::class.java)
@@ -276,57 +263,38 @@ open class RemappedComponentResolvers @Inject constructor(
                             checksumService.sha1(result.result)
                         )
 
-                        val cached = artifactCache[urlId]
+                        getOrResolve(artifact, urlId, artifactCache, cachePolicy, timeProvider, result) {
+                            val file = buildOperationExecutor.call(object : CallableBuildOperation<Path> {
+                                override fun description() = BuildOperationDescriptor
+                                    .displayName("Remapping ${result.result} from $sourceNamespace to ${id.targetNamespace}")
+                                    .progressDisplayName("Mappings: ${mappingFiles.joinToString()}")
+                                    .metadata(BuildOperationCategory.TASK)
 
-                        if (cached != null && !cachePolicy.artifactExpiry(
-                                artifact.delegate.toArtifactIdentifier(),
-                                if (cached.isMissing) null else cached.cachedFile,
-                                Duration.ofMillis(timeProvider.currentTime - cached.cachedAt),
-                                false,
-                                artifact.hash() == cached.descriptorHash
-                            ).isMustCheck && cached.cachedFile?.exists() == true
-                        ) {
-                            if (!cached.isMissing) {
-                                result.resolved(cached.cachedFile)
-                            }
+                                override fun call(context: BuildOperationContext) = context.callWithStatus {
+                                    JarRemapper.remap(
+                                        remapper,
+                                        mappings.tree,
+                                        sourceNamespace,
+                                        id.targetNamespace.name,
+                                        result.result.toPath(),
+                                        artifact.classpath
+                                    )
+                                }
+                            })
 
-                            return
+                            val output = cacheManager.fileStoreDirectory
+                                .resolve(mappings.hash.toString())
+                                .resolve(id.group)
+                                .resolve(id.module)
+                                .resolve(id.version)
+                                .resolve(checksumService.sha1(file.toFile()).toString())
+                                .resolve("${result.result.nameWithoutExtension}-${id.targetNamespace.name}.${result.result.extension}")
+
+                            output.parent.createDirectories()
+                            file.copyTo(output)
+
+                            output.toFile()
                         }
-
-                        val file = buildOperationExecutor.call(object : CallableBuildOperation<Path> {
-                            override fun description() = BuildOperationDescriptor
-                                .displayName("Remapping ${result.result} from $sourceNamespace to ${id.targetNamespace}")
-                                .progressDisplayName("Mappings: ${mappingFiles.joinToString()}")
-                                .metadata(BuildOperationCategory.TASK)
-
-                            override fun call(context: BuildOperationContext) = context.callWithStatus {
-                                JarRemapper.remap(
-                                    remapper,
-                                    mappings.tree,
-                                    sourceNamespace,
-                                    id.targetNamespace.name,
-                                    result.result.toPath(),
-                                    project.unsafeResolveConfiguration(artifact.classpath, true)
-                                )
-                            }
-                        })
-
-                        val output = cacheManager.fileStoreDirectory
-                            .resolve(mappings.hash.toString())
-                            .resolve(id.group)
-                            .resolve(id.module)
-                            .resolve(id.version)
-                            .resolve(checksumService.sha1(file.toFile()).toString())
-                            .resolve("${result.result.nameWithoutExtension}-${id.targetNamespace.name}.${result.result.extension}")
-
-                        output.parent.createDirectories()
-                        file.copyTo(output)
-
-                        val outputFile = output.toFile()
-
-                        result.resolved(outputFile)
-
-                        artifactCache[urlId] = DefaultCachedArtifact(outputFile, Instant.now().toEpochMilli(), artifact.hash())
                     }
                 }
 
@@ -374,7 +342,7 @@ open class RemappedComponentResolvers @Inject constructor(
     }
 }
 
-class RemappedComponentIdentifier(
+data class RemappedComponentIdentifier(
     val original: ModuleComponentIdentifier,
     val sourceNamespace: MappingsNamespace?,
     val targetNamespace: MappingsNamespace,

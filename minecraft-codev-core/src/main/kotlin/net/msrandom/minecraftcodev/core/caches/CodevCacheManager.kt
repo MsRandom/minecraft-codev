@@ -55,7 +55,7 @@ open class CodevCacheManager @Inject constructor(val rootPath: Path, fileAccessT
 
     @Suppress("UNCHECKED_CAST")
     fun <K, V> getMetadataCache(path: Path, keySerializer: () -> Serializer<K>, valueSerializer: () -> Serializer<V>) = memoryCache.computeIfAbsent(path) {
-        CachedPath(keySerializer(), valueSerializer(), rootPath.resolve(CacheLayout.META_DATA.key).resolve(it))
+        CachedPath(keySerializer(), valueSerializer(), metaDataDirectory.resolve(it))
     } as CachedPath<K, V>
 
     override fun getDisplayName() = "Minecraft Codev Caches $rootPath"
@@ -109,22 +109,31 @@ open class CodevCacheManager @Inject constructor(val rootPath: Path, fileAccessT
 
             operator fun set(key: K, value: V) = lock.withLock {
                 if (memoryCache.containsKey(key)) {
-                    throw UnsupportedOperationException("$file: Modifying existing cache elements is not yet supported.")
-                }
-
-                val append = if (memoryCache.isEmpty()) {
                     file.parent?.createDirectories()
-                    emptyArray()
+
+                    memoryCache[key] = value
+
+                    OutputStreamBackedEncoder(file.outputStream()).use {
+                        for ((existingKey, existingValue) in memoryCache) {
+                            keySerializer.write(it, existingKey)
+                            valueSerializer.write(it, existingValue)
+                        }
+                    }
                 } else {
-                    arrayOf(StandardOpenOption.APPEND)
-                }
+                    val append = if (memoryCache.isEmpty()) {
+                        file.parent?.createDirectories()
+                        emptyArray()
+                    } else {
+                        arrayOf(StandardOpenOption.APPEND)
+                    }
 
-                OutputStreamBackedEncoder(file.outputStream(*append)).use {
-                    keySerializer.write(it, key)
-                    valueSerializer.write(it, value)
-                }
+                    OutputStreamBackedEncoder(file.outputStream(*append)).use {
+                        keySerializer.write(it, key)
+                        valueSerializer.write(it, value)
+                    }
 
-                memoryCache[key] = value
+                    memoryCache[key] = value
+                }
             }
         }
     }

@@ -1,9 +1,12 @@
 package net.msrandom.minecraftcodev.remapper
 
 import net.fabricmc.mappingio.MappingVisitor
+import net.fabricmc.mappingio.adapter.MappingSourceNsSwitch
+import net.fabricmc.mappingio.format.ProGuardReader
 import net.fabricmc.mappingio.tree.MappingTreeView
 import net.fabricmc.mappingio.tree.MemoryMappingTree
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
+import net.msrandom.minecraftcodev.core.MappingsNamespace
+import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.gradle.api.artifacts.Configuration
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.ListProperty
@@ -15,6 +18,7 @@ import java.security.DigestInputStream
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
+import kotlin.io.path.inputStream
 
 fun interface MappingResolutionRule {
     operator fun invoke(
@@ -59,7 +63,7 @@ open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory) {
             var result = false
 
             if (isJar || extension == "zip") {
-                MinecraftCodevPlugin.zipFileSystem(path).use {
+                zipFileSystem(path).use {
                     for (rule in zipMappingsResolution.get()) {
                         if (rule(path, it, visitor, configuration, decorate, existingMappings, isJar, objects)) {
                             result = true
@@ -70,6 +74,18 @@ open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory) {
             }
 
             result
+        }
+
+        mappingsResolution.add { path, extension, visitor, _, decorate, _, _ ->
+            if (extension == "txt") {
+                path.inputStream().decorate().reader().use {
+                    ProGuardReader.read(it, MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE, MappingsNamespace.OBF, MappingSourceNsSwitch(visitor, MappingsNamespace.OBF))
+                }
+
+                true
+            } else {
+                false
+            }
         }
     }
 

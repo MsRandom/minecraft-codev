@@ -1,6 +1,6 @@
 package net.msrandom.minecraftcodev.forge
 
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.zipFileSystem
+import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.gradle.api.artifacts.transform.InputArtifact
 import org.gradle.api.artifacts.transform.TransformAction
 import org.gradle.api.artifacts.transform.TransformOutputs
@@ -11,8 +11,9 @@ import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassWriter
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.tree.*
-import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.*
+import kotlin.io.path.copyTo
 import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 import kotlin.io.path.writeBytes
@@ -79,7 +80,7 @@ abstract class ForgeJarTransformer : TransformAction<TransformParameters.None> {
 
     override fun transform(outputs: TransformOutputs) {
         val replace = zipFileSystem(input.get().asFile.toPath()).use {
-            val clientUserdev = it.getPath("net/minecraftforge/fml/loading/targets/ForgeClientUserdevLaunchHandler.class")
+            val clientUserdev = it.getPath(LAUNCH_HANDLER)
             if (clientUserdev.exists()) {
                 println(":Transforming ${input.get().asFile.name}")
 
@@ -91,9 +92,9 @@ abstract class ForgeJarTransformer : TransformAction<TransformParameters.None> {
 
         if (replace) {
             val output = outputs.file("transformed-${input.get().asFile.name}").toPath()
-            Files.copy(input.get().asFile.toPath(), output)
+            input.get().asFile.toPath().copyTo(output, StandardCopyOption.COPY_ATTRIBUTES)
             zipFileSystem(output).use { fs ->
-                val userdevLaunchHandler = fs.getPath("net/minecraftforge/fml/loading/targets/CommonUserdevLaunchHandler.class")
+                val userdevLaunchHandler = fs.getPath(LAUNCH_HANDLER)
 
                 val reader = userdevLaunchHandler.inputStream().use(::ClassReader)
                 val node = ClassNode()
@@ -198,5 +199,9 @@ abstract class ForgeJarTransformer : TransformAction<TransformParameters.None> {
         } else {
             outputs.file(input)
         }
+    }
+
+    companion object {
+        private const val LAUNCH_HANDLER = "net/minecraftforge/fml/loading/targets/ForgeClientUserdevLaunchHandler.class"
     }
 }

@@ -1,9 +1,9 @@
 package net.msrandom.minecraftcodev.core.resolve.legacy
 
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.walk
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.zipFileSystem
 import net.msrandom.minecraftcodev.core.resolve.JarSplittingResult
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
+import net.msrandom.minecraftcodev.core.utils.walk
+import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
 import org.gradle.internal.component.external.model.DefaultModuleComponentArtifactIdentifier
@@ -18,6 +18,7 @@ import org.objectweb.asm.tree.*
 import java.io.IOException
 import java.nio.file.FileSystem
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import kotlin.io.path.*
 import kotlin.reflect.KMutableProperty1
 
@@ -131,6 +132,7 @@ object LegacyJarSplitter {
                     add(Type.getObjectType(instruction.owner))
                     add(Type.getType(instruction.desc))
                 }
+
                 is FrameNode -> {
                     if (instruction.local != null) {
                         for (any in instruction.local) {
@@ -148,6 +150,7 @@ object LegacyJarSplitter {
                         }
                     }
                 }
+
                 is InvokeDynamicInsnNode -> {
                     fun addHandle(handle: Handle) {
                         val bsmDescriptor = Type.getType(handle.desc)
@@ -175,18 +178,21 @@ object LegacyJarSplitter {
                         }
                     }
                 }
+
                 is LdcInsnNode -> {
                     val cst = instruction.cst
                     if (cst is Type) {
                         add(if (cst.sort == Type.ARRAY) cst.elementType else cst)
                     }
                 }
+
                 is MethodInsnNode -> {
                     val methodDescriptor = Type.getMethodType(instruction.desc)
                     add(methodDescriptor.returnType)
                     addAll(methodDescriptor.argumentTypes)
                     add(Type.getObjectType(instruction.owner))
                 }
+
                 is MultiANewArrayInsnNode -> add(Type.getType(instruction.desc).elementType)
                 is TypeInsnNode -> add(Type.getObjectType(instruction.desc))
             }
@@ -202,18 +208,15 @@ object LegacyJarSplitter {
         client: Path,
         server: Path
     ) = useFileSystems { handle ->
-        outputCommon.deleteExisting()
-        outputClient.deleteExisting()
-
         val clientFs = zipFileSystem(client).also(handle)
         val serverFs = zipFileSystem(server).also(handle)
-        val commonFs = zipFileSystem(outputCommon, true).also(handle)
-        val newClientFs = zipFileSystem(outputClient, true).also(handle)
+        val commonFs = zipFileSystem(outputCommon).also(handle)
+        val newClientFs = zipFileSystem(outputClient).also(handle)
 
         val extraCommonTypes = hashSetOf<Type>()
 
         clientFs.getPath("/").walk {
-            for (clientEntry in this) {
+            for (clientEntry in filter(Path::isRegularFile)) {
                 val pathName = clientEntry.toString()
                 if (pathName.endsWith(".class")) {
                     val serverEntry = serverFs.getPath(pathName)
@@ -249,15 +252,15 @@ object LegacyJarSplitter {
                         serverNode.accept(writer)
 
                         val path = commonFs.getPath(pathName)
-                        path.parent?.createDirectories()
-
+                        serverEntry.copyTo(path, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
                         path.writeBytes(writer.toByteArray())
-                    } else {
-                        val path = newClientFs.getPath(pathName)
-                        path.parent?.createDirectories()
 
-                        clientEntry.copyTo(path)
+                        newClientFs.getPath(pathName).deleteExisting()
+                    } else {
+                        clientEntry.copyTo(newClientFs.getPath(pathName), StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
                     }
+                } else {
+                    newClientFs.getPath(pathName).deleteExisting()
                 }
             }
         }
@@ -265,9 +268,10 @@ object LegacyJarSplitter {
         for (extraCommonType in extraCommonTypes) {
             if (extraCommonType.sort == Type.OBJECT) {
                 val name = "${extraCommonType.internalName}.class"
-                val path = newClientFs.getPath(name)
-                if (path.exists()) {
-                    val reader = path.inputStream().use(::ClassReader)
+
+                val commonPath = commonFs.getPath(name)
+                if (commonPath.exists()) {
+                    val reader = commonPath.inputStream().use(::ClassReader)
                     val node = ClassNode()
                     reader.accept(node, 0)
 
@@ -276,14 +280,13 @@ object LegacyJarSplitter {
                     val writer = ClassWriter(reader, 0)
                     node.accept(writer)
 
-                    path.deleteExisting()
-                    commonFs.getPath(name).writeBytes(writer.toByteArray())
+                    commonPath.writeBytes(writer.toByteArray())
                 }
             }
         }
 
         serverFs.getPath("/").walk {
-            for (serverEntry in this) {
+            for (serverEntry in filter(Path::isRegularFile)) {
                 val name = serverEntry.toString()
                 if (name.endsWith(".class")) {
                     val output = commonFs.getPath(name)
@@ -299,6 +302,8 @@ object LegacyJarSplitter {
 
                         output.writeBytes(writer.toByteArray())
                     }
+                } else {
+                    commonFs.getPath(name).deleteExisting()
                 }
             }
         }
@@ -312,8 +317,8 @@ object LegacyJarSplitter {
 
         commonPath.parent.createDirectories()
         clientPath.parent.createDirectories()
-        common.copyTo(commonPath)
-        client.copyTo(clientPath)
+        common.copyTo(commonPath, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
+        client.copyTo(clientPath, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
 
         JarSplittingResult(
             commonPath,
@@ -334,14 +339,14 @@ object LegacyJarSplitter {
             if (server.getPath(name).notExists() || (!legacy && ("lang" in name || (path.parent.name == "assets" && path.name.startsWith('.'))))) {
                 val newPath = clientOut.getPath(name)
                 newPath.parent?.createDirectories()
-                path.copyTo(newPath)
+                path.copyTo(newPath, StandardCopyOption.COPY_ATTRIBUTES)
             }
         }
 
         server.withAssets { path ->
             val newPath = commonOut.getPath(path.toString())
             newPath.parent?.createDirectories()
-            path.copyTo(newPath)
+            path.copyTo(newPath, StandardCopyOption.COPY_ATTRIBUTES)
         }
     }
 

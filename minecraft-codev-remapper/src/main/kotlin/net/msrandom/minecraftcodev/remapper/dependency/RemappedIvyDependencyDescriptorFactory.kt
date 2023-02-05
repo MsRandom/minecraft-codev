@@ -1,6 +1,6 @@
 package net.msrandom.minecraftcodev.remapper.dependency
 
-import net.msrandom.minecraftcodev.core.named
+import net.msrandom.minecraftcodev.core.utils.named
 import org.gradle.api.artifacts.ModuleDependency
 import org.gradle.api.artifacts.component.ComponentIdentifier
 import org.gradle.api.attributes.AttributeContainer

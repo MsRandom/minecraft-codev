@@ -1,12 +1,14 @@
 package net.msrandom.minecraftcodev.remapper.resolve
 
+import net.msrandom.minecraftcodev.core.utils.addConfigurationResolutionDependencies
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.internal.artifacts.DefaultArtifactIdentifier
 import org.gradle.api.internal.artifacts.DefaultModuleVersionIdentifier
-import org.gradle.api.internal.tasks.DefaultTaskDependency
+import org.gradle.api.internal.tasks.AbstractTaskDependency
+import org.gradle.api.internal.tasks.TaskDependencyResolveContext
 import org.gradle.api.tasks.TaskDependency
 import org.gradle.internal.component.external.model.DefaultModuleComponentArtifactIdentifier
 import org.gradle.internal.component.external.model.ModuleComponentArtifactIdentifier
@@ -25,12 +27,11 @@ class MappingsArtifact(private val componentIdentifier: ModuleComponentIdentifie
     override fun getComponentId() = componentIdentifier
     override fun getName() = DefaultIvyArtifactName("mappings", ArtifactTypeDefinition.ZIP_TYPE, ArtifactTypeDefinition.ZIP_TYPE)
 
-    override fun getBuildDependencies(): TaskDependency = DefaultTaskDependency.EMPTY
-/*    override fun getBuildDependencies(): TaskDependency = object : AbstractTaskDependency() {
+    override fun getBuildDependencies(): TaskDependency = object : AbstractTaskDependency() {
         override fun visitDependencies(context: TaskDependencyResolveContext) {
             project.addConfigurationResolutionDependencies(context, project.configurations.getByName(mappingsConfiguration))
         }
-    }*/
+    }
 
     override fun toArtifactIdentifier() = DefaultArtifactIdentifier(
         DefaultModuleVersionIdentifier.newId(
@@ -64,11 +65,11 @@ class RemappedComponentArtifactMetadata(
 
     override fun getComponentId() = id
 
-/*    override fun getBuildDependencies(): TaskDependency = object : AbstractTaskDependency() {
+    override fun getBuildDependencies(): TaskDependency = object : AbstractTaskDependency() {
         override fun visitDependencies(context: TaskDependencyResolveContext) {
             context.add(delegate.buildDependencies)
             project.addConfigurationResolutionDependencies(context, classpath)
             project.addConfigurationResolutionDependencies(context, project.configurations.getByName(id.mappingsConfiguration))
         }
-    }*/
+    }
 }

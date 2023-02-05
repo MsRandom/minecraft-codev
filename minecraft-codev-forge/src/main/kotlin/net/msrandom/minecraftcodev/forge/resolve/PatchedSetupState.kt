@@ -6,24 +6,30 @@ import net.minecraftforge.accesstransformer.TransformerProcessor
 import net.minecraftforge.srgutils.IMappingFile
 import net.minecraftforge.srgutils.INamedMappingFile
 import net.msrandom.minecraftcodev.core.MappingsNamespace
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.callWithStatus
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.walk
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.zipFileSystem
 import net.msrandom.minecraftcodev.core.ModuleLibraryIdentifier
+import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
-import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
+import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.getOrResolve
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
 import net.msrandom.minecraftcodev.core.resolve.getExtractionState
 import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter.withAssets
+import net.msrandom.minecraftcodev.core.utils.callWithStatus
+import net.msrandom.minecraftcodev.core.utils.computeByNameIfAbsent
+import net.msrandom.minecraftcodev.core.utils.walk
+import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.forge.McpConfig
 import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin
 import net.msrandom.minecraftcodev.forge.PatchLibrary
 import net.msrandom.minecraftcodev.forge.UserdevConfig
+import net.msrandom.minecraftcodev.forge.dependency.PatchedComponentIdentifier
+import org.gradle.api.Project
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.internal.ProcessOperations
 import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
+import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
 import org.gradle.api.model.ObjectFactory
+import org.gradle.internal.component.external.model.DefaultModuleComponentArtifactIdentifier
 import org.gradle.internal.component.external.model.DefaultModuleComponentArtifactMetadata
 import org.gradle.internal.component.external.model.DefaultModuleComponentIdentifier
 import org.gradle.internal.component.model.DefaultComponentOverrideMetadata
@@ -34,6 +40,7 @@ import org.gradle.internal.operations.*
 import org.gradle.internal.resolve.ArtifactResolveException
 import org.gradle.internal.resolve.result.DefaultBuildableArtifactResolveResult
 import org.gradle.internal.resolve.result.DefaultBuildableComponentResolveResult
+import org.gradle.util.internal.BuildCommencedTimeProvider
 import java.io.File
 import java.io.PrintStream
 import java.nio.file.Files
@@ -46,6 +53,7 @@ import javax.inject.Inject
 import kotlin.io.path.*
 
 open class PatchedSetupState @Inject constructor(
+    private val moduleComponentIdentifier: PatchedComponentIdentifier,
     private val manifest: MinecraftVersionMetadata,
     private val clientJar: File,
     private val serverJar: File,
@@ -53,10 +61,12 @@ open class PatchedSetupState @Inject constructor(
     private val patchesHash: HashCode,
     private val cacheManager: CodevCacheManager,
 
+    private val project: Project,
     private val buildOperationExecutor: BuildOperationExecutor,
     private val processOperations: ProcessOperations,
-    private val checksumService: ChecksumService,
-    private val resolvers: ComponentResolversChainProvider
+    private val cachePolicy: CachePolicy,
+    private val timeProvider: BuildCommencedTimeProvider,
+    private val checksumService: ChecksumService
 ) {
     private val extractionState = getExtractionState(buildOperationExecutor, manifest, serverJar) { clientJar }
 
@@ -149,13 +159,17 @@ open class PatchedSetupState @Inject constructor(
 
                             if (output.notExists()) {
                                 output.parent?.createDirectories()
-                                path.copyTo(output)
+                                path.copyTo(output, StandardCopyOption.COPY_ATTRIBUTES)
                             }
                         }
                     }
                 }
 
                 // Add files from the universal Jar
+                project.configurations.computeByNameIfAbsent(userdevConfig.universal.replace(":", "")) {
+                    it.dependencies.add(project.dependencies.create(userdevConfig.universal))
+                }
+
                 val universal = resolveArtifact(userdevConfig.universal)
                 val filters = userdevConfig.universalFilters.map(::Regex)
                 zipFileSystem(universal.toPath()).use { universalZip ->
@@ -168,7 +182,7 @@ open class PatchedSetupState @Inject constructor(
                                 val output = patchedZip.getPath(name)
 
                                 output.parent?.createDirectories()
-                                path.copyTo(output)
+                                path.copyTo(output, StandardCopyOption.COPY_ATTRIBUTES)
                             }
                         }
                     }
@@ -183,7 +197,7 @@ open class PatchedSetupState @Inject constructor(
                                     val output = patchedZip.getPath(path.toString())
 
                                     output.parent?.createDirectories()
-                                    path.copyTo(output)
+                                    path.copyTo(output, StandardCopyOption.COPY_ATTRIBUTES)
                                 }
                             }
                         }
@@ -342,14 +356,13 @@ open class PatchedSetupState @Inject constructor(
 
                             if (newPath.notExists()) {
                                 newPath.parent?.createDirectories()
-                                path.copyTo(newPath)
+                                path.copyTo(newPath, StandardCopyOption.COPY_ATTRIBUTES)
                             }
                         }
                     }
                 }
 
                 val path = cacheManager.fileStoreDirectory.resolve(patchesHash.toString())
-                    .resolve("forge")
                     .resolve(manifest.id)
                     .resolve(checksumService.sha1(output.toFile()).toString())
                     .resolve("forge-${manifest.id}.${ArtifactTypeDefinition.JAR_TYPE}")
@@ -365,6 +378,32 @@ open class PatchedSetupState @Inject constructor(
                 path
             }
         })
+    }
+
+    val patchedOutput by lazy {
+        val patches = project.configurations.getByName(moduleComponentIdentifier.patches)
+
+        val patchesHash = PatchedMinecraftComponentResolvers.hash(patches, checksumService)
+
+        val identifier = DefaultModuleComponentArtifactIdentifier(
+            moduleComponentIdentifier,
+            moduleComponentIdentifier.module,
+            ArtifactTypeDefinition.JAR_TYPE,
+            ArtifactTypeDefinition.JAR_TYPE
+        )
+
+        val urlId = PatchedArtifactIdentifier(identifier, patchesHash)
+
+        val cache = cacheManager.getMetadataCache(Path("module-artifact"), { PatchedArtifactIdentifier.ArtifactSerializer }) {
+            CachedArtifactSerializer(cacheManager.fileStoreDirectory)
+        }.asFile
+
+        val result = DefaultBuildableArtifactResolveResult()
+        getOrResolve(DefaultModuleComponentArtifactMetadata(moduleComponentIdentifier, identifier.name), urlId, cache, cachePolicy, timeProvider, result) {
+            withAssets.toFile()
+        }
+
+        result.result
     }
 
     private fun resolveArtifact(library: String): File {
@@ -464,6 +503,7 @@ open class PatchedSetupState @Inject constructor(
         private val patchedStates = ConcurrentHashMap<Pair<String, File>, PatchedSetupState>()
 
         fun getPatchedState(
+            moduleComponentIdentifier: PatchedComponentIdentifier,
             manifest: MinecraftVersionMetadata,
             clientJar: File,
             serverJar: File,
@@ -472,7 +512,7 @@ open class PatchedSetupState @Inject constructor(
             cacheManager: CodevCacheManager,
             objectFactory: ObjectFactory
         ) = patchedStates.computeIfAbsent(manifest.id to userdevConfigFile) { (_, userdevFile) ->
-            objectFactory.newInstance(PatchedSetupState::class.java, manifest, clientJar, serverJar, userdevFile, patchesHash, cacheManager)
+            objectFactory.newInstance(PatchedSetupState::class.java, moduleComponentIdentifier, manifest, clientJar, serverJar, userdevFile, patchesHash, cacheManager)
         }
     }
 }

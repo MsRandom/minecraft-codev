@@ -1,20 +1,20 @@
 package net.msrandom.minecraftcodev.runs
 
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.osVersion
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.zipFileSystem
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
 import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
 import net.msrandom.minecraftcodev.core.resolve.MinecraftMetadataGenerator
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
+import net.msrandom.minecraftcodev.core.utils.getCacheProvider
+import net.msrandom.minecraftcodev.core.utils.osVersion
+import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
 import org.apache.commons.lang3.StringUtils
 import org.apache.commons.lang3.SystemUtils
 import org.gradle.api.artifacts.Configuration
 import org.gradle.api.artifacts.ResolvedArtifact
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
-import org.gradle.api.internal.artifacts.DefaultArtifactIdentifier
 import org.gradle.api.internal.artifacts.RepositoriesSupplier
 import org.gradle.api.internal.artifacts.configurations.ResolutionStrategyInternal
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.StartParameterResolutionOverride
@@ -23,8 +23,6 @@ import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.SourceSet
 import org.gradle.configurationcache.extensions.serviceOf
 import org.gradle.internal.os.OperatingSystem
-import java.io.File
-import java.time.Duration
 import java.util.jar.Attributes
 import java.util.jar.JarFile
 import java.util.jar.Manifest
@@ -185,23 +183,11 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
                             .firstNotNullOfOrNull { repository ->
                                 MinecraftArtifactResolver.resolveMojangFile(
                                     manifest,
-                                    MinecraftCodevPlugin.getCacheProvider(project.gradle).manager("minecraft"),
+                                    getCacheProvider(project.gradle).manager("minecraft"),
                                     project.serviceOf(),
                                     repository,
                                     MinecraftComponentResolvers.SERVER_DOWNLOAD
-                                ) { file: File, duration: Duration ->
-                                    val cachePolicy = (configuration.resolutionStrategy as ResolutionStrategyInternal).cachePolicy
-
-                                    project.serviceOf<StartParameterResolutionOverride>().applyToCachePolicy(cachePolicy)
-
-                                    cachePolicy.artifactExpiry(
-                                        DefaultArtifactIdentifier(artifact.moduleVersion.id, artifact.name, artifact.type, artifact.extension, artifact.classifier),
-                                        file,
-                                        duration,
-                                        false,
-                                        true
-                                    ).isMustCheck
-                                }
+                                )
                             } ?: throw UnsupportedOperationException("Version $artifactProvider does not have a server.")
 
                         zipFileSystem(serverJar.toPath()).use {
@@ -245,9 +231,10 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
                     MinecraftMetadataGenerator.getVersionManifest(
                         artifact.id.componentIdentifier as ModuleComponentIdentifier,
                         repository.url,
-                        MinecraftCodevPlugin.getCacheProvider(project.gradle).manager("minecraft"),
+                        getCacheProvider(project.gradle).manager("minecraft"),
                         cachePolicy,
-                        repository.transport.resourceAccessor,
+                        repository.resourceAccessor,
+                        project.serviceOf(),
                         project.serviceOf(),
                         null
                     )

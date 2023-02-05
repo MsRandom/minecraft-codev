@@ -5,7 +5,7 @@ import net.fabricmc.tinyremapper.IMappingProvider
 import net.fabricmc.tinyremapper.NonClassCopyMode
 import net.fabricmc.tinyremapper.OutputConsumerPath
 import net.fabricmc.tinyremapper.TinyRemapper
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.zipFileSystem
+import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.gradle.api.file.FileCollection
 import java.io.File
 import java.nio.file.Files

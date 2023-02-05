@@ -1,13 +1,15 @@
 package net.msrandom.minecraftcodev.core.resolve.legacy
 
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.zipFileSystem
 import net.msrandom.minecraftcodev.core.ModuleLibraryIdentifier
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
+import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.gradle.api.logging.Logger
 import java.nio.file.FileSystem
 import java.nio.file.Files
 import java.nio.file.Path
-import kotlin.io.path.*
+import kotlin.io.path.deleteExisting
+import kotlin.io.path.isRegularFile
+import kotlin.io.path.notExists
 
 object ServerFixer {
     private val LIBRARY_PATHS = mapOf(
@@ -34,7 +36,7 @@ object ServerFixer {
         return entry.value.firstOrNull { path.startsWith(it.first) }?.second
     }
 
-    fun removeLibraries(logger: Logger?, manifest: MinecraftVersionMetadata, newServer: Path, server: Path, serverFs: FileSystem, client: Path): Collection<ModuleLibraryIdentifier> {
+    fun removeLibraries(logger: Logger?, manifest: MinecraftVersionMetadata, newServer: Path, serverFs: FileSystem, client: Path): Collection<ModuleLibraryIdentifier> {
         val commonLibraries = mutableSetOf<MinecraftVersionMetadata.Library>()
         val libraryGroups = hashMapOf<String, MutableList<Pair<String, MinecraftVersionMetadata.Library>>>()
 
@@ -52,40 +54,32 @@ object ServerFixer {
             }
         }
 
-        newServer.deleteIfExists()
-
         // Do this even if it's already done, as we need it for collecting the server libraries
         logger?.lifecycle(":Stripping ${manifest.id} server Jar")
-        zipFileSystem(newServer, true).use { fixedFs ->
+        zipFileSystem(newServer).use { fixedFs ->
             zipFileSystem(client).use { clientFs ->
                 val root = serverFs.getPath("/")
                 WALK@ for (path in Files.walk(root).filter(Path::isRegularFile)) {
+                    val newPath = fixedFs.getPath(path.toString())
                     if (clientFs.getPath(path.toString()).notExists()) {
                         for (entry in libraryGroups) {
                             val library = testLibraryPath(path, entry)
 
                             if (library != null) {
                                 commonLibraries.add(library)
+                                newPath.deleteExisting()
                                 continue@WALK
                             }
                         }
-
-                        if ((path.parent != root || !path.toString().endsWith(".class")) && "net/minecraft" !in path.toString()) continue@WALK
                     }
 
-                    val newPath = fixedFs.getPath(path.toString())
-                    newPath.parent?.createDirectories()
-                    path.copyTo(newPath)
+                    if ((path.parent != root || !path.toString().endsWith(".class")) && "net/minecraft" !in path.toString()) {
+                        newPath.deleteExisting()
+                    }
                 }
             }
         }
 
-        return if (commonLibraries.isEmpty()) {
-            // If we found no libraries, there's no point in modifying the file.
-            server.copyTo(newServer, true)
-            emptyList()
-        } else {
-            commonLibraries.map(MinecraftVersionMetadata.Library::name)
-        }
+        return commonLibraries.map(MinecraftVersionMetadata.Library::name)
     }
 }

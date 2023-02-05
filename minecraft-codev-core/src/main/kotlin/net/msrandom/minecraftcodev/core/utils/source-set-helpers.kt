@@ -1,4 +1,4 @@
-package net.msrandom.minecraftcodev.core
+package net.msrandom.minecraftcodev.core.utils
 
 import net.msrandom.minecraftcodev.core.dependency.ConfiguredDependencyMetadata
 import org.apache.commons.lang3.StringUtils

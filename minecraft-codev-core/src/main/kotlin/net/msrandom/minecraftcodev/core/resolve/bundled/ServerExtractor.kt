@@ -14,7 +14,7 @@ object ServerExtractor {
             parts[1] to parts[2]
         }
 
-        serverFs.getPath("META-INF/versions/${versions.getValue(version)}").copyTo(newServer, StandardCopyOption.REPLACE_EXISTING)
+        serverFs.getPath("META-INF/versions/${versions.getValue(version)}").copyTo(newServer, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES)
 
         return librariesList.readLines().map { ModuleLibraryIdentifier.load(it.split('\t')[1]) }
     }

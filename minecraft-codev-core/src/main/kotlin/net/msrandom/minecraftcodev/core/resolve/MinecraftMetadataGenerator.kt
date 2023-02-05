@@ -8,10 +8,13 @@ import net.msrandom.minecraftcodev.core.*
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
 import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
 import net.msrandom.minecraftcodev.core.dependency.MinecraftDependencyMetadataWrapper
+import net.msrandom.minecraftcodev.core.repository.DefaultCacheAwareExternalResourceAccessor
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
+import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.getAdditionalCandidates
 import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.resolveMojangFile
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.addNamed
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.asMinecraftDownload
+import net.msrandom.minecraftcodev.core.utils.named
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
@@ -26,7 +29,6 @@ import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
 import org.gradle.api.internal.artifacts.DefaultModuleVersionIdentifier
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
 import org.gradle.api.internal.artifacts.dependencies.DefaultImmutableVersionConstraint
-import org.gradle.api.internal.artifacts.ivyservice.modulecache.FileStoreAndIndexProvider
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.dynamicversions.DefaultResolvedModuleVersion
 import org.gradle.api.internal.artifacts.publish.ImmutablePublishArtifact
 import org.gradle.api.internal.attributes.ImmutableAttributes
@@ -47,14 +49,12 @@ import org.gradle.internal.operations.BuildOperationExecutor
 import org.gradle.internal.resolve.result.BuildableComponentResolveResult
 import org.gradle.internal.resolve.result.BuildableModuleVersionListingResolveResult
 import org.gradle.internal.resource.ExternalResourceName
-import org.gradle.internal.resource.transfer.CacheAwareExternalResourceAccessor
 import org.gradle.nativeplatform.OperatingSystemFamily
 import org.gradle.nativeplatform.platform.internal.DefaultOperatingSystem
-import java.io.File
+import org.gradle.util.internal.BuildCommencedTimeProvider
 import java.net.URI
 import java.nio.file.Path
 import java.time.Duration
-import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import kotlin.io.path.*
@@ -64,10 +64,10 @@ open class MinecraftMetadataGenerator @Inject constructor(
     private val globalCacheDir: GlobalCacheDir,
     private val attributesFactory: ImmutableAttributesFactory,
     private val buildOperationExecutor: BuildOperationExecutor,
-    private val fileStoreAndIndexProvider: FileStoreAndIndexProvider,
     private val instantiator: NamedObjectInstantiator,
     private val objectFactory: ObjectFactory,
     private val checksumService: ChecksumService,
+    private val timeProvider: BuildCommencedTimeProvider,
     private val cachePolicy: CachePolicy,
     private val project: Project
 ) {
@@ -76,21 +76,12 @@ open class MinecraftMetadataGenerator @Inject constructor(
         repository: MinecraftRepositoryImpl.Resolver,
         manifest: MinecraftVersionMetadata
     ): Lazy<ServerExtractionResult>? {
-        val shouldRefresh = { _: File, duration: Duration ->
-            cachePolicy.moduleExpiry(
-                componentIdentifier,
-                DefaultResolvedModuleVersion(DefaultModuleVersionIdentifier.newId(componentIdentifier)),
-                duration
-            ).isMustCheck
-        }
-
         val serverJar = resolveMojangFile(
             manifest,
             cacheManager,
             checksumService,
             repository,
-            MinecraftComponentResolvers.SERVER_DOWNLOAD,
-            shouldRefresh
+            MinecraftComponentResolvers.SERVER_DOWNLOAD
         )
 
         return if (serverJar == null) {
@@ -102,8 +93,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                     cacheManager,
                     checksumService,
                     repository,
-                    MinecraftComponentResolvers.CLIENT_DOWNLOAD,
-                    shouldRefresh
+                    MinecraftComponentResolvers.CLIENT_DOWNLOAD
                 )!!
             }
         }
@@ -112,7 +102,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
     fun resolveMetadata(
         repository: MinecraftRepositoryImpl.Resolver,
         extraLibraries: List<ModuleLibraryIdentifier>,
-        resourceAccessor: CacheAwareExternalResourceAccessor,
+        resourceAccessor: DefaultCacheAwareExternalResourceAccessor,
         moduleComponentIdentifier: ModuleComponentIdentifier,
         requestMetaData: ComponentOverrideMetadata,
         result: BuildableComponentResolveResult,
@@ -126,14 +116,18 @@ open class MinecraftMetadataGenerator @Inject constructor(
             cacheManager,
             cachePolicy,
             resourceAccessor,
-            fileStoreAndIndexProvider,
+            checksumService,
+            timeProvider,
             null
         )
 
         val manifest = getVersionManifest(
             moduleComponentIdentifier,
             resourceAccessor,
-            fileStoreAndIndexProvider,
+            cachePolicy,
+            cacheManager,
+            checksumService,
+            timeProvider,
             result::attempted,
             versionList
         )
@@ -254,7 +248,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
 
     fun resolveMetadata(
         repository: MinecraftRepositoryImpl.Resolver,
-        resourceAccessor: CacheAwareExternalResourceAccessor,
+        resourceAccessor: DefaultCacheAwareExternalResourceAccessor,
         moduleComponentIdentifier: ModuleComponentIdentifier,
         requestMetaData: ComponentOverrideMetadata,
         result: BuildableComponentResolveResult
@@ -266,14 +260,18 @@ open class MinecraftMetadataGenerator @Inject constructor(
             cacheManager,
             cachePolicy,
             resourceAccessor,
-            fileStoreAndIndexProvider,
+            checksumService,
+            timeProvider,
             null
         )
 
         val manifest = getVersionManifest(
             moduleComponentIdentifier,
             resourceAccessor,
-            fileStoreAndIndexProvider,
+            cachePolicy,
+            cacheManager,
+            checksumService,
+            timeProvider,
             result::attempted,
             versionList
         )
@@ -685,13 +683,14 @@ open class MinecraftMetadataGenerator @Inject constructor(
             identifier: ModuleComponentIdentifier,
             resolvedModuleVersion: ResolvedModuleVersion?,
             versionManifest: Path,
+            timeProvider: BuildCommencedTimeProvider,
             cachePolicy: CachePolicy
         ): MinecraftVersionList? {
             val list = versionManifest.inputStream().use {
                 json.decodeFromStream<MinecraftVersionManifest>(it)
             }
 
-            val age = Duration.between(versionManifest.getLastModifiedTime().toInstant(), Instant.now())
+            val age = Duration.ofMillis(timeProvider.currentTime - versionManifest.getLastModifiedTime().toMillis())
             val expiry = if (resolvedModuleVersion == null) {
                 cachePolicy.versionListExpiry(identifier.moduleIdentifier, list.versions.mapTo(mutableSetOf()) { DefaultModuleVersionIdentifier.newId(identifier.moduleIdentifier, it.id) }, age)
             } else {
@@ -707,27 +706,23 @@ open class MinecraftMetadataGenerator @Inject constructor(
 
         private fun fetchVersionList(
             url: URI,
-            fileStoreAndIndexProvider: FileStoreAndIndexProvider,
+            resolvedModuleVersion: ResolvedModuleVersion?,
             result: BuildableModuleVersionListingResolveResult?,
-            resourceAccessor: CacheAwareExternalResourceAccessor,
+            resourceAccessor: DefaultCacheAwareExternalResourceAccessor,
+            checksumService: ChecksumService,
             versionManifest: Path
         ): MinecraftVersionList? {
             val location = ExternalResourceName(url)
 
-            val fileStore = object : CacheAwareExternalResourceAccessor.DefaultResourceFileStore<String>(fileStoreAndIndexProvider.externalResourceFileStore) {
-                override fun computeKey() = location.toString()
-            }
-
             result?.attempted(location)
 
-            val resource = resourceAccessor.getResource(location, null, fileStore, null)
+            val resource = if (resolvedModuleVersion == null) {
+                resourceAccessor.getResource(location, null, versionManifest, null)
+            } else {
+                resourceAccessor.getResource(location, null, versionManifest, getAdditionalCandidates(versionManifest, checksumService))
+            }
 
             return resource?.file?.let { file ->
-                versionManifest.deleteIfExists()
-                versionManifest.parent.createDirectories()
-
-                file.toPath().copyTo(versionManifest)
-
                 file.inputStream().use {
                     MinecraftVersionList(json.decodeFromStream(it))
                 }
@@ -740,8 +735,9 @@ open class MinecraftMetadataGenerator @Inject constructor(
             url: URI,
             cacheManager: CodevCacheManager,
             cachePolicy: CachePolicy,
-            resourceAccessor: CacheAwareExternalResourceAccessor,
-            fileStoreAndIndexProvider: FileStoreAndIndexProvider,
+            resourceAccessor: DefaultCacheAwareExternalResourceAccessor,
+            checksumService: ChecksumService,
+            timeProvider: BuildCommencedTimeProvider,
             result: BuildableModuleVersionListingResolveResult?
         ) = synchronized(manifestLock) {
             if (isManifestInitialized) {
@@ -749,9 +745,9 @@ open class MinecraftMetadataGenerator @Inject constructor(
             } else {
                 val versionManifest = cacheManager.rootPath.resolve("version-manifest.json")
 
-                val cached = versionManifest.takeIf(Path::exists)?.let { checkCached(id, resolvedModuleVersion, it, cachePolicy) }
+                val cached = versionManifest.takeIf(Path::exists)?.let { checkCached(id, resolvedModuleVersion, it, timeProvider, cachePolicy) }
 
-                this.versionManifest = cached ?: fetchVersionList(url, fileStoreAndIndexProvider, result, resourceAccessor, versionManifest)
+                this.versionManifest = cached ?: fetchVersionList(url, resolvedModuleVersion, result, resourceAccessor, checksumService, versionManifest)
                 this.isManifestInitialized = true
 
                 this.versionManifest
@@ -763,37 +759,49 @@ open class MinecraftMetadataGenerator @Inject constructor(
             url: URI,
             cacheManager: CodevCacheManager,
             cachePolicy: CachePolicy,
-            resourceAccessor: CacheAwareExternalResourceAccessor,
-            fileStoreAndIndexProvider: FileStoreAndIndexProvider,
+            resourceAccessor: DefaultCacheAwareExternalResourceAccessor,
+            checksumService: ChecksumService,
+            timeProvider: BuildCommencedTimeProvider,
             attempt: ((location: ExternalResourceName) -> Unit)?,
         ) = getVersionManifest(
             id,
             resourceAccessor,
-            fileStoreAndIndexProvider,
+            cachePolicy,
+            cacheManager,
+            checksumService,
+            timeProvider,
             attempt,
-            getVersionList(id, DefaultResolvedModuleVersion(DefaultModuleVersionIdentifier.newId(id)), url, cacheManager, cachePolicy, resourceAccessor, fileStoreAndIndexProvider, null)
+            getVersionList(id, DefaultResolvedModuleVersion(DefaultModuleVersionIdentifier.newId(id)), url, cacheManager, cachePolicy, resourceAccessor, checksumService, timeProvider, null)
         )
 
         fun getVersionManifest(
             id: ModuleComponentIdentifier,
-            resourceAccessor: CacheAwareExternalResourceAccessor,
-            fileStoreAndIndexProvider: FileStoreAndIndexProvider,
+            resourceAccessor: DefaultCacheAwareExternalResourceAccessor,
+            cachePolicy: CachePolicy,
+            cacheManager: CodevCacheManager,
+            checksumService: ChecksumService,
+            timeProvider: BuildCommencedTimeProvider,
             attempt: ((location: ExternalResourceName) -> Unit)?,
             versionList: MinecraftVersionList?
         ): MinecraftVersionMetadata? = versionList?.versions?.get(id.version)?.let { info ->
             versionData.computeIfAbsent(id.version) {
-                val location = ExternalResourceName(info.url)
+                val path = cacheManager.rootPath.resolve("cached-metadata").resolve("${id.version}.json")
 
-                attempt?.invoke(location)
+                val resolvedVersion = DefaultResolvedModuleVersion(DefaultModuleVersionIdentifier.newId(id.group, id.module, id.version))
+                val refresh = !path.exists() || cachePolicy.moduleExpiry(id, resolvedVersion, Duration.ofMillis(timeProvider.currentTime - path.getLastModifiedTime().toMillis())).isMustCheck
+                if (!refresh && checksumService.sha1(path.toFile()).toString() == info.sha1) {
+                    path.inputStream()
+                } else {
+                    val location = ExternalResourceName(info.url)
+                    attempt?.invoke(location)
 
-                resourceAccessor.getResource(
-                    location,
-                    null,
-                    object : CacheAwareExternalResourceAccessor.DefaultResourceFileStore<String>(fileStoreAndIndexProvider.externalResourceFileStore) {
-                        override fun computeKey() = location.toString()
-                    },
-                    null
-                )?.file?.inputStream()?.use(json::decodeFromStream)
+                    resourceAccessor.getResource(
+                        location,
+                        info.sha1,
+                        path,
+                        getAdditionalCandidates(path, checksumService)
+                    )?.file?.inputStream()
+                }?.use(json::decodeFromStream)
             }
         }
     }

@@ -52,9 +52,7 @@ data class CachedExternalResourceSerializer(private val commonRootPath: Path) : 
         if (metaData != null) {
             encoder.writeString(metaData.location.toASCIIString())
             encoder.writeBoolean(metaData.lastModified != null)
-            if (metaData.lastModified != null) {
-                encoder.writeLong(metaData.lastModified!!.time)
-            }
+            metaData.lastModified?.time?.let(encoder::writeLong)
             encoder.writeNullableString(metaData.contentType)
             encoder.writeSmallLong(metaData.contentLength)
             encoder.writeNullableString(metaData.etag)

@@ -2,13 +2,14 @@ package net.msrandom.minecraftcodev.accesswidener
 
 import net.fabricmc.accesswidener.AccessWidener
 import net.fabricmc.accesswidener.AccessWidenerClassVisitor
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.walk
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.zipFileSystem
+import net.msrandom.minecraftcodev.core.utils.walk
+import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassWriter
 import org.objectweb.asm.Opcodes
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import kotlin.io.path.*
 
 object JarAccessWidener {
@@ -32,7 +33,7 @@ object JarAccessWidener {
 
                             outputPath.writeBytes(writer.toByteArray())
                         } else {
-                            path.copyTo(outputPath)
+                            path.copyTo(outputPath, StandardCopyOption.COPY_ATTRIBUTES)
                         }
                     }
                 }

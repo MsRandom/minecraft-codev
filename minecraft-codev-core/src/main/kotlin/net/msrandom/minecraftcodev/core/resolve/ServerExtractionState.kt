@@ -1,15 +1,17 @@
 package net.msrandom.minecraftcodev.core.resolve
 
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.callWithStatus
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.zipFileSystem
 import net.msrandom.minecraftcodev.core.ModuleLibraryIdentifier
 import net.msrandom.minecraftcodev.core.resolve.bundled.ServerExtractor
 import net.msrandom.minecraftcodev.core.resolve.legacy.ServerFixer
+import net.msrandom.minecraftcodev.core.utils.callWithStatus
+import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.gradle.internal.operations.*
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.io.path.copyTo
 import kotlin.io.path.exists
 
 private val extractionStates = ConcurrentHashMap<File, Lazy<ServerExtractionResult>>()
@@ -39,7 +41,8 @@ fun getExtractionState(buildOperationExecutor: BuildOperationExecutor, manifest:
                         } else {
                             // Old server Jar, strip the libraries out manually
                             isBundled = false
-                            commonLibraries = ServerFixer.removeLibraries(null, manifest, extractedJar, serverJar.toPath(), serverFs, clientJar().toPath())
+                            serverJar.toPath().copyTo(extractedJar, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES)
+                            commonLibraries = ServerFixer.removeLibraries(null, manifest, extractedJar, serverFs, clientJar().toPath())
                         }
                     }
 

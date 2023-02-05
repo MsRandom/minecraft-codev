@@ -1,11 +1,12 @@
 package net.msrandom.minecraftcodev.accesswidener
 
 import net.msrandom.minecraftcodev.accesswidener.dependency.AccessWidenedDependencyFactory
+import net.msrandom.minecraftcodev.accesswidener.dependency.AccessWidenedDependencyMetadata
 import net.msrandom.minecraftcodev.accesswidener.dependency.AccessWidenedIvyDependencyDescriptorFactory
 import net.msrandom.minecraftcodev.accesswidener.resolve.AccessWidenedComponentResolvers
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
-import net.msrandom.minecraftcodev.core.applyPlugin
-import net.msrandom.minecraftcodev.core.createSourceSetConfigurations
+import net.msrandom.minecraftcodev.core.utils.applyPlugin
+import net.msrandom.minecraftcodev.core.utils.createSourceSetConfigurations
 import net.msrandom.minecraftcodev.core.dependency.registerCustomDependency
 import org.gradle.api.Plugin
 import org.gradle.api.invocation.Gradle
@@ -17,7 +18,8 @@ class MinecraftCodevAccessWidenerPlugin<T : PluginAware> : Plugin<T> {
             "accessWidened",
             AccessWidenedIvyDependencyDescriptorFactory::class.java,
             AccessWidenedDependencyFactory::class.java,
-            AccessWidenedComponentResolvers::class.java
+            AccessWidenedComponentResolvers::class.java,
+            AccessWidenedDependencyMetadata::class.java
         )
     }
 

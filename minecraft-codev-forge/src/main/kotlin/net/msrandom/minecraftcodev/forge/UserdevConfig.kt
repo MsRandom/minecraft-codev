@@ -3,8 +3,8 @@ package net.msrandom.minecraftcodev.forge
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.decodeFromStream
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.zipFileSystem
 import net.msrandom.minecraftcodev.core.ModuleLibraryIdentifier
+import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.exists
