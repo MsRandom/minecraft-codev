@@ -7,8 +7,7 @@ import java.io.File
 
 @Testable
 class PatchedMinecraftTests {
-    @Test
-    fun `Test patched Minecraft`() {
+    private fun test(pathName: String) {
         GradleRunner.create()
             .withProjectDir(File("basic-patched-test"))
             .withPluginClasspath()
@@ -18,14 +17,6 @@ class PatchedMinecraftTests {
             .build()
     }
 
-    @Test
-    fun `Test remapped patched Minecraft`() {
-        GradleRunner.create()
-            .withProjectDir(File("remapped-patched-test"))
-            .withPluginClasspath()
-            .withArguments("jar", "printCompileClasspath", "-s")
-            .forwardOutput()
-            .withDebug(true)
-            .build()
-    }
+    @Test fun `Test patched Minecraft`() = test("basic-patched-test")
+    @Test fun `Test remapped patched Minecraft`() = test("remapped-patched-test")
 }

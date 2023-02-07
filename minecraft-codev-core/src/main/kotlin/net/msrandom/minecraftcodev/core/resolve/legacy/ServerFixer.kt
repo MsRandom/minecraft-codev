@@ -71,10 +71,10 @@ object ServerFixer {
                                 continue@WALK
                             }
                         }
-                    }
 
-                    if ((path.parent != root || !path.toString().endsWith(".class")) && "net/minecraft" !in path.toString()) {
-                        newPath.deleteExisting()
+                        if ((path.parent != root || !path.toString().endsWith(".class")) && "net/minecraft" !in path.toString()) {
+                            newPath.deleteExisting()
+                        }
                     }
                 }
             }

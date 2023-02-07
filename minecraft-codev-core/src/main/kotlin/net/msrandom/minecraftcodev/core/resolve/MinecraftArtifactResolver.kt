@@ -6,6 +6,7 @@ import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.asMinecraftDownload
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.hash
+import net.msrandom.minecraftcodev.core.utils.asSerializable
 import org.gradle.api.artifacts.component.ComponentArtifactIdentifier
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.FileStoreAndIndexProvider
@@ -71,7 +72,7 @@ open class MinecraftArtifactResolver @Inject constructor(
             if (artifact is LocalComponentArtifactMetadata) {
                 result.resolved(artifact.file)
             } else {
-                getOrResolve(artifact as ModuleComponentArtifactMetadata, artifact.id, artifactCache, cachePolicy, timeProvider, result) {
+                getOrResolve(artifact as ModuleComponentArtifactMetadata, artifact.id.asSerializable, artifactCache, cachePolicy, timeProvider, result) {
                     for (repository in repositories) {
                         when (componentIdentifier.module) {
                             MinecraftComponentResolvers.COMMON_MODULE -> {

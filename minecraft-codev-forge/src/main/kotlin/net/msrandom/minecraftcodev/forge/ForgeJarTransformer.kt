@@ -1,27 +1,10 @@
 package net.msrandom.minecraftcodev.forge
 
-import net.msrandom.minecraftcodev.core.utils.zipFileSystem
-import org.gradle.api.artifacts.transform.InputArtifact
-import org.gradle.api.artifacts.transform.TransformAction
-import org.gradle.api.artifacts.transform.TransformOutputs
-import org.gradle.api.artifacts.transform.TransformParameters
-import org.gradle.api.file.FileSystemLocation
-import org.gradle.api.provider.Provider
-import org.objectweb.asm.ClassReader
-import org.objectweb.asm.ClassWriter
+import net.msrandom.minecraftcodev.core.dependency.AsmJarTransformer
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.tree.*
-import java.nio.file.StandardCopyOption
-import java.util.*
-import kotlin.io.path.copyTo
-import kotlin.io.path.exists
-import kotlin.io.path.inputStream
-import kotlin.io.path.writeBytes
 
-abstract class ForgeJarTransformer : TransformAction<TransformParameters.None> {
-    abstract val input: Provider<FileSystemLocation>
-        @InputArtifact get
-
+abstract class ForgeJarTransformer : AsmJarTransformer("net/minecraftforge/fml/loading/targets/ForgeClientUserdevLaunchHandler.class") {
     private fun MethodNode.loadPaths(property: String, index: Int) {
         // ArrayList var1 = new ArrayList();
         instructions.add(TypeInsnNode(Opcodes.NEW, "java/util/ArrayList"))
@@ -78,130 +61,94 @@ abstract class ForgeJarTransformer : TransformAction<TransformParameters.None> {
         instructions.add(minecraftLoopEnd)
     }
 
-    override fun transform(outputs: TransformOutputs) {
-        val replace = zipFileSystem(input.get().asFile.toPath()).use {
-            val clientUserdev = it.getPath(LAUNCH_HANDLER)
-            if (clientUserdev.exists()) {
-                println(":Transforming ${input.get().asFile.name}")
+    override fun editNode(node: ClassNode) {
+        val methodIndex = node.methods.indexOfFirst { it.name == "getMinecraftPaths" }
 
-                true
-            } else {
-                false
-            }
+        node.methods[methodIndex] = MethodNode().apply {
+            val old = node.methods[methodIndex]
+            name = old.name
+            desc = old.desc
+
+            loadPaths("minecraftCodev.minecraftJars", 1)
+            loadPaths("minecraftCodev.fmlJars", 5)
+
+            val index = 9
+
+            instructions.add(MethodInsnNode(Opcodes.INVOKESTATIC, "java/util/stream/Stream", "builder", "()Ljava/util/stream/Stream\$Builder;", true))
+            instructions.add(VarInsnNode(Opcodes.ASTORE, index))
+
+            // Iterator var6 = getModClasses().entrySet().iterator()
+            instructions.add(VarInsnNode(Opcodes.ALOAD, 0))
+            instructions.add(MethodInsnNode(Opcodes.INVOKEVIRTUAL, "net/minecraftforge/fml/loading/targets/CommonLaunchHandler", "getModClasses", "()Ljava/util/Map;"))
+            instructions.add(MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/Map", "entrySet", "()Ljava/util/Set;"))
+            instructions.add(MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/lang/Iterable", "iterator", "()Ljava/util/Iterator;"))
+            instructions.add(VarInsnNode(Opcodes.ASTORE, index + 1))
+
+            val modLoopStart = LabelNode()
+            val modLoopEnd = LabelNode()
+
+            // modLoopStart:
+            instructions.add(modLoopStart)
+
+            // if (!var6.hasNext()) goto modLoopEnd;
+            instructions.add(VarInsnNode(Opcodes.ALOAD, index + 1))
+            instructions.add(MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/Iterator", "hasNext", "()Z"))
+            instructions.add(JumpInsnNode(Opcodes.IFEQ, modLoopEnd))
+
+            // var5.add(var6.next().getValue());
+            instructions.add(VarInsnNode(Opcodes.ALOAD, index))
+            instructions.add(VarInsnNode(Opcodes.ALOAD, index + 1))
+            instructions.add(MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/Iterator", "next", "()Ljava/lang/Object;"))
+            instructions.add(MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/Map\$Entry", "getValue", "()Ljava/lang/Object;"))
+            instructions.add(MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/stream/Stream\$Builder", "add", "(Ljava/lang/Object;)Ljava/util/stream/Stream\$Builder;"))
+            instructions.add(InsnNode(Opcodes.POP))
+
+            // goto modLoopStart;
+            instructions.add(JumpInsnNode(Opcodes.GOTO, modLoopStart))
+
+            // modLoopEnd:
+            instructions.add(modLoopEnd)
+
+            // return new LocatedPaths();
+            instructions.add(TypeInsnNode(Opcodes.NEW, "net/minecraftforge/fml/loading/targets/CommonLaunchHandler\$LocatedPaths"))
+            instructions.add(InsnNode(Opcodes.DUP))
+
+            instructions.add(VarInsnNode(Opcodes.ALOAD, 1))
+
+            // this.getMcFilter(Paths.get(...), var1, var9)
+            instructions.add(VarInsnNode(Opcodes.ALOAD, 0))
+            instructions.add(LdcInsnNode("/fakepath/b538a141-5c9a-4e55-8db2-38242acf0d73/shouldnotexist/"))
+            instructions.add(InsnNode(Opcodes.ICONST_0))
+            instructions.add(TypeInsnNode(Opcodes.ANEWARRAY, "java/lang/String"))
+            instructions.add(MethodInsnNode(Opcodes.INVOKESTATIC, "java/nio/file/Paths", "get", "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;"))
+            instructions.add(VarInsnNode(Opcodes.ALOAD, 1))
+            instructions.add(VarInsnNode(Opcodes.ALOAD, index))
+            instructions.add(
+                MethodInsnNode(
+                    Opcodes.INVOKEVIRTUAL,
+                    "net/minecraftforge/fml/loading/targets/CommonDevLaunchHandler",
+                    "getMcFilter",
+                    "(Ljava/nio/file/Path;Ljava/util/List;Ljava/util/stream/Stream\$Builder;)Ljava/util/function/BiPredicate;"
+                )
+            )
+
+            instructions.add(VarInsnNode(Opcodes.ALOAD, index))
+            instructions.add(MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/stream/Stream\$Builder", "build", "()Ljava/util/stream/Stream;"))
+            instructions.add(MethodInsnNode(Opcodes.INVOKESTATIC, "java/util/stream/Collectors", "toList", "()Ljava/util/stream/Collector;"))
+            instructions.add(MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/stream/Stream", "collect", "(Ljava/util/stream/Collector;)Ljava/lang/Object;"))
+
+            instructions.add(VarInsnNode(Opcodes.ALOAD, 5))
+
+            instructions.add(
+                MethodInsnNode(
+                    Opcodes.INVOKESPECIAL,
+                    "net/minecraftforge/fml/loading/targets/CommonLaunchHandler\$LocatedPaths",
+                    "<init>",
+                    "(Ljava/util/List;Ljava/util/function/BiPredicate;Ljava/util/List;Ljava/util/List;)V"
+                )
+            )
+
+            instructions.add(InsnNode(Opcodes.ARETURN))
         }
-
-        if (replace) {
-            val output = outputs.file("transformed-${input.get().asFile.name}").toPath()
-            input.get().asFile.toPath().copyTo(output, StandardCopyOption.COPY_ATTRIBUTES)
-            zipFileSystem(output).use { fs ->
-                val userdevLaunchHandler = fs.getPath(LAUNCH_HANDLER)
-
-                val reader = userdevLaunchHandler.inputStream().use(::ClassReader)
-                val node = ClassNode()
-
-                reader.accept(node, 0)
-
-                val methodIndex = node.methods.indexOfFirst { it.name == "getMinecraftPaths" }
-
-                node.methods[methodIndex] = MethodNode().apply {
-                    val old = node.methods[methodIndex]
-                    name = old.name
-                    desc = old.desc
-
-                    loadPaths("minecraftCodev.minecraftJars", 1)
-                    loadPaths("minecraftCodev.fmlJars", 5)
-
-                    val index = 9
-
-                    instructions.add(MethodInsnNode(Opcodes.INVOKESTATIC, "java/util/stream/Stream", "builder", "()Ljava/util/stream/Stream\$Builder;", true))
-                    instructions.add(VarInsnNode(Opcodes.ASTORE, index))
-
-                    // Iterator var6 = getModClasses().entrySet().iterator()
-                    instructions.add(VarInsnNode(Opcodes.ALOAD, 0))
-                    instructions.add(MethodInsnNode(Opcodes.INVOKEVIRTUAL, "net/minecraftforge/fml/loading/targets/CommonLaunchHandler", "getModClasses", "()Ljava/util/Map;"))
-                    instructions.add(MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/Map", "entrySet", "()Ljava/util/Set;"))
-                    instructions.add(MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/lang/Iterable", "iterator", "()Ljava/util/Iterator;"))
-                    instructions.add(VarInsnNode(Opcodes.ASTORE, index + 1))
-
-                    val modLoopStart = LabelNode()
-                    val modLoopEnd = LabelNode()
-
-                    // modLoopStart:
-                    instructions.add(modLoopStart)
-
-                    // if (!var6.hasNext()) goto modLoopEnd;
-                    instructions.add(VarInsnNode(Opcodes.ALOAD, index + 1))
-                    instructions.add(MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/Iterator", "hasNext", "()Z"))
-                    instructions.add(JumpInsnNode(Opcodes.IFEQ, modLoopEnd))
-
-                    // var5.add(var6.next().getValue());
-                    instructions.add(VarInsnNode(Opcodes.ALOAD, index))
-                    instructions.add(VarInsnNode(Opcodes.ALOAD, index + 1))
-                    instructions.add(MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/Iterator", "next", "()Ljava/lang/Object;"))
-                    instructions.add(MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/Map\$Entry", "getValue", "()Ljava/lang/Object;"))
-                    instructions.add(MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/stream/Stream\$Builder", "add", "(Ljava/lang/Object;)Ljava/util/stream/Stream\$Builder;"))
-                    instructions.add(InsnNode(Opcodes.POP))
-
-                    // goto modLoopStart;
-                    instructions.add(JumpInsnNode(Opcodes.GOTO, modLoopStart))
-
-                    // modLoopEnd:
-                    instructions.add(modLoopEnd)
-
-                    // return new LocatedPaths();
-                    instructions.add(TypeInsnNode(Opcodes.NEW, "net/minecraftforge/fml/loading/targets/CommonLaunchHandler\$LocatedPaths"))
-                    instructions.add(InsnNode(Opcodes.DUP))
-
-                    instructions.add(VarInsnNode(Opcodes.ALOAD, 1))
-
-                    // this.getMcFilter(Paths.get(...), var1, var9)
-                    instructions.add(VarInsnNode(Opcodes.ALOAD, 0))
-                    instructions.add(LdcInsnNode("/fakepath/" + UUID.randomUUID() + "/shouldnotexist/"))
-                    instructions.add(InsnNode(Opcodes.ICONST_0))
-                    instructions.add(TypeInsnNode(Opcodes.ANEWARRAY, "java/lang/String"))
-                    instructions.add(MethodInsnNode(Opcodes.INVOKESTATIC, "java/nio/file/Paths", "get", "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;"))
-                    instructions.add(VarInsnNode(Opcodes.ALOAD, 1))
-                    instructions.add(VarInsnNode(Opcodes.ALOAD, index))
-                    instructions.add(
-                        MethodInsnNode(
-                            Opcodes.INVOKEVIRTUAL,
-                            "net/minecraftforge/fml/loading/targets/CommonDevLaunchHandler",
-                            "getMcFilter",
-                            "(Ljava/nio/file/Path;Ljava/util/List;Ljava/util/stream/Stream\$Builder;)Ljava/util/function/BiPredicate;"
-                        )
-                    )
-
-                    instructions.add(VarInsnNode(Opcodes.ALOAD, index))
-                    instructions.add(MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/stream/Stream\$Builder", "build", "()Ljava/util/stream/Stream;"))
-                    instructions.add(MethodInsnNode(Opcodes.INVOKESTATIC, "java/util/stream/Collectors", "toList", "()Ljava/util/stream/Collector;"))
-                    instructions.add(MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/stream/Stream", "collect", "(Ljava/util/stream/Collector;)Ljava/lang/Object;"))
-
-                    instructions.add(VarInsnNode(Opcodes.ALOAD, 5))
-
-                    instructions.add(
-                        MethodInsnNode(
-                            Opcodes.INVOKESPECIAL,
-                            "net/minecraftforge/fml/loading/targets/CommonLaunchHandler\$LocatedPaths",
-                            "<init>",
-                            "(Ljava/util/List;Ljava/util/function/BiPredicate;Ljava/util/List;Ljava/util/List;)V"
-                        )
-                    )
-
-                    instructions.add(InsnNode(Opcodes.ARETURN))
-                }
-
-                val writer = ClassWriter(reader, ClassWriter.COMPUTE_MAXS or ClassWriter.COMPUTE_FRAMES)
-
-                node.accept(writer)
-
-                userdevLaunchHandler.writeBytes(writer.toByteArray())
-            }
-        } else {
-            outputs.file(input)
-        }
-    }
-
-    companion object {
-        private const val LAUNCH_HANDLER = "net/minecraftforge/fml/loading/targets/ForgeClientUserdevLaunchHandler.class"
     }
 }

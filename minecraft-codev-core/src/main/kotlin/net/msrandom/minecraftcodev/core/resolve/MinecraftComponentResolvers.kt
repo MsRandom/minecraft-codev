@@ -17,6 +17,7 @@ import org.gradle.api.internal.attributes.ImmutableAttributes
 import org.gradle.api.internal.attributes.ImmutableAttributesFactory
 import org.gradle.api.internal.model.NamedObjectInstantiator
 import org.gradle.api.model.ObjectFactory
+import org.gradle.internal.component.external.model.DefaultModuleComponentIdentifier
 import org.gradle.internal.component.external.model.MetadataSourcedComponentArtifacts
 import org.gradle.internal.component.model.ComponentArtifactMetadata
 import org.gradle.internal.component.model.ComponentOverrideMetadata
@@ -32,7 +33,6 @@ import org.gradle.internal.resolve.resolver.OriginArtifactSelector
 import org.gradle.internal.resolve.result.BuildableComponentResolveResult
 import org.gradle.internal.snapshot.impl.CoercingStringValueSnapshot
 import org.gradle.util.internal.BuildCommencedTimeProvider
-import java.util.*
 import javax.inject.Inject
 
 open class MinecraftComponentResolvers @Inject constructor(
@@ -168,6 +168,7 @@ open class MinecraftComponentResolvers @Inject constructor(
 
 open class MinecraftComponentIdentifier(module: String, private val version: String, override val needsSources: Boolean = true) : ModuleComponentIdentifier, MayNeedSources {
     private val moduleIdentifier = DefaultModuleIdentifier.newId(MinecraftComponentResolvers.GROUP, module)
+    private val original = DefaultModuleComponentIdentifier(moduleIdentifier, version)
 
     open val isBase
         get() = module == MinecraftComponentResolvers.COMMON_MODULE
@@ -180,11 +181,6 @@ open class MinecraftComponentIdentifier(module: String, private val version: Str
     override fun getModule(): String = moduleIdentifier.name
     override fun getVersion() = version
     override fun getModuleIdentifier(): ModuleIdentifier = moduleIdentifier
-
-    override fun hashCode() = Objects.hash(module, version)
-    override fun equals(other: Any?) = other is MinecraftComponentIdentifier &&
-            module == other.module &&
-            version == other.version
 }
 
 interface MayNeedSources {

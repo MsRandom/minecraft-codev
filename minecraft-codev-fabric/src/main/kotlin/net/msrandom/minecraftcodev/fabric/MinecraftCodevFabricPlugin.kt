@@ -18,31 +18,27 @@ import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 
 class MinecraftCodevFabricPlugin<T : PluginAware> : Plugin<T> {
-    override fun apply(target: T) {
-        target.plugins.apply(MinecraftCodevPlugin::class.java)
+    override fun apply(target: T) = applyPlugin(target) {
+        plugins.withType(MinecraftCodevRemapperPlugin::class.java) {
+            val remapper = extensions.getByType(MinecraftCodevExtension::class.java).extensions.getByType(RemapperExtension::class.java)
 
-        applyPlugin(target) {
-            plugins.withType(MinecraftCodevRemapperPlugin::class.java) {
-                val remapper = extensions.getByType(MinecraftCodevExtension::class.java).extensions.getByType(RemapperExtension::class.java)
-
-                remapper.mappingsResolution.add { path, extension, visitor, _, decorate, _, _ ->
-                    if (extension == "tiny") {
-                        readTiny(visitor, path.inputStream().decorate())
-                        true
-                    } else {
-                        false
-                    }
+            remapper.mappingsResolution.add { path, extension, visitor, _, decorate, _, _ ->
+                if (extension == "tiny") {
+                    readTiny(visitor, path.inputStream().decorate())
+                    true
+                } else {
+                    false
                 }
+            }
 
-                remapper.zipMappingsResolution.add { _, fileSystem, visitor, _, decorate, _, _, _ ->
-                    val tiny = fileSystem.getPath("mappings/mappings.tiny")
-                    if (tiny.exists()) {
-                        // Assuming tiny
-                        readTiny(visitor, tiny.inputStream().decorate())
-                        true
-                    } else {
-                        false
-                    }
+            remapper.zipMappingsResolution.add { _, fileSystem, visitor, _, decorate, _, _, _ ->
+                val tiny = fileSystem.getPath("mappings/mappings.tiny")
+                if (tiny.exists()) {
+                    // Assuming tiny
+                    readTiny(visitor, tiny.inputStream().decorate())
+                    true
+                } else {
+                    false
                 }
             }
         }

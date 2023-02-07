@@ -1,8 +1,8 @@
 package net.msrandom.minecraftcodev.runs
 
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
-import net.msrandom.minecraftcodev.core.utils.applyPlugin
 import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
+import net.msrandom.minecraftcodev.core.utils.applyPlugin
 import net.msrandom.minecraftcodev.core.utils.createSourceSetElements
 import net.msrandom.minecraftcodev.core.utils.extendKotlinConfigurations
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
@@ -29,8 +29,6 @@ class MinecraftCodevRunsPlugin<T : PluginAware> @Inject constructor(cacheDir: Gl
     val logging: Path = cache.resolve("logging")
 
     override fun apply(target: T) = applyPlugin(target) {
-        // plugins.apply(IdeaExtPlugin::class.java)
-
         val capitalizedNatives = StringUtils.capitalize(NATIVES_CONFIGURATION)
 
         createSourceSetElements { name, isSourceSet ->

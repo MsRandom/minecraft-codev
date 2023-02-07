@@ -1,10 +1,9 @@
 package net.msrandom.minecraftcodev.remapper
 
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
+import net.msrandom.minecraftcodev.core.dependency.registerCustomDependency
 import net.msrandom.minecraftcodev.core.utils.applyPlugin
 import net.msrandom.minecraftcodev.core.utils.createSourceSetConfigurations
-import net.msrandom.minecraftcodev.core.dependency.registerCustomDependency
 import net.msrandom.minecraftcodev.remapper.dependency.RemappedDependencyFactory
 import net.msrandom.minecraftcodev.remapper.dependency.RemappedDependencyMetadata
 import net.msrandom.minecraftcodev.remapper.dependency.RemappedIvyDependencyDescriptorFactory
@@ -22,14 +21,9 @@ class MinecraftCodevRemapperPlugin<T : PluginAware> : Plugin<T> {
         RemappedDependencyMetadata::class.java
     )
 
-    override fun apply(target: T) {
-        target.plugins.apply(MinecraftCodevPlugin::class.java)
-
-        applyPlugin(target, ::applyGradle) {
-            val remapper = extensions.getByType(MinecraftCodevExtension::class.java).extensions.create("remapper", RemapperExtension::class.java)
-
-            createSourceSetConfigurations(MAPPINGS_CONFIGURATION)
-        }
+    override fun apply(target: T) = applyPlugin(target, ::applyGradle) {
+        extensions.getByType(MinecraftCodevExtension::class.java).extensions.create("remapper", RemapperExtension::class.java)
+        createSourceSetConfigurations(MAPPINGS_CONFIGURATION)
     }
 
     companion object {

@@ -4,8 +4,11 @@ import com.google.common.collect.HashMultimap
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.encodeToStream
-import net.msrandom.minecraftcodev.core.*
+import net.msrandom.minecraftcodev.core.LibraryData
+import net.msrandom.minecraftcodev.core.MappingsNamespace
+import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
+import net.msrandom.minecraftcodev.core.ModuleLibraryIdentifier
 import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
 import net.msrandom.minecraftcodev.core.dependency.MinecraftDependencyMetadataWrapper
 import net.msrandom.minecraftcodev.core.repository.DefaultCacheAwareExternalResourceAccessor
@@ -785,7 +788,10 @@ open class MinecraftMetadataGenerator @Inject constructor(
             versionList: MinecraftVersionList?
         ): MinecraftVersionMetadata? = versionList?.versions?.get(id.version)?.let { info ->
             versionData.computeIfAbsent(id.version) {
-                val path = cacheManager.rootPath.resolve("cached-metadata").resolve("${id.version}.json")
+                val path = cacheManager.rootPath
+                    .resolve("cached-metadata")
+                    .resolve(info.sha1!!)
+                    .resolve("${id.version}.json")
 
                 val resolvedVersion = DefaultResolvedModuleVersion(DefaultModuleVersionIdentifier.newId(id.group, id.module, id.version))
                 val refresh = !path.exists() || cachePolicy.moduleExpiry(id, resolvedVersion, Duration.ofMillis(timeProvider.currentTime - path.getLastModifiedTime().toMillis())).isMustCheck

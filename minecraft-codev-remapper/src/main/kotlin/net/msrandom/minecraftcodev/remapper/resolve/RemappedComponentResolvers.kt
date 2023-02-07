@@ -12,10 +12,7 @@ import net.msrandom.minecraftcodev.core.resolve.MayNeedSources
 import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.getOrResolve
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentIdentifier
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.addNamed
-import net.msrandom.minecraftcodev.core.utils.callWithStatus
-import net.msrandom.minecraftcodev.core.utils.computeByNameIfAbsent
-import net.msrandom.minecraftcodev.core.utils.getSourceSetConfigurationName
-import net.msrandom.minecraftcodev.core.utils.zipFileSystem
+import net.msrandom.minecraftcodev.core.utils.*
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.copy
 import net.msrandom.minecraftcodev.remapper.FieldAddDescVisitor
 import net.msrandom.minecraftcodev.remapper.JarRemapper
@@ -257,7 +254,7 @@ open class RemappedComponentResolvers @Inject constructor(
 
                     if (result.isSuccessful) {
                         val urlId = RemappedArtifactIdentifier(
-                            artifact.id,
+                            artifact.id.asSerializable,
                             id.targetNamespace.name,
                             mappings.hash,
                             checksumService.sha1(result.result)
@@ -342,7 +339,7 @@ open class RemappedComponentResolvers @Inject constructor(
     }
 }
 
-data class RemappedComponentIdentifier(
+class RemappedComponentIdentifier(
     val original: ModuleComponentIdentifier,
     val sourceNamespace: MappingsNamespace?,
     val targetNamespace: MappingsNamespace,
@@ -362,5 +359,5 @@ data class RemappedComponentIdentifier(
     override fun withoutSources() =
         RemappedComponentIdentifier(original, sourceNamespace, targetNamespace, mappingsConfiguration, moduleConfiguration, false)
 
-    override fun getDisplayName() = "Remapped ${original.displayName} -> $targetNamespace"
+    override fun getDisplayName() = "${original.displayName} (Remapped to $targetNamespace)"
 }

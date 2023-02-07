@@ -215,11 +215,11 @@ object LegacyJarSplitter {
 
         val extraCommonTypes = hashSetOf<Type>()
 
-        clientFs.getPath("/").walk {
+        newClientFs.getPath("/").walk {
             for (clientEntry in filter(Path::isRegularFile)) {
                 val pathName = clientEntry.toString()
                 if (pathName.endsWith(".class")) {
-                    val serverEntry = serverFs.getPath(pathName)
+                    val serverEntry = commonFs.getPath(pathName)
 
                     if (serverEntry.exists()) {
                         // Shared entry
@@ -285,7 +285,7 @@ object LegacyJarSplitter {
             }
         }
 
-        serverFs.getPath("/").walk {
+        commonFs.getPath("/").walk {
             for (serverEntry in filter(Path::isRegularFile)) {
                 val name = serverEntry.toString()
                 if (name.endsWith(".class")) {
@@ -336,7 +336,7 @@ object LegacyJarSplitter {
     fun copyAssets(client: FileSystem, server: FileSystem, commonOut: FileSystem, clientOut: FileSystem, legacy: Boolean = server.getPath("data").notExists()) {
         client.withAssets { path ->
             val name = path.toString()
-            if (server.getPath(name).notExists() || (!legacy && ("lang" in name || (path.parent.name == "assets" && path.name.startsWith('.'))))) {
+            if (server.getPath(name).notExists() || (!legacy && ("lang" in name || ("assets" in name && path.name.startsWith('.'))))) {
                 val newPath = clientOut.getPath(name)
                 newPath.parent?.createDirectories()
                 path.copyTo(newPath, StandardCopyOption.COPY_ATTRIBUTES)

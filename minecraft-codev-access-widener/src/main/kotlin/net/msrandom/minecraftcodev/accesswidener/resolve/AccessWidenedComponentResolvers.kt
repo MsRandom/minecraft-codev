@@ -7,15 +7,16 @@ import net.msrandom.minecraftcodev.accesswidener.MinecraftCodevAccessWidenerPlug
 import net.msrandom.minecraftcodev.accesswidener.dependency.AccessWidenedDependencyMetadata
 import net.msrandom.minecraftcodev.accesswidener.dependency.AccessWidenedDependencyMetadataWrapper
 import net.msrandom.minecraftcodev.core.MappingsNamespace
-import net.msrandom.minecraftcodev.core.utils.SourcesGenerator
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
-import net.msrandom.minecraftcodev.core.utils.getSourceSetConfigurationName
 import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
 import net.msrandom.minecraftcodev.core.resolve.MayNeedSources
 import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.getOrResolve
 import net.msrandom.minecraftcodev.core.resolve.SourcesArtifactComponentMetadata
+import net.msrandom.minecraftcodev.core.utils.SourcesGenerator
+import net.msrandom.minecraftcodev.core.utils.asSerializable
 import net.msrandom.minecraftcodev.core.utils.callWithStatus
+import net.msrandom.minecraftcodev.core.utils.getSourceSetConfigurationName
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.copy
 import org.gradle.api.Project
@@ -240,13 +241,12 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                 val hash = HashCode.fromBytes(messageDigest.digest())
 
                 val urlId = AccessWidenedArtifactIdentifier(
-                    artifact.id,
+                    artifact.id.asSerializable,
                     hash,
                     checksumService.sha1(result.result)
                 )
 
                 getOrResolve(artifact, urlId, artifactCache, cachePolicy, timeProvider, result) {
-
                     val sources = SourcesGenerator.decompile(result.result.toPath(), emptyList(), buildOperationExecutor)
 
                     val output = cacheManager.fileStoreDirectory
@@ -332,7 +332,7 @@ open class AccessWidenedComponentResolvers @Inject constructor(
     }
 }
 
-data class AccessWidenedComponentIdentifier(
+class AccessWidenedComponentIdentifier(
     val original: ModuleComponentIdentifier,
     val accessWidenersConfiguration: String,
     val moduleConfiguration: String?,
@@ -350,5 +350,5 @@ data class AccessWidenedComponentIdentifier(
     override fun withoutSources() =
         AccessWidenedComponentIdentifier(original, accessWidenersConfiguration, moduleConfiguration, false)
 
-    override fun getDisplayName() = "Access Widened ${original.displayName}"
+    override fun getDisplayName() = "${original.displayName} (Access Widened)"
 }

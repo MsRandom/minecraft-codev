@@ -1,6 +1,5 @@
 package net.msrandom.minecraftcodev.runs
 
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
 import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
@@ -174,9 +173,7 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
 
             mainClass.set(
                 manifestProvider
-                    .zip(configurationProvider) { a, b -> a to b }
-                    .zip(artifactProvider) { (manifest, configuration), artifact -> Triple(manifest, configuration, artifact) }
-                    .map { (manifest, configuration, artifact) ->
+                    .map { manifest ->
                         val serverJar = project.serviceOf<RepositoriesSupplier>().get()
                             .filterIsInstance<MinecraftRepositoryImpl>()
                             .map(MinecraftRepositoryImpl::createResolver)

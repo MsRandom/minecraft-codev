@@ -92,10 +92,5 @@ class PatchedComponentIdentifier(version: String, val patches: String, val modul
     override val isBase get() = true
 
     override fun withoutSources() = PatchedComponentIdentifier(version, patches, moduleConfiguration, false)
-    override fun getDisplayName() = "Patched ${super.getDisplayName()}"
-
-    override fun hashCode() = Objects.hash(version, patches, moduleConfiguration)
-    override fun equals(other: Any?) = other is PatchedComponentIdentifier &&
-            version == other.version &&
-            moduleConfiguration == other.moduleConfiguration
+    override fun getDisplayName() = "${super.getDisplayName()} (Forge Patched)"
 }
