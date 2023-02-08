@@ -17,7 +17,6 @@ import org.gradle.api.internal.attributes.ImmutableAttributes
 import org.gradle.api.internal.attributes.ImmutableAttributesFactory
 import org.gradle.api.internal.model.NamedObjectInstantiator
 import org.gradle.api.model.ObjectFactory
-import org.gradle.internal.component.external.model.DefaultModuleComponentIdentifier
 import org.gradle.internal.component.external.model.MetadataSourcedComponentArtifacts
 import org.gradle.internal.component.model.ComponentArtifactMetadata
 import org.gradle.internal.component.model.ComponentOverrideMetadata
@@ -63,11 +62,54 @@ open class MinecraftComponentResolvers @Inject constructor(
         if (identifier::class == MinecraftComponentIdentifier::class) {
             identifier as MinecraftComponentIdentifier
 
-            if (identifier.version.endsWith("-SNAPSHOT")) {
-                val realVersion = identifier.version.substring(0, identifier.version.length - "-SNAPSHOT".length)
+            var versionList: MinecraftVersionList? = null
 
-            } else if (UNIQUE_VERSION_ID matches identifier.version) {
+            for (repository in repositories) {
+                versionList = MinecraftMetadataGenerator.getVersionList(
+                    identifier,
+                    null,
+                    repository.url,
+                    cacheManager,
+                    cachePolicy,
+                    repository.resourceAccessor,
+                    checksumService,
+                    timeProvider,
+                    null
+                )
 
+                if (versionList != null) {
+                    break
+                }
+            }
+
+            if (versionList == null) {
+                return
+            }
+
+            var isChanging = false
+            val id = if (identifier.version.endsWith("-SNAPSHOT")) {
+                val snapshot = versionList.snapshot(identifier.version.substring(0, identifier.version.length - "-SNAPSHOT".length))
+                if (snapshot == null) {
+                    result.notFound(identifier)
+                    return
+                }
+
+                isChanging = true
+                MinecraftComponentIdentifier(identifier.module, snapshot, identifier.needsSources)
+            } else {
+                val match = UNIQUE_VERSION_ID.find(identifier.version)?.groups?.get(1)?.value
+
+                if (match == null) {
+                    identifier
+                } else {
+                    val version = versionList.snapshotTimestamps[match]
+                    if (version == null) {
+                        result.notFound(identifier)
+                        return
+                    }
+
+                    MinecraftComponentIdentifier(identifier.module, version, identifier.needsSources)
+                }
             }
 
             for (repository in repositories) {
@@ -78,7 +120,8 @@ open class MinecraftComponentResolvers @Inject constructor(
                 metadataGenerator.resolveMetadata(
                     repository,
                     repository.resourceAccessor,
-                    identifier,
+                    id,
+                    isChanging,
                     componentOverrideMetadata,
                     result
                 )
@@ -168,7 +211,6 @@ open class MinecraftComponentResolvers @Inject constructor(
 
 open class MinecraftComponentIdentifier(module: String, private val version: String, override val needsSources: Boolean = true) : ModuleComponentIdentifier, MayNeedSources {
     private val moduleIdentifier = DefaultModuleIdentifier.newId(MinecraftComponentResolvers.GROUP, module)
-    private val original = DefaultModuleComponentIdentifier(moduleIdentifier, version)
 
     open val isBase
         get() = module == MinecraftComponentResolvers.COMMON_MODULE

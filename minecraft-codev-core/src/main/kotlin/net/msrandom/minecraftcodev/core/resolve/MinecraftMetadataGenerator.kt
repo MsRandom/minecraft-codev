@@ -253,6 +253,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
         repository: MinecraftRepositoryImpl.Resolver,
         resourceAccessor: DefaultCacheAwareExternalResourceAccessor,
         moduleComponentIdentifier: ModuleComponentIdentifier,
+        isChanging: Boolean,
         requestMetaData: ComponentOverrideMetadata,
         result: BuildableComponentResolveResult
     ) {
@@ -341,7 +342,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                             moduleComponentIdentifier,
                             DefaultModuleVersionIdentifier.newId(moduleComponentIdentifier.moduleIdentifier, moduleComponentIdentifier.version),
                             listOf(library, sourcesElements),
-                            requestMetaData.isChanging,
+                            isChanging || requestMetaData.isChanging,
                             manifest.type,
                             versionList.latest.keys.reversed(),
                             artifact,
@@ -448,7 +449,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                             moduleComponentIdentifier,
                             DefaultModuleVersionIdentifier.newId(moduleComponentIdentifier.moduleIdentifier, moduleComponentIdentifier.version),
                             variants,
-                            requestMetaData.isChanging,
+                            isChanging || requestMetaData.isChanging,
                             manifest.type,
                             versionList.latest.keys.reversed(),
                             artifact,
@@ -522,7 +523,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                             moduleComponentIdentifier,
                             DefaultModuleVersionIdentifier.newId(moduleComponentIdentifier.moduleIdentifier, moduleComponentIdentifier.version),
                             variants,
-                            requestMetaData.isChanging,
+                            isChanging || requestMetaData.isChanging,
                             manifest.type,
                             versionList.latest.keys.reversed(),
                             artifact,
@@ -557,7 +558,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                                             objectFactory
                                         )
                                     ),
-                                    requestMetaData.isChanging,
+                                    isChanging || requestMetaData.isChanging,
                                     manifest.type,
                                     versionList.latest.keys.reversed(),
                                     artifact,

@@ -42,7 +42,7 @@ fun getExtractionState(buildOperationExecutor: BuildOperationExecutor, manifest:
                             // Old server Jar, strip the libraries out manually
                             isBundled = false
                             serverJar.toPath().copyTo(extractedJar, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES)
-                            commonLibraries = ServerFixer.removeLibraries(null, manifest, extractedJar, serverFs, clientJar().toPath())
+                            commonLibraries = ServerFixer.removeLibraries(manifest, extractedJar, serverFs, clientJar().toPath())
                         }
                     }
 

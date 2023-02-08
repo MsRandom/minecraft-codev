@@ -8,11 +8,23 @@ import java.io.File
 @Testable
 class MinecraftTests {
     @Test
-    fun `Test basic Minecraft`() {
+    fun `Basic Minecraft Build`() {
         GradleRunner.create()
             .withProjectDir(File("basic-minecraft-test"))
             .withPluginClasspath()
-            .withArguments("common12Jar", "common16Jar", "common18Jar", "client12Jar", "client16Jar", "client18Jar", "printCompileClasspath", "-s")
+            .withArguments(
+                "commonUniqueSnapshotJar",
+                "commonLatestReleaseJar",
+                "commonLatestSnapshotJar",
+                "commonChangingSnapshotJar",
+                "commonSubversionJar",
+                "commonClosedMavenRangeJar",
+                "commonOpenMavenRangeJar",
+                "clientUniqueSnapshotJar",
+                "clientSubversionJar",
+                "printCompileClasspath",
+                "-s"
+            )
             .forwardOutput()
             .withDebug(true)
             .build()

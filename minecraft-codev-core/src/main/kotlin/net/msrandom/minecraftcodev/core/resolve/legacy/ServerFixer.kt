@@ -3,7 +3,6 @@ package net.msrandom.minecraftcodev.core.resolve.legacy
 import net.msrandom.minecraftcodev.core.ModuleLibraryIdentifier
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
-import org.gradle.api.logging.Logger
 import java.nio.file.FileSystem
 import java.nio.file.Files
 import java.nio.file.Path
@@ -36,7 +35,7 @@ object ServerFixer {
         return entry.value.firstOrNull { path.startsWith(it.first) }?.second
     }
 
-    fun removeLibraries(logger: Logger?, manifest: MinecraftVersionMetadata, newServer: Path, serverFs: FileSystem, client: Path): Collection<ModuleLibraryIdentifier> {
+    fun removeLibraries(manifest: MinecraftVersionMetadata, newServer: Path, serverFs: FileSystem, client: Path): Collection<ModuleLibraryIdentifier> {
         val commonLibraries = mutableSetOf<MinecraftVersionMetadata.Library>()
         val libraryGroups = hashMapOf<String, MutableList<Pair<String, MinecraftVersionMetadata.Library>>>()
 
@@ -55,7 +54,6 @@ object ServerFixer {
         }
 
         // Do this even if it's already done, as we need it for collecting the server libraries
-        logger?.lifecycle(":Stripping ${manifest.id} server Jar")
         zipFileSystem(newServer).use { fixedFs ->
             zipFileSystem(client).use { clientFs ->
                 val root = serverFs.getPath("/")

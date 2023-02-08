@@ -207,120 +207,120 @@ object LegacyJarSplitter {
         outputClient: Path,
         client: Path,
         server: Path
-    ) = useFileSystems { handle ->
-        val clientFs = zipFileSystem(client).also(handle)
-        val serverFs = zipFileSystem(server).also(handle)
-        val commonFs = zipFileSystem(outputCommon).also(handle)
-        val newClientFs = zipFileSystem(outputClient).also(handle)
+    ): JarSplittingResult {
+        useFileSystems { handle ->
+            val clientFs = zipFileSystem(client).also(handle)
+            val serverFs = zipFileSystem(server).also(handle)
+            val commonFs = zipFileSystem(outputCommon).also(handle)
+            val newClientFs = zipFileSystem(outputClient).also(handle)
 
-        val extraCommonTypes = hashSetOf<Type>()
+            val extraCommonTypes = hashSetOf<Type>()
 
-        newClientFs.getPath("/").walk {
-            for (clientEntry in filter(Path::isRegularFile)) {
-                val pathName = clientEntry.toString()
-                if (pathName.endsWith(".class")) {
-                    val serverEntry = commonFs.getPath(pathName)
+            clientFs.getPath("/").walk {
+                for (clientEntry in filter(Path::isRegularFile)) {
+                    val pathName = clientEntry.toString()
+                    if (pathName.endsWith(".class")) {
+                        val serverEntry = serverFs.getPath(pathName)
 
-                    if (serverEntry.exists()) {
-                        // Shared entry
-                        val clientReader = clientEntry.inputStream().use(::ClassReader)
-                        val serverReader = serverEntry.inputStream().use(::ClassReader)
-                        val clientNode = ClassNode()
-                        val serverNode = ClassNode()
+                        if (serverEntry.exists()) {
+                            // Shared entry
+                            val clientReader = clientEntry.inputStream().use(::ClassReader)
+                            val serverReader = serverEntry.inputStream().use(::ClassReader)
+                            val clientNode = ClassNode()
+                            val serverNode = ClassNode()
 
-                        clientReader.accept(clientNode, 0)
-                        serverReader.accept(serverNode, 0)
+                            clientReader.accept(clientNode, 0)
+                            serverReader.accept(serverNode, 0)
 
-                        val mergedInterfaces = mergeLists(clientNode.interfaces, serverNode.interfaces, String::toString)
-                        val mergedFields = mergeLists(clientNode.fields, serverNode.fields, FieldNode::name)
-                        val mergedMethods = mergeLists(clientNode.methods, serverNode.methods) { name + desc }
+                            val mergedInterfaces = mergeLists(clientNode.interfaces, serverNode.interfaces, String::toString)
+                            val mergedFields = mergeLists(clientNode.fields, serverNode.fields, FieldNode::name)
+                            val mergedMethods = mergeLists(clientNode.methods, serverNode.methods) { name + desc }
 
-                        extraCommonTypes.addAll(mergedInterfaces.client.map(Type::getObjectType))
-                        extraCommonTypes.addAll(mergedFields.client.map { Type.getType(it.desc) })
-                        extraCommonTypes.addAll(mergedMethods.client.flatMap { it.collectTypeReferences() })
+                            extraCommonTypes.addAll(mergedInterfaces.client.map(Type::getObjectType))
+                            extraCommonTypes.addAll(mergedFields.client.map { Type.getType(it.desc) })
+                            extraCommonTypes.addAll(mergedMethods.client.flatMap { it.collectTypeReferences() })
 
-                        addAnnotation(mergedFields.client, FieldNode::invisibleAnnotations, UNSAFE_FOR_COMMON)
-                        addAnnotation(mergedFields.server, FieldNode::invisibleAnnotations, UNSAFE_FOR_CLIENT)
-                        addAnnotation(mergedMethods.client, MethodNode::invisibleAnnotations, UNSAFE_FOR_COMMON)
-                        addAnnotation(mergedMethods.server, MethodNode::invisibleAnnotations, UNSAFE_FOR_CLIENT)
+                            addAnnotation(mergedFields.client, FieldNode::invisibleAnnotations, UNSAFE_FOR_COMMON)
+                            addAnnotation(mergedFields.server, FieldNode::invisibleAnnotations, UNSAFE_FOR_CLIENT)
+                            addAnnotation(mergedMethods.client, MethodNode::invisibleAnnotations, UNSAFE_FOR_COMMON)
+                            addAnnotation(mergedMethods.server, MethodNode::invisibleAnnotations, UNSAFE_FOR_CLIENT)
 
-                        serverNode.interfaces = mergedInterfaces.merged
-                        serverNode.fields = mergedFields.merged
-                        serverNode.methods = mergedMethods.merged
+                            serverNode.interfaces = mergedInterfaces.merged
+                            serverNode.fields = mergedFields.merged
+                            serverNode.methods = mergedMethods.merged
 
-                        val writer = ClassWriter(serverReader, 0)
-                        serverNode.accept(writer)
+                            val writer = ClassWriter(serverReader, 0)
+                            serverNode.accept(writer)
 
-                        val path = commonFs.getPath(pathName)
-                        serverEntry.copyTo(path, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
-                        path.writeBytes(writer.toByteArray())
+                            val path = commonFs.getPath(pathName)
+                            serverEntry.copyTo(path, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
+                            path.writeBytes(writer.toByteArray())
 
-                        newClientFs.getPath(pathName).deleteExisting()
+                            newClientFs.getPath(pathName).deleteExisting()
+                        } else {
+                            clientEntry.copyTo(newClientFs.getPath(pathName), StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
+                        }
                     } else {
-                        clientEntry.copyTo(newClientFs.getPath(pathName), StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
+                        newClientFs.getPath(pathName).deleteExisting()
                     }
-                } else {
-                    newClientFs.getPath(pathName).deleteExisting()
                 }
             }
-        }
 
-        for (extraCommonType in extraCommonTypes) {
-            if (extraCommonType.sort == Type.OBJECT) {
-                val name = "${extraCommonType.internalName}.class"
+            for (extraCommonType in extraCommonTypes) {
+                if (extraCommonType.sort == Type.OBJECT) {
+                    val name = "${extraCommonType.internalName}.class"
 
-                val commonPath = commonFs.getPath(name)
-                if (commonPath.exists()) {
-                    val reader = commonPath.inputStream().use(::ClassReader)
-                    val node = ClassNode()
-                    reader.accept(node, 0)
-
-                    addAnnotation(node, ClassNode::invisibleAnnotations, UNSAFE_FOR_COMMON)
-
-                    val writer = ClassWriter(reader, 0)
-                    node.accept(writer)
-
-                    commonPath.writeBytes(writer.toByteArray())
-                }
-            }
-        }
-
-        commonFs.getPath("/").walk {
-            for (serverEntry in filter(Path::isRegularFile)) {
-                val name = serverEntry.toString()
-                if (name.endsWith(".class")) {
-                    val output = commonFs.getPath(name)
-                    if (output.notExists()) {
-                        val reader = serverEntry.inputStream().use(::ClassReader)
+                    val commonPath = commonFs.getPath(name)
+                    if (commonPath.exists()) {
+                        val reader = commonPath.inputStream().use(::ClassReader)
                         val node = ClassNode()
                         reader.accept(node, 0)
 
-                        addAnnotation(node, ClassNode::invisibleAnnotations, UNSAFE_FOR_CLIENT)
+                        addAnnotation(node, ClassNode::invisibleAnnotations, UNSAFE_FOR_COMMON)
 
                         val writer = ClassWriter(reader, 0)
                         node.accept(writer)
 
-                        output.writeBytes(writer.toByteArray())
+                        commonPath.writeBytes(writer.toByteArray())
                     }
-                } else {
-                    commonFs.getPath(name).deleteExisting()
                 }
             }
+
+            serverFs.getPath("/").walk {
+                for (serverEntry in filter(Path::isRegularFile)) {
+                    val name = serverEntry.toString()
+                    val output = commonFs.getPath(name)
+                    if (name.endsWith(".class")) {
+                        if (output.notExists()) {
+                            val reader = serverEntry.inputStream().use(::ClassReader)
+                            val node = ClassNode()
+                            reader.accept(node, 0)
+
+                            addAnnotation(node, ClassNode::invisibleAnnotations, UNSAFE_FOR_CLIENT)
+
+                            val writer = ClassWriter(reader, 0)
+                            node.accept(writer)
+
+                            output.writeBytes(writer.toByteArray())
+                        }
+                    } else {
+                        output.deleteExisting()
+                    }
+                }
+            }
+
+            copyAssets(clientFs, serverFs, commonFs, newClientFs)
         }
 
-        copyAssets(clientFs, serverFs, commonFs, newClientFs)
-
-        JarSplittingResult(outputCommon, outputClient)
-    }.let { (common, client) ->
-        val commonPath = pathFunction(makeId(MinecraftComponentResolvers.COMMON_MODULE, version), checksumService.sha1(common.toFile()).toString())
-        val clientPath = pathFunction(makeId(MinecraftComponentResolvers.CLIENT_MODULE, version), checksumService.sha1(client.toFile()).toString())
+        val commonPath = pathFunction(makeId(MinecraftComponentResolvers.COMMON_MODULE, version), checksumService.sha1(outputCommon.toFile()).toString())
+        val clientPath = pathFunction(makeId(MinecraftComponentResolvers.CLIENT_MODULE, version), checksumService.sha1(outputClient.toFile()).toString())
 
         commonPath.parent.createDirectories()
         clientPath.parent.createDirectories()
-        common.copyTo(commonPath, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
-        client.copyTo(clientPath, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
+        outputCommon.copyTo(commonPath, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
+        outputClient.copyTo(clientPath, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
 
-        JarSplittingResult(
+        return JarSplittingResult(
             commonPath,
             clientPath
         )
@@ -336,7 +336,7 @@ object LegacyJarSplitter {
     fun copyAssets(client: FileSystem, server: FileSystem, commonOut: FileSystem, clientOut: FileSystem, legacy: Boolean = server.getPath("data").notExists()) {
         client.withAssets { path ->
             val name = path.toString()
-            if (server.getPath(name).notExists() || (!legacy && ("lang" in name || ("assets" in name && path.name.startsWith('.'))))) {
+            if (server.getPath(name).notExists() || (!legacy && ("lang" in name || (path.parent.name == "assets" && path.name.startsWith('.'))))) {
                 val newPath = clientOut.getPath(name)
                 newPath.parent?.createDirectories()
                 path.copyTo(newPath, StandardCopyOption.COPY_ATTRIBUTES)

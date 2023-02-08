@@ -60,120 +60,116 @@ open class MinecraftDependencyToComponentIdResolver @Inject constructor(
         result: BuildableComponentIdResolveResult,
         identifierFactory: (String, String) -> ModuleComponentIdentifier
     ) {
-        val componentSelector = dependency.selector
-        if (componentSelector is ModuleComponentSelector) {
-            if (componentSelector.group == MinecraftComponentResolvers.GROUP) {
-                if (acceptor?.isDynamic != false) {
-                    val attributesSchema = project.dependencies.attributesSchema as AttributesSchemaInternal
+        val componentSelector = dependency.selector as ModuleComponentSelector
+        if (acceptor?.isDynamic != false) {
+            val attributesSchema = project.dependencies.attributesSchema as AttributesSchemaInternal
 
-                    for (repository in repositories) {
-                        val versionList = MinecraftMetadataGenerator.getVersionList(
-                            DefaultModuleComponentIdentifier.newId(componentSelector.moduleIdentifier, componentSelector.version),
-                            null,
-                            repository.url,
-                            cacheManager,
-                            cachePolicy,
-                            repository.resourceAccessor,
-                            checksumService,
-                            timeProvider,
-                            null
-                        )
+            for (repository in repositories) {
+                val versionList = MinecraftMetadataGenerator.getVersionList(
+                    DefaultModuleComponentIdentifier.newId(componentSelector.moduleIdentifier, componentSelector.version),
+                    null,
+                    repository.url,
+                    cacheManager,
+                    cachePolicy,
+                    repository.resourceAccessor,
+                    checksumService,
+                    timeProvider,
+                    null
+                )
 
-                        if (versionList != null) {
-                            val scheme = versionList.latest.keys.reversed()
-                            val unmatched = mutableListOf<String>()
-                            val rejections = mutableListOf<RejectedVersion>()
+                if (versionList != null) {
+                    val scheme = versionList.latest.keys.reversed()
+                    val unmatched = mutableListOf<String>()
+                    val rejections = mutableListOf<RejectedVersion>()
 
-                            for ((id, version) in versionList.versions) {
-                                val metadata = object : ComponentMetadata {
-                                    override fun getAttributes() = attributesFactory.of(ProjectInternal.STATUS_ATTRIBUTE, status)
-                                    override fun getId() = DefaultModuleVersionIdentifier.newId(componentSelector.moduleIdentifier, id)
-                                    override fun isChanging() = false
-                                    override fun getStatus() = version.type
-                                    override fun getStatusScheme() = scheme
-                                }
+                    for ((id, version) in versionList.versions) {
+                        val metadata = object : ComponentMetadata {
+                            override fun getAttributes() = attributesFactory.of(ProjectInternal.STATUS_ATTRIBUTE, status)
+                            override fun getId() = DefaultModuleVersionIdentifier.newId(componentSelector.moduleIdentifier, id)
+                            override fun isChanging() = false
+                            override fun getStatus() = version.type
+                            override fun getStatusScheme() = scheme
+                        }
 
-                                val accepted = if (acceptor == null) {
-                                    true
-                                } else if (acceptor is VersionRangeSelector) {
-                                    VersionRangeSelector(acceptor.selector, { x, y -> compareVersions(x.source, y.source) }, versionParser).accept(id)
-                                } else if (acceptor.requiresMetadata()) {
-                                    acceptor.accept(metadata)
-                                } else {
-                                    acceptor.accept(id)
-                                }
+                        val accepted = if (acceptor == null) {
+                            true
+                        } else if (acceptor is VersionRangeSelector) {
+                            VersionRangeSelector(acceptor.selector, { x, y -> compareVersions(x.source, y.source) }, versionParser).accept(id)
+                        } else if (acceptor.requiresMetadata()) {
+                            acceptor.accept(metadata)
+                        } else {
+                            acceptor.accept(id)
+                        }
 
-                                if (!accepted) {
-                                    unmatched.add(id)
-                                    continue
-                                }
+                        if (!accepted) {
+                            unmatched.add(id)
+                            continue
+                        }
 
-                                val componentIdentifier = identifierFactory(componentSelector.module, id)
+                        val componentIdentifier = identifierFactory(componentSelector.module, id)
 
-                                if (!resolveContext.attributes.isEmpty) {
-                                    val attributes = metadata.attributes as AttributeContainerInternal
-                                    val matching = attributesSchema.matcher().isMatching(attributes, resolveContext.attributes as AttributeContainerInternal)
-                                    if (!matching) {
-                                        rejections.add(
-                                            RejectedByAttributesVersion(
-                                                componentIdentifier,
-                                                attributesSchema.matcher().describeMatching(attributes, resolveContext.attributes as AttributeContainerInternal)
-                                            )
-                                        )
+                        if (!resolveContext.attributes.isEmpty) {
+                            val attributes = metadata.attributes as AttributeContainerInternal
+                            val matching = attributesSchema.matcher().isMatching(attributes, resolveContext.attributes as AttributeContainerInternal)
+                            if (!matching) {
+                                rejections.add(
+                                    RejectedByAttributesVersion(
+                                        componentIdentifier,
+                                        attributesSchema.matcher().describeMatching(attributes, resolveContext.attributes as AttributeContainerInternal)
+                                    )
+                                )
 
-                                        continue
-                                    }
-                                }
+                                continue
+                            }
+                        }
 
-                                if (rejector != null && rejector.accept(id)) {
-                                    rejections.add(RejectedBySelectorVersion(componentIdentifier, rejector))
-                                    continue
-                                }
+                        if (rejector != null && rejector.accept(id)) {
+                            rejections.add(RejectedBySelectorVersion(componentIdentifier, rejector))
+                            continue
+                        }
 
-                                val selection: ComponentSelectionInternal = object : ComponentSelectionInternal {
-                                    private var rejected = false
-                                    private var rejectionReason: String? = null
+                        val selection: ComponentSelectionInternal = object : ComponentSelectionInternal {
+                            private var rejected = false
+                            private var rejectionReason: String? = null
 
-                                    override fun getCandidate() = componentIdentifier
-                                    override fun getMetadata() = metadata
-                                    override fun <T : Any?> getDescriptor(descriptorClass: Class<T>) = null
+                            override fun getCandidate() = componentIdentifier
+                            override fun getMetadata() = metadata
+                            override fun <T : Any?> getDescriptor(descriptorClass: Class<T>) = null
 
-                                    override fun reject(reason: String) {
-                                        rejected = true
-                                        rejectionReason = reason
-                                    }
-
-                                    override fun isRejected() = rejected
-                                    override fun getRejectionReason() = rejectionReason
-                                }
-
-                                if (processRules(selection, metadata, true)) {
-                                    processRules(selection, metadata, false)
-                                }
-
-                                if (selection.isRejected) {
-                                    rejections.add(RejectedByRuleVersion(componentIdentifier, selection.rejectionReason))
-                                    continue
-                                }
-
-                                result.resolved(componentIdentifier, metadata.id)
-                                break
+                            override fun reject(reason: String) {
+                                rejected = true
+                                rejectionReason = reason
                             }
 
-                            break
+                            override fun isRejected() = rejected
+                            override fun getRejectionReason() = rejectionReason
                         }
+
+                        if (processRules(selection, metadata, true)) {
+                            processRules(selection, metadata, false)
+                        }
+
+                        if (selection.isRejected) {
+                            rejections.add(RejectedByRuleVersion(componentIdentifier, selection.rejectionReason))
+                            continue
+                        }
+
+                        result.resolved(componentIdentifier, metadata.id)
+                        break
                     }
-                } else {
-                    val version = acceptor.selector
-                    val moduleId = componentSelector.moduleIdentifier
-                    val id = identifierFactory(componentSelector.module, version)
-                    val mvId = DefaultModuleVersionIdentifier.newId(moduleId, version)
-                    if (rejector != null && rejector.accept(version)) {
-                        result.rejected(id, mvId)
-                    } else {
-                        result.resolved(id, mvId)
-                    }
+
+                    break
                 }
+            }
+        } else {
+            val version = acceptor.selector
+            val moduleId = componentSelector.moduleIdentifier
+            val id = identifierFactory(componentSelector.module, version)
+            val mvId = DefaultModuleVersionIdentifier.newId(moduleId, version)
+            if (rejector != null && rejector.accept(version)) {
+                result.rejected(id, mvId)
+            } else {
+                result.resolved(id, mvId)
             }
         }
     }
