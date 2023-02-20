@@ -4,15 +4,21 @@ import de.siegmar.fastcsv.reader.NamedCsvReader
 import kotlinx.serialization.json.decodeFromStream
 import net.fabricmc.mappingio.MappedElementKind
 import net.fabricmc.mappingio.MappingUtil
+import net.fabricmc.mappingio.MappingVisitor
 import net.fabricmc.mappingio.adapter.MappingNsCompleter
 import net.fabricmc.mappingio.format.ProGuardReader
 import net.fabricmc.mappingio.format.TsrgReader
+import net.fabricmc.mappingio.tree.MappingTreeView
 import net.fabricmc.mappingio.tree.MemoryMappingTree
 import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
 import net.msrandom.minecraftcodev.core.MinecraftType
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
+import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver
+import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentIdentifier
+import net.msrandom.minecraftcodev.core.utils.addConfigurationResolutionDependencies
+import net.msrandom.minecraftcodev.core.utils.createIfAbsent
 import net.msrandom.minecraftcodev.core.utils.getCacheProvider
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.forge.McpConfig
@@ -21,19 +27,30 @@ import net.msrandom.minecraftcodev.forge.PatchedMinecraftCodevExtension
 import net.msrandom.minecraftcodev.forge.UserdevConfig
 import net.msrandom.minecraftcodev.forge.dependency.PatchedComponentIdentifier
 import net.msrandom.minecraftcodev.forge.resolve.PatchedMinecraftComponentResolvers
+import net.msrandom.minecraftcodev.forge.resolve.PatchedSetupState
 import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
 import net.msrandom.minecraftcodev.remapper.RemapperExtension
+import net.msrandom.minecraftcodev.remapper.ZipMappingResolutionRule
 import org.cadixdev.at.io.AccessTransformFormats
 import org.cadixdev.lorenz.MappingSet
 import org.gradle.api.Project
+import org.gradle.api.artifacts.Configuration
 import org.gradle.api.internal.artifacts.RepositoriesSupplier
 import org.gradle.api.internal.artifacts.configurations.ResolutionStrategyInternal
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.StartParameterResolutionOverride
+import org.gradle.api.internal.tasks.AbstractTaskDependency
+import org.gradle.api.internal.tasks.TaskDependencyResolveContext
+import org.gradle.api.model.ObjectFactory
 import org.gradle.configurationcache.extensions.serviceOf
+import org.gradle.internal.component.external.model.DefaultModuleComponentArtifactMetadata
+import org.gradle.internal.component.model.DefaultIvyArtifactName
+import org.gradle.internal.component.model.ImmutableModuleSources
 import org.gradle.internal.hash.ChecksumService
+import org.gradle.internal.resolve.result.DefaultBuildableArtifactResolveResult
 import org.gradle.util.internal.BuildCommencedTimeProvider
 import org.objectweb.asm.*
 import java.io.InputStream
+import java.nio.file.FileSystem
 import java.nio.file.Path
 import java.util.jar.Manifest
 import kotlin.io.path.deleteExisting
@@ -49,137 +66,181 @@ internal fun Project.setupForgeRemapperIntegration() {
         val startParameterResolutionOverride = serviceOf<StartParameterResolutionOverride>()
         val remapper = extensions.getByType(MinecraftCodevExtension::class.java).extensions.getByType(RemapperExtension::class.java)
 
-        remapper.zipMappingsResolution.add { path, fileSystem, visitor, configuration, decorate, existingMappings, _, objects ->
-            val configPath = fileSystem.getPath("config.json")
-            if (configPath.exists()) {
-                val mcpDependency = dependencies.create(configPath.inputStream().use { MinecraftCodevPlugin.json.decodeFromStream<UserdevConfig>(it) }.mcp)
-                val mcp = unsafeResolveConfiguration(configurations.detachedConfiguration(mcpDependency).setTransitive(false)).singleFile
+        remapper.zipMappingsResolution.add(object : ZipMappingResolutionRule {
+            override fun loadMappings(
+                path: Path,
+                fileSystem: FileSystem,
+                visitor: MappingVisitor,
+                configuration: Configuration,
+                decorate: InputStream.() -> InputStream,
+                existingMappings: MappingTreeView,
+                isJar: Boolean,
+                objects: ObjectFactory
+            ): Boolean {
+                val configPath = fileSystem.getPath("config.json")
 
-                zipFileSystem(mcp.toPath()).use { mcpFs ->
-                    val config = mcpFs.getPath("config.json").inputStream().decorate().use { MinecraftCodevPlugin.json.decodeFromStream<McpConfig>(it) }
-                    val mappings = mcpFs.getPath(config.data.mappings)
+                return if (configPath.exists()) {
+                    val mcpLibrary = configPath.inputStream().use { MinecraftCodevPlugin.json.decodeFromStream<UserdevConfig>(it) }.mcp
 
-                    val namespaceCompleter = MappingNsCompleter(visitor, mapOf(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE to MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE), true)
+                    val mcp = configurations.createIfAbsent(PatchedSetupState.configurationName(mcpLibrary)) {
+                        it.dependencies.add(dependencies.create(mcpLibrary))
+                        it.isVisible = false
+                    }.singleFile
 
-                    val classFixer = if (config.official) {
-                        val clientMappingsDependency = extensions.getByType(MinecraftCodevExtension::class.java)(MinecraftType.ClientMappings, config.version)
-                        val clientMappingsFile = unsafeResolveConfiguration(configurations.detachedConfiguration(clientMappingsDependency)).singleFile
-                        val clientMappings = MemoryMappingTree()
+                    zipFileSystem(mcp.toPath()).use { mcpFs ->
+                        val config = mcpFs.getPath("config.json").inputStream().decorate().use { MinecraftCodevPlugin.json.decodeFromStream<McpConfig>(it) }
+                        val mappings = mcpFs.getPath(config.data.mappings)
 
-                        clientMappingsFile.reader().use { ProGuardReader.read(it, clientMappings) }
-                        ClassNameReplacer(namespaceCompleter, clientMappings, MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE, MappingUtil.NS_TARGET_FALLBACK)
-                    } else {
-                        namespaceCompleter
-                    }
+                        val namespaceCompleter = MappingNsCompleter(visitor, mapOf(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE to MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE), true)
 
-                    mappings.inputStream().reader().use {
-                        TsrgReader.read(
-                            it, MappingsNamespace.OBF, MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE, classFixer
-                        )
-                    }
+                        val classFixer = if (config.official) {
+                            val result = DefaultBuildableArtifactResolveResult()
+                            objects.newInstance(MinecraftArtifactResolver::class.java).resolveArtifact(
+                                DefaultModuleComponentArtifactMetadata(
+                                    MinecraftComponentIdentifier(MinecraftType.ClientMappings.module, config.version, false),
+                                    DefaultIvyArtifactName(
+                                        MinecraftType.ClientMappings.module,
+                                        "txt",
+                                        "txt"
+                                    )
+                                ),
+                                ImmutableModuleSources.of(),
+                                result
+                            )
 
-                    if (!config.official) {
-                        val clientMappingsDependency =
-                            extensions.getByType(MinecraftCodevExtension::class.java).extensions.getByType(PatchedMinecraftCodevExtension::class.java)(config.version)
+                            val clientMappings = MemoryMappingTree()
 
-                        val patchState = PatchedMinecraftComponentResolvers.getPatchState(
-                            PatchedComponentIdentifier(config.version, "", null),
-                            repositoriesSupplier.get().filterIsInstance<MinecraftRepositoryImpl>().map(MinecraftRepositoryImpl::createResolver),
-                            getCacheProvider(gradle),
-                            (configuration.resolutionStrategy as ResolutionStrategyInternal).cachePolicy.also(startParameterResolutionOverride::applyToCachePolicy),
-                            checksumService,
-                            timeProvider,
-                            path.toFile(),
-                            objects
-                        ) ?: return@add false
+                            result.result.reader().use { ProGuardReader.read(it, clientMappings) }
+                            ClassNameReplacer(namespaceCompleter, clientMappings, MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE, MappingUtil.NS_TARGET_FALLBACK)
+                        } else {
+                            namespaceCompleter
+                        }
 
-                        zipFileSystem(patchState.withAssets).use { patchedJar ->
-                            if (visitor.visitHeader()) {
-                                if (visitor.visitContent()) {
-                                    val obfNamespace = existingMappings.getNamespaceId(MappingsNamespace.OBF)
-                                    val srgNamespace = existingMappings.getNamespaceId(MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE)
-                                    val namedNamespace = existingMappings.getNamespaceId(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
+                        mappings.inputStream().reader().use {
+                            TsrgReader.read(
+                                it, MappingsNamespace.OBF, MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE, classFixer
+                            )
+                        }
 
-                                    for (classMapping in existingMappings.classes) {
-                                        if (visitor.visitClass(classMapping.getName(obfNamespace))) {
-                                            val classPath = patchedJar.getPath(classMapping.getName(srgNamespace) + ".class")
-                                            if (classPath.notExists()) continue
+                        if (!config.official) {
+                            val clientMappingsDependency =
+                                extensions.getByType(MinecraftCodevExtension::class.java).extensions.getByType(PatchedMinecraftCodevExtension::class.java)(config.version)
 
-                                            val reader = classPath.inputStream().use(::ClassReader)
-                                            reader.accept(object : ClassVisitor(Opcodes.ASM9) {
-                                                override fun visitMethod(access: Int, name: String, descriptor: String, signature: String?, exceptions: Array<out String>?): MethodVisitor {
-                                                    val methodMapping = classMapping.getMethod(name, descriptor, srgNamespace)
-                                                    val arguments = Type.getMethodType(descriptor).argumentTypes
-                                                    val argumentStack = arguments.toMutableList()
+                            val patchState = PatchedMinecraftComponentResolvers.getPatchState(
+                                PatchedComponentIdentifier(config.version, "", null),
+                                repositoriesSupplier.get().filterIsInstance<MinecraftRepositoryImpl>().map(MinecraftRepositoryImpl::createResolver),
+                                getCacheProvider(gradle),
+                                (configuration.resolutionStrategy as ResolutionStrategyInternal).cachePolicy.also(startParameterResolutionOverride::applyToCachePolicy),
+                                checksumService,
+                                timeProvider,
+                                path.toFile(),
+                                objects
+                            ) ?: return false
 
-                                                    if (methodMapping == null) {
-                                                        return if (visitor.visitMethod(name, descriptor)) {
-                                                            visitor.visitDstName(MappedElementKind.METHOD, srgNamespace, name)
-                                                            visitor.visitDstName(MappedElementKind.METHOD, namedNamespace, name)
+                            zipFileSystem(patchState.patchedOutput.toPath()).use { patchedJar ->
+                                if (visitor.visitHeader()) {
+                                    if (visitor.visitContent()) {
+                                        val obfNamespace = existingMappings.getNamespaceId(MappingsNamespace.OBF)
+                                        val srgNamespace = existingMappings.getNamespaceId(MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE)
+                                        val namedNamespace = existingMappings.getNamespaceId(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
 
-                                                            object : MethodVisitor(Opcodes.ASM9, super.visitMethod(access, name, descriptor, signature, exceptions)) {
-                                                                override fun visitLocalVariable(name: String?, descriptor: String, signature: String?, start: Label, end: Label, index: Int) {
-                                                                    if (argumentStack.isEmpty() || name == null) {
-                                                                        super.visitLocalVariable(name, descriptor, signature, start, end, index)
-                                                                    } else {
-                                                                        if (Type.getType(descriptor) == argumentStack[0]) {
-                                                                            argumentStack.removeAt(0)
-                                                                            visitor.visitMethodArg(arguments.size - argumentStack.size, index, null)
-                                                                            visitor.visitDstName(MappedElementKind.METHOD_ARG, srgNamespace, name)
-                                                                            visitor.visitDstName(MappedElementKind.METHOD_ARG, namedNamespace, name)
+                                        for (classMapping in existingMappings.classes) {
+                                            if (visitor.visitClass(classMapping.getName(obfNamespace))) {
+                                                val classPath = patchedJar.getPath(classMapping.getName(srgNamespace) + ".class")
+                                                if (classPath.notExists()) continue
+
+                                                val reader = classPath.inputStream().use(::ClassReader)
+                                                reader.accept(object : ClassVisitor(Opcodes.ASM9) {
+                                                    override fun visitMethod(access: Int, name: String, descriptor: String, signature: String?, exceptions: Array<out String>?): MethodVisitor {
+                                                        val methodMapping = classMapping.getMethod(name, descriptor, srgNamespace)
+                                                        val arguments = Type.getMethodType(descriptor).argumentTypes
+                                                        val argumentStack = arguments.toMutableList()
+
+                                                        if (methodMapping == null) {
+                                                            return if (visitor.visitMethod(name, descriptor)) {
+                                                                visitor.visitDstName(MappedElementKind.METHOD, srgNamespace, name)
+                                                                visitor.visitDstName(MappedElementKind.METHOD, namedNamespace, name)
+
+                                                                object : MethodVisitor(Opcodes.ASM9, super.visitMethod(access, name, descriptor, signature, exceptions)) {
+                                                                    override fun visitLocalVariable(name: String?, descriptor: String, signature: String?, start: Label, end: Label, index: Int) {
+                                                                        if (argumentStack.isEmpty() || name == null) {
+                                                                            super.visitLocalVariable(name, descriptor, signature, start, end, index)
+                                                                        } else {
+                                                                            if (Type.getType(descriptor) == argumentStack[0]) {
+                                                                                argumentStack.removeAt(0)
+                                                                                visitor.visitMethodArg(arguments.size - argumentStack.size, index, null)
+                                                                                visitor.visitDstName(MappedElementKind.METHOD_ARG, srgNamespace, name)
+                                                                                visitor.visitDstName(MappedElementKind.METHOD_ARG, namedNamespace, name)
+                                                                            }
                                                                         }
                                                                     }
                                                                 }
+                                                            } else {
+                                                                super.visitMethod(access, name, descriptor, signature, exceptions)
                                                             }
                                                         } else {
-                                                            super.visitMethod(access, name, descriptor, signature, exceptions)
-                                                        }
-                                                    } else {
-                                                        return if (visitor.visitMethod(methodMapping.getName(obfNamespace), methodMapping.getDesc(obfNamespace))) {
-                                                            visitor.visitDstName(MappedElementKind.METHOD, srgNamespace, name)
-                                                            visitor.visitDstName(MappedElementKind.METHOD, namedNamespace, name)
+                                                            return if (visitor.visitMethod(methodMapping.getName(obfNamespace), methodMapping.getDesc(obfNamespace))) {
+                                                                visitor.visitDstName(MappedElementKind.METHOD, srgNamespace, name)
+                                                                visitor.visitDstName(MappedElementKind.METHOD, namedNamespace, name)
 
-                                                            object : MethodVisitor(Opcodes.ASM9, super.visitMethod(access, name, descriptor, signature, exceptions)) {
-                                                                override fun visitLocalVariable(name: String?, descriptor: String, signature: String?, start: Label, end: Label, index: Int) {
-                                                                    if (argumentStack.isEmpty() || name == null) {
-                                                                        super.visitLocalVariable(name, descriptor, signature, start, end, index)
-                                                                    } else {
-                                                                        if (Type.getType(descriptor) == argumentStack[0]) {
-                                                                            argumentStack.removeAt(0)
+                                                                object : MethodVisitor(Opcodes.ASM9, super.visitMethod(access, name, descriptor, signature, exceptions)) {
+                                                                    override fun visitLocalVariable(name: String?, descriptor: String, signature: String?, start: Label, end: Label, index: Int) {
+                                                                        if (argumentStack.isEmpty() || name == null) {
+                                                                            super.visitLocalVariable(name, descriptor, signature, start, end, index)
+                                                                        } else {
+                                                                            if (Type.getType(descriptor) == argumentStack[0]) {
+                                                                                argumentStack.removeAt(0)
 
-                                                                            visitor.visitMethodArg(
-                                                                                arguments.size - argumentStack.size,
-                                                                                index,
-                                                                                methodMapping.args.firstOrNull { it.lvIndex == index }?.getName(obfNamespace)
-                                                                            )
+                                                                                visitor.visitMethodArg(
+                                                                                    arguments.size - argumentStack.size,
+                                                                                    index,
+                                                                                    methodMapping.args.firstOrNull { it.lvIndex == index }?.getName(obfNamespace)
+                                                                                )
 
-                                                                            visitor.visitDstName(MappedElementKind.METHOD_ARG, srgNamespace, name)
-                                                                            visitor.visitDstName(MappedElementKind.METHOD_ARG, namedNamespace, name)
+                                                                                visitor.visitDstName(MappedElementKind.METHOD_ARG, srgNamespace, name)
+                                                                                visitor.visitDstName(MappedElementKind.METHOD_ARG, namedNamespace, name)
+                                                                            }
                                                                         }
                                                                     }
                                                                 }
+                                                            } else {
+                                                                super.visitMethod(access, name, descriptor, signature, exceptions)
                                                             }
-                                                        } else {
-                                                            super.visitMethod(access, name, descriptor, signature, exceptions)
                                                         }
                                                     }
-                                                }
-                                            }, 0)
+                                                }, 0)
+                                            }
                                         }
                                     }
                                 }
-                            }
 
-                            visitor.visitEnd()
+                                visitor.visitEnd()
+                            }
                         }
                     }
-                }
 
-                true
-            } else {
-                false
+                    true
+                } else {
+                    false
+                }
             }
-        }
+
+            override fun resolveBuildDependencies(path: Path, fileSystem: FileSystem, isJar: Boolean) = object : AbstractTaskDependency() {
+                override fun visitDependencies(context: TaskDependencyResolveContext) {
+                    val configPath = fileSystem.getPath("config.json")
+
+                    if (configPath.exists()) {
+                        val mcpLibrary = configPath.inputStream().use { MinecraftCodevPlugin.json.decodeFromStream<UserdevConfig>(it) }.mcp
+                        val configuration = configurations.createIfAbsent(PatchedSetupState.configurationName(mcpLibrary)) {
+                            it.dependencies.add(dependencies.create(mcpLibrary))
+                            it.isVisible = false
+                        }
+
+                        project.addConfigurationResolutionDependencies(context, configuration)
+                    }
+                }
+            }
+        })
 
         remapper.zipMappingsResolution.add { _, fileSystem, visitor, _, decorate, existingMappings, _, _ ->
             val methods = fileSystem.getPath("methods.csv")

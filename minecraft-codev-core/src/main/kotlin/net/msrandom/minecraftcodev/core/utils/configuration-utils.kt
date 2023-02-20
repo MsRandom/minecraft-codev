@@ -12,7 +12,8 @@ import org.gradle.api.internal.tasks.TaskDependencyResolveContext
 import org.gradle.configurationcache.extensions.serviceOf
 
 fun Project.addConfigurationResolutionDependencies(context: TaskDependencyResolveContext, configuration: Configuration) {
-    context.add(configuration.buildDependencies)
+    context.add(configuration)
+
     context.add(
         serviceOf<ITaskFactory>().create(
             TaskIdentity.create(
@@ -25,5 +26,5 @@ fun Project.addConfigurationResolutionDependencies(context: TaskDependencyResolv
     )
 }
 
-fun ConfigurationContainer.computeByNameIfAbsent(name: String, setup: (configuration: Configuration) -> Unit): Configuration =
+fun ConfigurationContainer.createIfAbsent(name: String, setup: (configuration: Configuration) -> Unit): Configuration =
     findByName(name) ?: create(name).also(setup)

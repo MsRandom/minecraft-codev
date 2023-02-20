@@ -53,6 +53,7 @@ import org.gradle.internal.resolve.resolver.OriginArtifactSelector
 import org.gradle.internal.resolve.result.*
 import org.gradle.util.internal.BuildCommencedTimeProvider
 import java.nio.file.Path
+import java.util.*
 import java.util.concurrent.locks.ReentrantLock
 import javax.inject.Inject
 import kotlin.concurrent.withLock
@@ -128,7 +129,8 @@ open class RemappedComponentResolvers @Inject constructor(
                     },
                     { artifact, artifacts ->
                         if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
-                            val classpath = project.configurations.computeByNameIfAbsent("artifactClasspath-${identifier.hashCode().toString(16)}") {
+                            val hash = Objects.hash(identifier.original.moduleIdentifier, identifier.original.version, identifier.mappingsConfiguration)
+                            val classpath = project.configurations.createIfAbsent("artifactClasspath-${hash.toString(16)}") {
                                 it.dependencies.addAll(transitiveDependencies.map { project.convertDescriptor(it) })
                                 it.isVisible = false
                             }
@@ -172,25 +174,23 @@ open class RemappedComponentResolvers @Inject constructor(
         if (dependency is RemappedDependencyMetadata) {
             resolvers.get().componentIdResolver.resolve(dependency.delegate, acceptor, rejector, result)
 
-            if (result.hasResult()) {
-                if (result.failure == null) {
-                    val metadata = result.metadata
-                    val mappingsConfiguration = project.getSourceSetConfigurationName(dependency, MinecraftCodevRemapperPlugin.MAPPINGS_CONFIGURATION)
+            if (result.hasResult() && result.failure == null) {
+                val metadata = result.metadata
+                val mappingsConfiguration = project.getSourceSetConfigurationName(dependency, MinecraftCodevRemapperPlugin.MAPPINGS_CONFIGURATION)
 
-                    if (result.id is ModuleComponentIdentifier) {
-                        val id = RemappedComponentIdentifier(
-                            result.id as ModuleComponentIdentifier,
-                            dependency.sourceNamespace,
-                            dependency.targetNamespace,
-                            mappingsConfiguration,
-                            dependency.getModuleConfiguration()
-                        ).mayHaveSources()
+                if (result.id is ModuleComponentIdentifier) {
+                    val id = RemappedComponentIdentifier(
+                        result.id as ModuleComponentIdentifier,
+                        dependency.sourceNamespace,
+                        dependency.targetNamespace,
+                        mappingsConfiguration,
+                        dependency.getModuleConfiguration()
+                    ).mayHaveSources()
 
-                        if (metadata == null) {
-                            result.resolved(id, result.moduleVersionId)
-                        } else {
-                            result.resolved(wrapMetadata(metadata, id))
-                        }
+                    if (metadata == null) {
+                        result.resolved(id, result.moduleVersionId)
+                    } else {
+                        result.resolved(wrapMetadata(metadata, id))
                     }
                 }
             }
@@ -216,12 +216,6 @@ open class RemappedComponentResolvers @Inject constructor(
         exclusions: ExcludeSpec,
         overriddenAttributes: ImmutableAttributes
     ) = if (component.id is RemappedComponentIdentifier) {
-        project.extensions
-            .getByType(MinecraftCodevExtension::class.java)
-            .extensions
-            .getByType(RemapperExtension::class.java)
-            .loadMappings(project.configurations.getByName((component.id as RemappedComponentIdentifier).mappingsConfiguration), objects)
-
         MetadataSourcedComponentArtifacts().getArtifactsFor(
             component, configuration, artifactResolver, hashMapOf(), artifactTypeRegistry, exclusions, overriddenAttributes, calculatedValueContainerFactory
         )

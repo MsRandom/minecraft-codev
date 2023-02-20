@@ -1,5 +1,6 @@
 package net.msrandom.minecraftcodev.forge.resolve
 
+import com.google.common.base.CaseFormat
 import com.google.common.io.ByteStreams.nullOutputStream
 import kotlinx.serialization.json.decodeFromStream
 import net.minecraftforge.accesstransformer.TransformerProcessor
@@ -7,39 +8,29 @@ import net.minecraftforge.srgutils.IMappingFile
 import net.minecraftforge.srgutils.INamedMappingFile
 import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
-import net.msrandom.minecraftcodev.core.ModuleLibraryIdentifier
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
 import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.getOrResolve
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
 import net.msrandom.minecraftcodev.core.resolve.getExtractionState
 import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter.withAssets
-import net.msrandom.minecraftcodev.core.utils.callWithStatus
-import net.msrandom.minecraftcodev.core.utils.computeByNameIfAbsent
-import net.msrandom.minecraftcodev.core.utils.walk
-import net.msrandom.minecraftcodev.core.utils.zipFileSystem
-import net.msrandom.minecraftcodev.forge.McpConfig
-import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin
-import net.msrandom.minecraftcodev.forge.PatchLibrary
-import net.msrandom.minecraftcodev.forge.UserdevConfig
+import net.msrandom.minecraftcodev.core.utils.*
+import net.msrandom.minecraftcodev.forge.*
 import net.msrandom.minecraftcodev.forge.dependency.PatchedComponentIdentifier
 import org.gradle.api.Project
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.internal.ProcessOperations
-import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
+import org.gradle.api.internal.tasks.AbstractTaskDependency
+import org.gradle.api.internal.tasks.TaskDependencyResolveContext
 import org.gradle.api.model.ObjectFactory
+import org.gradle.api.tasks.TaskDependency
 import org.gradle.internal.component.external.model.DefaultModuleComponentArtifactIdentifier
 import org.gradle.internal.component.external.model.DefaultModuleComponentArtifactMetadata
-import org.gradle.internal.component.external.model.DefaultModuleComponentIdentifier
-import org.gradle.internal.component.model.DefaultComponentOverrideMetadata
-import org.gradle.internal.component.model.DefaultIvyArtifactName
 import org.gradle.internal.hash.ChecksumService
 import org.gradle.internal.hash.HashCode
 import org.gradle.internal.operations.*
-import org.gradle.internal.resolve.ArtifactResolveException
 import org.gradle.internal.resolve.result.DefaultBuildableArtifactResolveResult
-import org.gradle.internal.resolve.result.DefaultBuildableComponentResolveResult
 import org.gradle.util.internal.BuildCommencedTimeProvider
 import java.io.File
 import java.io.PrintStream
@@ -77,7 +68,36 @@ open class PatchedSetupState @Inject constructor(
     }
 
     private val mcpConfigFile by lazy {
-        resolveArtifact(userdevConfig.mcp).toPath()
+        project.unsafeResolveConfiguration(project.configurations.createIfAbsent(configurationName(userdevConfig.mcp)) {
+            it.dependencies.add(project.dependencies.create(userdevConfig.mcp))
+            it.isVisible = false
+        }).singleFile.toPath()
+    }
+
+    private val forgeUniversalConfiguration = project.configurations.createIfAbsent(configurationName(userdevConfig.universal)) {
+        it.dependencies.add(project.dependencies.create(userdevConfig.universal))
+        it.isTransitive = false
+        it.isVisible = false
+    }
+
+    private val commonClasspathConfiguration by lazy {
+        project.configurations.createIfAbsent("${manifest.id}-commonClasspath") {
+            for (library in extractionState.value.libraries) {
+                it.dependencies.add(project.dependencies.create(library.toString()))
+            }
+        }
+    }
+
+    private val mergeFunction by lazy {
+        mcpConfig.functions.getValue("merge")
+    }
+
+    private val renameFunction by lazy {
+        mcpConfig.functions.getValue("rename")
+    }
+
+    private val mcInjectFunction by lazy {
+        mcpConfig.functions["mcinject"]
     }
 
     private val mcpConfig by lazy {
@@ -101,6 +121,27 @@ open class PatchedSetupState @Inject constructor(
         }
     }
 
+    val taskDependencies: TaskDependency
+        get() = object : AbstractTaskDependency() {
+            override fun visitDependencies(context: TaskDependencyResolveContext) {
+                project.addConfigurationResolutionDependencies(context, forgeUniversalConfiguration)
+                project.addConfigurationResolutionDependencies(context, commonClasspathConfiguration)
+                project.addConfigurationResolutionDependencies(context, functionConfiguration(userdevConfig.binpatcher))
+                project.addConfigurationResolutionDependencies(context, functionConfiguration(mergeFunction))
+                project.addConfigurationResolutionDependencies(context, functionConfiguration(renameFunction))
+
+                mcInjectFunction?.let {
+                    project.addConfigurationResolutionDependencies(context, functionConfiguration(it))
+                }
+            }
+        }
+
+    private fun functionConfiguration(function: PatchLibrary) = project.configurations.createIfAbsent(configurationName(function.version)) {
+        it.dependencies.add(project.dependencies.create(function.version))
+        it.isTransitive = false
+        it.isVisible = false
+    }
+
     private fun merged(): Path = buildOperationExecutor.call(object : CallableBuildOperation<Path> {
         val merged = Files.createTempFile("merged-", ".tmp.jar")
 
@@ -111,7 +152,7 @@ open class PatchedSetupState @Inject constructor(
 
         override fun call(context: BuildOperationContext) = context.callWithStatus {
             executeMcp(
-                mcpConfig.functions.getValue("merge"),
+                mergeFunction,
                 mapOf(
                     "client" to clientJar.absolutePath,
                     "server" to extractionState.value.result.toAbsolutePath(),
@@ -166,11 +207,11 @@ open class PatchedSetupState @Inject constructor(
                 }
 
                 // Add files from the universal Jar
-                project.configurations.computeByNameIfAbsent(userdevConfig.universal.replace(":", "")) {
+                project.configurations.createIfAbsent(userdevConfig.universal.replace(":", "")) {
                     it.dependencies.add(project.dependencies.create(userdevConfig.universal))
                 }
 
-                val universal = resolveArtifact(userdevConfig.universal)
+                val universal = forgeUniversalConfiguration.singleFile
                 val filters = userdevConfig.universalFilters.map(::Regex)
                 zipFileSystem(universal.toPath()).use { universalZip ->
                     val root = universalZip.getPath("/")
@@ -191,10 +232,11 @@ open class PatchedSetupState @Inject constructor(
                 // Add userdev injects
                 userdevConfig.inject?.let { inject ->
                     zipFileSystem(userdevConfigFile.toPath()).use { userdevZip ->
-                        if (userdevZip.getPath(inject).exists()) {
-                            userdevZip.getPath(inject).walk {
+                        val injectPath = userdevZip.getPath(inject)
+                        if (injectPath.exists()) {
+                            injectPath.walk {
                                 for (path in filter(Path::isRegularFile)) {
-                                    val output = patchedZip.getPath(path.toString())
+                                    val output = patchedZip.getPath(injectPath.relativize(path).toString())
 
                                     output.parent?.createDirectories()
                                     path.copyTo(output, StandardCopyOption.COPY_ATTRIBUTES)
@@ -210,7 +252,6 @@ open class PatchedSetupState @Inject constructor(
     })
 
     private fun renamed(): Path = buildOperationExecutor.call(object : CallableBuildOperation<Path> {
-        val extractionState = getExtractionState(buildOperationExecutor, manifest, serverJar) { clientJar }
         val input = if (userdevConfig.notchObf) patched() else merged()
         val renamed = Files.createTempFile("renamed-", ".tmp.jar")
         val fixedMappingsPath = Files.createTempFile("mappings-", ".tmp.tsrg")
@@ -231,9 +272,8 @@ open class PatchedSetupState @Inject constructor(
                 }
             }
 
-
             executeMcp(
-                mcpConfig.functions.getValue("rename"),
+                renameFunction,
                 mapOf(
                     "input" to input.toAbsolutePath(),
                     "output" to renamed.toAbsolutePath(),
@@ -242,9 +282,9 @@ open class PatchedSetupState @Inject constructor(
                 Triple(
                     "libraries",
                     "-e",
-                    extractionState.value
-                        .libraries
-                        .map { resolveArtifact(it, null).toString() }
+                    commonClasspathConfiguration.files.map {
+                        it.absolutePath
+                    }
                 )
             )
 
@@ -273,7 +313,7 @@ open class PatchedSetupState @Inject constructor(
             }
 
             executeMcp(
-                mcpConfig.functions.getValue("mcinject"),
+                mcInjectFunction!!,
                 mapOf(
                     "input" to input.toAbsolutePath(),
                     "output" to injected.toAbsolutePath(),
@@ -336,7 +376,7 @@ open class PatchedSetupState @Inject constructor(
         }
     })
 
-    val withAssets: Path by lazy {
+    private val withAssets: Path by lazy {
         buildOperationExecutor.call(object : CallableBuildOperation<Path> {
             val accessTransformed = accessTransformed()
             val output = Files.createTempFile("forge-", ".tmp.jar")
@@ -380,11 +420,7 @@ open class PatchedSetupState @Inject constructor(
         })
     }
 
-    val patchedOutput by lazy {
-        val patches = project.configurations.getByName(moduleComponentIdentifier.patches)
-
-        val patchesHash = PatchedMinecraftComponentResolvers.hash(patches, checksumService)
-
+    val patchedOutput: File by lazy {
         val identifier = DefaultModuleComponentArtifactIdentifier(
             moduleComponentIdentifier,
             moduleComponentIdentifier.module,
@@ -406,55 +442,12 @@ open class PatchedSetupState @Inject constructor(
         result.result
     }
 
-    private fun resolveArtifact(library: String): File {
-        val extensionIndex = library.indexOf('@')
-
-        val id: ModuleLibraryIdentifier
-        val extension: String?
-        if (extensionIndex < 0) {
-            id = ModuleLibraryIdentifier.load(library)
-            extension = null
-        } else {
-            id = ModuleLibraryIdentifier.load(library.substring(0, extensionIndex))
-            extension = library.substring(extensionIndex + 1)
-        }
-
-        return resolveArtifact(id, extension)
-    }
-
-    private fun resolveArtifact(library: ModuleLibraryIdentifier, extension: String?): File {
-        val id = DefaultModuleComponentIdentifier.newId(DefaultModuleIdentifier.newId(library.group, library.module), library.version)
-        val componentResult = DefaultBuildableComponentResolveResult()
-
-        resolvers.get().componentResolver.resolve(
-            id,
-            DefaultComponentOverrideMetadata.EMPTY,
-            componentResult
-        )
-
-        if (componentResult.hasResult()) {
-            val artifactResult = DefaultBuildableArtifactResolveResult()
-
-            resolvers.get().artifactResolver.resolveArtifact(
-                DefaultModuleComponentArtifactMetadata(id, DefaultIvyArtifactName(library.module, ArtifactTypeDefinition.JAR_TYPE, extension ?: ArtifactTypeDefinition.JAR_TYPE, library.classifier)),
-                componentResult.metadata.sources,
-                artifactResult
-            )
-
-            if (artifactResult.hasResult()) {
-                return artifactResult.result
-            }
-        }
-
-        throw ArtifactResolveException(id, "No artifact found")
-    }
-
     private fun executeMcp(
         function: PatchLibrary,
         argumentTemplates: Map<String, Any?>,
         argumentLists: Triple<String, String, Collection<String>>? = null
     ) {
-        val jar = resolveArtifact(function.version)
+        val jar = functionConfiguration(function).singleFile
 
         val mainClass = JarFile(jar).use {
             it.manifest.mainAttributes.getValue(Attributes.Name.MAIN_CLASS)
@@ -514,5 +507,8 @@ open class PatchedSetupState @Inject constructor(
         ) = patchedStates.computeIfAbsent(manifest.id to userdevConfigFile) { (_, userdevFile) ->
             objectFactory.newInstance(PatchedSetupState::class.java, moduleComponentIdentifier, manifest, clientJar, serverJar, userdevFile, patchesHash, cacheManager)
         }
+
+        fun configurationName(libraryName: String): String =
+            CaseFormat.LOWER_HYPHEN.to(CaseFormat.LOWER_CAMEL, libraryName.replace(Regex("[:.]"), "-"))
     }
 }

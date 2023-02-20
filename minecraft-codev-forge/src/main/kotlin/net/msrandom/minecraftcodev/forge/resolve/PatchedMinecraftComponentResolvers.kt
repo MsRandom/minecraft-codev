@@ -4,7 +4,6 @@ import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
-import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.getOrResolve
 import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.resolveMojangFile
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
 import net.msrandom.minecraftcodev.core.resolve.MinecraftDependencyToComponentIdResolver
@@ -14,6 +13,7 @@ import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin
 import net.msrandom.minecraftcodev.forge.UserdevConfig
 import net.msrandom.minecraftcodev.forge.dependency.PatchedComponentIdentifier
 import net.msrandom.minecraftcodev.forge.dependency.PatchedMinecraftDependencyMetadata
+import net.msrandom.minecraftcodev.forge.unsafeResolveConfiguration
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
 import org.gradle.api.artifacts.component.ComponentIdentifier
@@ -27,7 +27,6 @@ import org.gradle.api.internal.attributes.ImmutableAttributes
 import org.gradle.api.internal.component.ArtifactType
 import org.gradle.api.model.ObjectFactory
 import org.gradle.internal.component.external.model.MetadataSourcedComponentArtifacts
-import org.gradle.internal.component.external.model.ModuleComponentArtifactMetadata
 import org.gradle.internal.component.model.*
 import org.gradle.internal.hash.ChecksumService
 import org.gradle.internal.hash.HashCode
@@ -106,8 +105,9 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
         if (identifier is PatchedComponentIdentifier) {
             val patches = project.unsafeResolveConfiguration(project.configurations.getByName(identifier.patches))
             val config = UserdevConfig.fromFile(patches.singleFile)
+            val patchState = getPatchState(identifier, patches.singleFile, hash(patches, checksumService))
 
-            if (config != null) {
+            if (config != null && patchState != null) {
                 for (repository in repositories) {
                     objectFactory.newInstance(MinecraftMetadataGenerator::class.java, minecraftCacheManager).resolveMetadata(
                         repository,
@@ -117,7 +117,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
                         componentOverrideMetadata,
                         result,
                         MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE,
-                        patches
+                        patchState.taskDependencies
                     )
 
                     if (result.hasResult()) {
@@ -160,11 +160,8 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
             val patches = project.configurations.getByName(moduleComponentIdentifier.patches)
 
             val patchesHash = hash(patches, checksumService)
-
-            val urlId = PatchedArtifactIdentifier(artifact.id, patchesHash)
-
-            getOrResolve(artifact as ModuleComponentArtifactMetadata, urlId, artifactCache, cachePolicy, timeProvider, result) {
-                getPatchState(moduleComponentIdentifier, patches.singleFile, patchesHash)?.withAssets?.toFile()
+            getPatchState(moduleComponentIdentifier, patches.singleFile, patchesHash)?.patchedOutput?.let {
+                result.resolved(it)
             }
         }
     }

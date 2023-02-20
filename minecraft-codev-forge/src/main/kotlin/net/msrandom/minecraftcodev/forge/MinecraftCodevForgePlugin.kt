@@ -9,6 +9,7 @@ import net.msrandom.minecraftcodev.core.utils.applyPlugin
 import net.msrandom.minecraftcodev.core.utils.createSourceSetConfigurations
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.forge.dependency.PatchedMinecraftDependencyFactory
+import net.msrandom.minecraftcodev.forge.dependency.PatchedMinecraftDependencyMetadata
 import net.msrandom.minecraftcodev.forge.dependency.PatchedMinecraftIvyDependencyDescriptorFactory
 import net.msrandom.minecraftcodev.forge.mappings.setupForgeRemapperIntegration
 import net.msrandom.minecraftcodev.forge.resolve.PatchedMinecraftComponentResolvers
@@ -26,7 +27,8 @@ open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
         "patched",
         PatchedMinecraftIvyDependencyDescriptorFactory::class.java,
         PatchedMinecraftDependencyFactory::class.java,
-        PatchedMinecraftComponentResolvers::class.java
+        PatchedMinecraftComponentResolvers::class.java,
+        PatchedMinecraftDependencyMetadata::class.java
     )
 
     override fun apply(target: T) = applyPlugin(target, ::applyGradle) {

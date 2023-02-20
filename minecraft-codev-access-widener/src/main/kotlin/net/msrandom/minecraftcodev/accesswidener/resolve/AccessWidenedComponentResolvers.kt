@@ -161,23 +161,21 @@ open class AccessWidenedComponentResolvers @Inject constructor(
         if (dependency is AccessWidenedDependencyMetadata) {
             resolvers.get().componentIdResolver.resolve(dependency.delegate, acceptor, rejector, result)
 
-            if (result.hasResult()) {
-                if (result.failure == null) {
-                    val metadata = result.metadata
-                    val accessWidenersConfiguration = project.getSourceSetConfigurationName(dependency, MinecraftCodevAccessWidenerPlugin.ACCESS_WIDENERS_CONFIGURATION)
+            if (result.hasResult() && result.failure == null) {
+                val metadata = result.metadata
+                val accessWidenersConfiguration = project.getSourceSetConfigurationName(dependency, MinecraftCodevAccessWidenerPlugin.ACCESS_WIDENERS_CONFIGURATION)
 
-                    if (result.id is ModuleComponentIdentifier) {
-                        val id = AccessWidenedComponentIdentifier(
-                            result.id as ModuleComponentIdentifier,
-                            accessWidenersConfiguration,
-                            dependency.getModuleConfiguration()
-                        ).mayHaveSources()
+                if (result.id is ModuleComponentIdentifier) {
+                    val id = AccessWidenedComponentIdentifier(
+                        result.id as ModuleComponentIdentifier,
+                        accessWidenersConfiguration,
+                        dependency.getModuleConfiguration()
+                    ).mayHaveSources()
 
-                        if (metadata == null) {
-                            result.resolved(id, result.moduleVersionId)
-                        } else {
-                            result.resolved(wrapMetadata(metadata, id))
-                        }
+                    if (metadata == null) {
+                        result.resolved(id, result.moduleVersionId)
+                    } else {
+                        result.resolved(wrapMetadata(metadata, id))
                     }
                 }
             }

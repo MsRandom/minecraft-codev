@@ -9,7 +9,7 @@ import java.io.File
 class PatchedMinecraftTests {
     private fun test(pathName: String) {
         GradleRunner.create()
-            .withProjectDir(File("basic-patched-test"))
+            .withProjectDir(File(pathName))
             .withPluginClasspath()
             .withArguments("jar", "printCompileClasspath", "-s")
             .forwardOutput()

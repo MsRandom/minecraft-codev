@@ -19,8 +19,6 @@ import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Comp
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.asMinecraftDownload
 import net.msrandom.minecraftcodev.core.utils.named
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader
-import org.gradle.api.Project
-import org.gradle.api.artifacts.Configuration
 import org.gradle.api.artifacts.Dependency
 import org.gradle.api.artifacts.ResolvedModuleVersion
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
@@ -40,6 +38,7 @@ import org.gradle.api.internal.model.NamedObjectInstantiator
 import org.gradle.api.internal.project.ProjectInternal
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.plugins.JavaPlugin
+import org.gradle.api.tasks.TaskDependency
 import org.gradle.initialization.layout.GlobalCacheDir
 import org.gradle.internal.component.external.model.DefaultModuleComponentArtifactMetadata
 import org.gradle.internal.component.external.model.DefaultModuleComponentSelector
@@ -71,14 +70,9 @@ open class MinecraftMetadataGenerator @Inject constructor(
     private val objectFactory: ObjectFactory,
     private val checksumService: ChecksumService,
     private val timeProvider: BuildCommencedTimeProvider,
-    private val cachePolicy: CachePolicy,
-    private val project: Project
+    private val cachePolicy: CachePolicy
 ) {
-    private fun extractionState(
-        componentIdentifier: ModuleComponentIdentifier,
-        repository: MinecraftRepositoryImpl.Resolver,
-        manifest: MinecraftVersionMetadata
-    ): Lazy<ServerExtractionResult>? {
+    private fun extractionState(repository: MinecraftRepositoryImpl.Resolver, manifest: MinecraftVersionMetadata): Lazy<ServerExtractionResult>? {
         val serverJar = resolveMojangFile(
             manifest,
             cacheManager,
@@ -110,7 +104,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
         requestMetaData: ComponentOverrideMetadata,
         result: BuildableComponentResolveResult,
         mappingsNamespace: String,
-        configuration: Configuration
+        taskDependencies: TaskDependency
     ) {
         val versionList = getVersionList(
             moduleComponentIdentifier,
@@ -145,9 +139,11 @@ open class MinecraftMetadataGenerator @Inject constructor(
                         extension,
                         null
                     )
-                ) {}
+                ) {
+                    override fun getBuildDependencies() = taskDependencies
+                }
             } else {
-                DefaultModuleComponentArtifactMetadata(
+                object : DefaultModuleComponentArtifactMetadata(
                     moduleComponentIdentifier,
                     DefaultIvyArtifactName(
                         moduleComponentIdentifier.module,
@@ -155,19 +151,14 @@ open class MinecraftMetadataGenerator @Inject constructor(
                         extension,
                         classifier
                     )
-                )
+                ) {
+                    override fun getBuildDependencies() = taskDependencies
+                }
             }
 
             val defaultAttributes = ImmutableAttributes.EMPTY.addNamed(MappingsNamespace.attribute, mappingsNamespace)
-
-            val extractionResult = extractionState(
-                moduleComponentIdentifier,
-                repository,
-                manifest
-            )?.value
-
+            val extractionResult = extractionState(repository, manifest)?.value
             val libraries = collectLibraries(manifest, extractionResult?.libraries ?: emptyList())
-
             val artifact = artifact(ArtifactTypeDefinition.JAR_TYPE)
             val artifacts = listOf(artifact)
 
@@ -308,18 +299,14 @@ open class MinecraftMetadataGenerator @Inject constructor(
             val defaultAttributes = ImmutableAttributes.EMPTY.addNamed(MappingsNamespace.attribute, MappingsNamespace.OBF)
             when (moduleComponentIdentifier.module) {
                 MinecraftComponentResolvers.COMMON_MODULE -> {
-                    val extractionState = extractionState(
-                        moduleComponentIdentifier,
-                        repository,
-                        manifest
-                    ) ?: return
+                    val extractionState = extractionState(repository, manifest) ?: return
 
                     val library = CodevGradleLinkageLoader.ConfigurationMetadata(
                         Dependency.DEFAULT_CONFIGURATION,
                         moduleComponentIdentifier,
                         collectLibraries(manifest, extractionState.value.libraries).common.map(::mapLibrary),
                         listOf(artifact),
-                        defaultAttributes(manifest, defaultAttributes).libraryAttributes().runtimeAttributes(),
+                        defaultAttributes(manifest, defaultAttributes).libraryAttributes(),
                         ImmutableCapabilities.EMPTY,
                         setOf(Dependency.DEFAULT_CONFIGURATION),
                         objectFactory
@@ -353,11 +340,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                 }
 
                 MinecraftComponentResolvers.CLIENT_MODULE -> {
-                    val extractionResult = extractionState(
-                        moduleComponentIdentifier,
-                        repository,
-                        manifest
-                    )?.value
+                    val extractionResult = extractionState(repository, manifest)?.value
 
                     val commonDependency = extractionResult?.let {
                         MinecraftDependencyMetadataWrapper(
@@ -461,12 +444,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                 }
 
                 MinecraftComponentResolvers.CLIENT_NATIVES_MODULE -> {
-                    val extractionResult = extractionState(
-                        moduleComponentIdentifier,
-                        repository,
-                        manifest
-                    )?.value
-
+                    val extractionResult = extractionState(repository, manifest)?.value
                     val libraries = collectLibraries(manifest, extractionResult?.libraries ?: emptyList())
                     val variants = mutableListOf<ConfigurationMetadata>()
 
@@ -509,7 +487,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                                 moduleComponentIdentifier,
                                 dependencies,
                                 artifacts,
-                                defaultAttributes(manifest, defaultAttributes).runtimeAttributes().addNamed(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE, system.name.toString()),
+                                defaultAttributes(manifest, defaultAttributes).addNamed(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE, system.name.toString()),
                                 ImmutableCapabilities.EMPTY,
                                 setOf(system.name.toString()),
                                 objectFactory
@@ -601,9 +579,6 @@ open class MinecraftMetadataGenerator @Inject constructor(
     private fun ImmutableAttributes.docsAttributes(docsType: String) = this
         .addNamed(Category.CATEGORY_ATTRIBUTE, Category.DOCUMENTATION)
         .addNamed(DocsType.DOCS_TYPE_ATTRIBUTE, docsType)
-
-    private fun ImmutableAttributes.apiAttributes() =
-        addNamed(Usage.USAGE_ATTRIBUTE, Usage.JAVA_API)
 
     private fun ImmutableAttributes.runtimeAttributes() =
         addNamed(Usage.USAGE_ATTRIBUTE, Usage.JAVA_RUNTIME)
