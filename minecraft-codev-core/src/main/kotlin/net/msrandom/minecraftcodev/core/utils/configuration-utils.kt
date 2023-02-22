@@ -5,25 +5,12 @@ import org.apache.commons.lang3.StringUtils
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
 import org.gradle.api.artifacts.ConfigurationContainer
-import org.gradle.api.internal.project.ProjectInternal
-import org.gradle.api.internal.project.taskfactory.ITaskFactory
-import org.gradle.api.internal.project.taskfactory.TaskIdentity
 import org.gradle.api.internal.tasks.TaskDependencyResolveContext
-import org.gradle.configurationcache.extensions.serviceOf
 
 fun Project.addConfigurationResolutionDependencies(context: TaskDependencyResolveContext, configuration: Configuration) {
-    context.add(configuration)
+    val name = "resolve" + StringUtils.capitalize(configuration.name)
 
-    context.add(
-        serviceOf<ITaskFactory>().create(
-            TaskIdentity.create(
-                "resolve" + StringUtils.capitalize(configuration.name),
-                ResolveConfiguration::class.java,
-                project as ProjectInternal
-            ),
-            arrayOf(configuration)
-        )
-    )
+    context.add(tasks.findByName(name) ?: tasks.create(name, ResolveConfiguration::class.java, configuration))
 }
 
 fun ConfigurationContainer.createIfAbsent(name: String, setup: (configuration: Configuration) -> Unit): Configuration =
