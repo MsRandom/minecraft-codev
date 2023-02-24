@@ -6,13 +6,13 @@ import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
-import net.msrandom.minecraftcodev.core.dependency.convertDescriptor
 import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
 import net.msrandom.minecraftcodev.core.resolve.MayNeedSources
 import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.getOrResolve
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentIdentifier
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.addNamed
 import net.msrandom.minecraftcodev.core.utils.*
+import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.allArtifacts
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.copy
 import net.msrandom.minecraftcodev.remapper.FieldAddDescVisitor
 import net.msrandom.minecraftcodev.remapper.JarRemapper
@@ -28,15 +28,18 @@ import org.gradle.api.artifacts.component.ModuleComponentSelector
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.attributes.Category
 import org.gradle.api.attributes.LibraryElements
+import org.gradle.api.internal.artifacts.VariantTransformRegistry
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
+import org.gradle.api.internal.artifacts.dependencies.DefaultImmutableVersionConstraint
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ComponentResolvers
+import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.UnionVersionSelector
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionSelector
+import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionSelectorScheme
+import org.gradle.api.internal.artifacts.ivyservice.resolveengine.excludes.ModuleExclusions
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.excludes.specs.ExcludeSpec
+import org.gradle.api.internal.artifacts.transform.TransformedVariantFactory
 import org.gradle.api.internal.artifacts.type.ArtifactTypeRegistry
-import org.gradle.api.internal.attributes.AttributeContainerInternal
-import org.gradle.api.internal.attributes.AttributeValue
-import org.gradle.api.internal.attributes.ImmutableAttributes
-import org.gradle.api.internal.attributes.ImmutableAttributesFactory
+import org.gradle.api.internal.attributes.*
 import org.gradle.api.internal.component.ArtifactType
 import org.gradle.api.internal.model.NamedObjectInstantiator
 import org.gradle.api.model.ObjectFactory
@@ -52,6 +55,7 @@ import org.gradle.internal.resolve.resolver.DependencyToComponentIdResolver
 import org.gradle.internal.resolve.resolver.OriginArtifactSelector
 import org.gradle.internal.resolve.result.*
 import org.gradle.util.internal.BuildCommencedTimeProvider
+import java.io.File
 import java.nio.file.Path
 import java.util.*
 import java.util.concurrent.locks.ReentrantLock
@@ -71,6 +75,10 @@ open class RemappedComponentResolvers @Inject constructor(
     private val buildOperationExecutor: BuildOperationExecutor,
     private val attributesFactory: ImmutableAttributesFactory,
     private val instantiator: NamedObjectInstantiator,
+    private val versionSelectorSchema: VersionSelectorScheme,
+    private val moduleExclusions: ModuleExclusions,
+    private val variantTransforms: VariantTransformRegistry,
+    private val transformedVariantFactory: TransformedVariantFactory,
 
     cacheProvider: CodevCacheProvider
 ) : ComponentResolvers, DependencyToComponentIdResolver, ComponentMetaDataResolver, OriginArtifactSelector, ArtifactResolver {
@@ -86,6 +94,53 @@ open class RemappedComponentResolvers @Inject constructor(
     override fun getComponentResolver() = this
     override fun getArtifactSelector() = this
     override fun getArtifactResolver() = this
+
+    private fun buildClasspath(selectedVariants: MutableList<Pair<ModuleSources, List<ComponentArtifactMetadata>>>, dependencies: Iterable<DependencyMetadata>) {
+        for (dependency in dependencies) {
+            val selector = dependency.selector
+            val constraint = if (selector is ModuleComponentSelector) selector.versionConstraint else DefaultImmutableVersionConstraint.of()
+            val require = if (constraint.requiredVersion.isEmpty()) null else versionSelectorSchema.parseSelector(constraint.requiredVersion)
+            val preferred = if (constraint.preferredVersion.isEmpty()) null else versionSelectorSchema.parseSelector(constraint.preferredVersion)
+            val reject = UnionVersionSelector(constraint.rejectedVersions.map(versionSelectorSchema::parseSelector))
+            val idResult = DefaultBuildableComponentIdResolveResult()
+
+            resolvers.get().componentIdResolver.resolve(dependency, preferred ?: require, reject, idResult)
+
+            val metadata = idResult.metadata ?: run {
+                val componentResult = DefaultBuildableComponentResolveResult()
+                resolvers.get().componentResolver.resolve(idResult.id, DefaultComponentOverrideMetadata.EMPTY, componentResult)
+
+                componentResult.metadata
+            }
+
+            val configurations = dependency.selectConfigurations(
+                (configuration.attributes as AttributeContainerInternal).asImmutable(),
+                metadata,
+                project.dependencies.attributesSchema as AttributesSchemaInternal,
+                configuration.outgoing.capabilities
+            )
+
+            for (configuration in configurations) {
+                buildClasspath(selectedVariants, configuration.dependencies)
+            }
+
+            val artifacts = buildList {
+                if (dependency.artifacts.isEmpty()) {
+                    for (configuration in configurations) {
+                        addAll(configuration.allArtifacts)
+                    }
+                } else {
+                    for (configuration in configurations) {
+                        for (artifactName in dependency.artifacts) {
+                            add(configuration.artifact(artifactName))
+                        }
+                    }
+                }
+            }
+
+            selectedVariants.add((metadata.sources ?: ImmutableModuleSources.of()) to artifacts)
+        }
+    }
 
     private fun wrapMetadata(metadata: ComponentResolveMetadata, identifier: RemappedComponentIdentifier) = metadata.copy(
         identifier,
@@ -129,18 +184,15 @@ open class RemappedComponentResolvers @Inject constructor(
                     },
                     { artifact, artifacts ->
                         if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
-                            val hash = Objects.hash(identifier.original.moduleIdentifier, identifier.original.version, identifier.mappingsConfiguration)
-                            val classpath = project.configurations.createIfAbsent("artifactClasspath-${hash.toString(16)}") {
-                                it.dependencies.addAll(transitiveDependencies.map { project.convertDescriptor(it) })
-                                it.isVisible = false
-                            }
+                            val selectedArtifacts = mutableListOf<Pair<ModuleSources, List<ComponentArtifactMetadata>>>()
+
+                            buildClasspath(selectedArtifacts, transitiveDependencies)
 
                             RemappedComponentArtifactMetadata(
                                 artifact as ModuleComponentArtifactMetadata,
                                 identifier,
                                 sourceNamespace,
-                                classpath,
-                                project
+                                selectedArtifacts
                             )
                         } else {
                             artifact
@@ -162,7 +214,7 @@ open class RemappedComponentResolvers @Inject constructor(
         },
         { artifact ->
             if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
-                RemappedComponentArtifactMetadata(artifact, identifier, null, project.configurations.detachedConfiguration(), project)
+                RemappedComponentArtifactMetadata(artifact, identifier, null, emptyList())
             } else {
                 artifact
             }
@@ -236,7 +288,7 @@ open class RemappedComponentResolvers @Inject constructor(
                 .extensions
                 .getByType(RemapperExtension::class.java)
 
-            val mappings = remapper.loadMappings(mappingFiles, objects)
+            val mappings = remapper.loadMappings(mappingFiles, objects, false)
 
             when (artifact) {
                 is RemappedComponentArtifactMetadata -> {
@@ -255,10 +307,21 @@ open class RemappedComponentResolvers @Inject constructor(
                         )
 
                         getOrResolve(artifact, urlId, artifactCache, cachePolicy, timeProvider, result) {
+                            val classpath = mutableSetOf<File>()
+
+                            for ((sources, artifacts) in artifact.selectedArtifacts) {
+                                for (dependencyArtifact in artifacts) {
+                                    val artifactResult = DefaultBuildableArtifactResolveResult()
+                                    resolvers.get().artifactResolver.resolveArtifact(dependencyArtifact, sources, artifactResult)
+
+                                    classpath.add(artifactResult.result)
+                                }
+                            }
+
                             val file = buildOperationExecutor.call(object : CallableBuildOperation<Path> {
                                 override fun description() = BuildOperationDescriptor
                                     .displayName("Remapping ${result.result} from $sourceNamespace to ${id.targetNamespace}")
-                                    .progressDisplayName("Mappings: ${mappingFiles.joinToString()}")
+                                    .progressDisplayName("Mappings: $mappingFiles")
                                     .metadata(BuildOperationCategory.TASK)
 
                                 override fun call(context: BuildOperationContext) = context.callWithStatus {
@@ -268,7 +331,7 @@ open class RemappedComponentResolvers @Inject constructor(
                                         sourceNamespace,
                                         id.targetNamespace.name,
                                         result.result.toPath(),
-                                        artifact.classpath
+                                        classpath
                                     )
                                 }
                             })

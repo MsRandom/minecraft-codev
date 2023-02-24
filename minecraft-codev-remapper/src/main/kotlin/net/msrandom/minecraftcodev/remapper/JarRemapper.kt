@@ -6,7 +6,6 @@ import net.fabricmc.tinyremapper.NonClassCopyMode
 import net.fabricmc.tinyremapper.OutputConsumerPath
 import net.fabricmc.tinyremapper.TinyRemapper
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
-import org.gradle.api.file.FileCollection
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -19,7 +18,7 @@ object JarRemapper {
         sourceNamespace: String,
         targetNamespace: String,
         input: Path,
-        classpath: FileCollection
+        classpath: Iterable<File>
     ): Path {
         val output = Files.createTempFile("remapped", ".tmp.jar")
         val sourceNamespaceId = mappings.getNamespaceId(sourceNamespace)

@@ -38,7 +38,6 @@ import org.gradle.api.internal.model.NamedObjectInstantiator
 import org.gradle.api.internal.project.ProjectInternal
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.plugins.JavaPlugin
-import org.gradle.api.tasks.TaskDependency
 import org.gradle.initialization.layout.GlobalCacheDir
 import org.gradle.internal.component.external.model.DefaultModuleComponentArtifactMetadata
 import org.gradle.internal.component.external.model.DefaultModuleComponentSelector
@@ -103,8 +102,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
         moduleComponentIdentifier: ModuleComponentIdentifier,
         requestMetaData: ComponentOverrideMetadata,
         result: BuildableComponentResolveResult,
-        mappingsNamespace: String,
-        taskDependencies: TaskDependency
+        mappingsNamespace: String
     ) {
         val versionList = getVersionList(
             moduleComponentIdentifier,
@@ -139,11 +137,9 @@ open class MinecraftMetadataGenerator @Inject constructor(
                         extension,
                         null
                     )
-                ) {
-                    override fun getBuildDependencies() = taskDependencies
-                }
+                ) {}
             } else {
-                object : DefaultModuleComponentArtifactMetadata(
+                DefaultModuleComponentArtifactMetadata(
                     moduleComponentIdentifier,
                     DefaultIvyArtifactName(
                         moduleComponentIdentifier.module,
@@ -151,9 +147,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                         extension,
                         classifier
                     )
-                ) {
-                    override fun getBuildDependencies() = taskDependencies
-                }
+                )
             }
 
             val defaultAttributes = ImmutableAttributes.EMPTY.addNamed(MappingsNamespace.attribute, mappingsNamespace)

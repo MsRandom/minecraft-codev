@@ -51,7 +51,7 @@ abstract class RemapJar : Jar() {
             .getByType(RemapperExtension::class.java)
 
         // TODO This will break in contexts where the mapping rules expect an object factory with a resolver chain provider
-        val mappings = remapper.loadMappings(mappings.get(), objectFactory)
+        val mappings = remapper.loadMappings(mappings.get(), objectFactory, true)
 
         val remapped = JarRemapper.remap(remapper, mappings.tree, sourceNamespace.get(), targetNamespace.get(), input.asFile.get().toPath(), classpath)
 

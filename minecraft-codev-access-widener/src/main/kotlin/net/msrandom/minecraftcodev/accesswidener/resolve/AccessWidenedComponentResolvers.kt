@@ -13,10 +13,7 @@ import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
 import net.msrandom.minecraftcodev.core.resolve.MayNeedSources
 import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.getOrResolve
 import net.msrandom.minecraftcodev.core.resolve.SourcesArtifactComponentMetadata
-import net.msrandom.minecraftcodev.core.utils.SourcesGenerator
-import net.msrandom.minecraftcodev.core.utils.asSerializable
-import net.msrandom.minecraftcodev.core.utils.callWithStatus
-import net.msrandom.minecraftcodev.core.utils.getSourceSetConfigurationName
+import net.msrandom.minecraftcodev.core.utils.*
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.copy
 import org.gradle.api.Project
@@ -134,7 +131,7 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                                 val library = artifacts.first { it.name.type == ArtifactTypeDefinition.JAR_TYPE }
                                 SourcesArtifactComponentMetadata(library as ModuleComponentArtifactMetadata, artifact.id as ModuleComponentArtifactIdentifier)
                             } else {
-                                AccessWidenedComponentArtifactMetadata(artifact as ModuleComponentArtifactMetadata, identifier, namespace, project)
+                                AccessWidenedComponentArtifactMetadata(artifact as ModuleComponentArtifactMetadata, identifier, namespace)
                             }
                         } else {
                             artifact
@@ -149,7 +146,7 @@ open class AccessWidenedComponentResolvers @Inject constructor(
         },
         { artifact ->
             if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
-                AccessWidenedComponentArtifactMetadata(artifact, identifier, null, project)
+                AccessWidenedComponentArtifactMetadata(artifact, identifier, null)
             } else {
                 artifact
             }
@@ -226,14 +223,8 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                 val accessWideners = project.configurations.getByName(id.accessWidenersConfiguration)
                 val messageDigest = MessageDigest.getInstance("SHA1")
 
-                for (accessWidener in accessWideners) {
-                    val stream = DigestInputStream(accessWidener.inputStream().buffered(), messageDigest)
-
-                    while (true) {
-                        if (stream.read() < 0) {
-                            break
-                        }
-                    }
+                project.visitConfigurationFiles(resolvers, accessWideners) { accessWidener ->
+                    DigestInputStream(accessWidener.inputStream().buffered(), messageDigest).readAllBytes()
                 }
 
                 val hash = HashCode.fromBytes(messageDigest.digest())
@@ -253,7 +244,7 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                         .resolve(id.module)
                         .resolve(id.version)
                         .resolve(checksumService.sha1(sources.toFile()).toString())
-                        .resolve("${result.result.nameWithoutExtension}-access-widened-sources.${result.result.extension}")
+                        .resolve("${result.result.nameWithoutExtension}-sources.${result.result.extension}")
 
                     output.parent.createDirectories()
                     sources.copyTo(output)
@@ -267,12 +258,14 @@ open class AccessWidenedComponentResolvers @Inject constructor(
 
             if (result.isSuccessful) {
                 val accessWideners = project.configurations.getByName(id.accessWidenersConfiguration)
+
                 val messageDigest = MessageDigest.getInstance("SHA1")
 
                 val accessWidener = AccessWidener().also { visitor ->
                     val reader = AccessWidenerReader(visitor)
-                    for (accessWidener in accessWideners) {
-                        DigestInputStream(accessWidener.inputStream(), messageDigest).bufferedReader().use {
+
+                    project.visitConfigurationFiles(resolvers, accessWideners) { file ->
+                        DigestInputStream(file.inputStream(), messageDigest).bufferedReader().use {
                             if (artifact.namespace == null) {
                                 reader.read(it)
                             } else {
@@ -285,7 +278,7 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                 val hash = HashCode.fromBytes(messageDigest.digest())
 
                 val urlId = AccessWidenedArtifactIdentifier(
-                    artifact.id,
+                    artifact.id.asSerializable,
                     hash,
                     checksumService.sha1(result.result)
                 )
@@ -294,7 +287,7 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                     val file = buildOperationExecutor.call(object : CallableBuildOperation<Path> {
                         override fun description() = BuildOperationDescriptor
                             .displayName("Access Widening ${result.result}")
-                            .progressDisplayName("Access Wideners: ${accessWideners.joinToString()}")
+                            .progressDisplayName("Access Widener targets: ${accessWidener.targets}")
                             .metadata(BuildOperationCategory.TASK)
 
                         override fun call(context: BuildOperationContext) = context.callWithStatus {

@@ -8,19 +8,13 @@ import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
 import net.msrandom.minecraftcodev.core.utils.applyPlugin
 import net.msrandom.minecraftcodev.core.utils.named
 import org.gradle.api.Plugin
-import org.gradle.api.Task
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.attributes.Attribute
 import org.gradle.api.invocation.Gradle
-import org.gradle.api.plugins.JavaPlugin
 import org.gradle.api.plugins.JvmEcosystemPlugin
 import org.gradle.api.plugins.PluginAware
-import org.gradle.api.tasks.SourceSetContainer
-import org.gradle.internal.DefaultTaskExecutionRequest
 import org.gradle.internal.os.OperatingSystem
 import org.gradle.nativeplatform.OperatingSystemFamily
-import org.jetbrains.kotlin.gradle.plugin.KotlinMultiplatformPluginWrapper
-import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSetContainer
 
 open class MinecraftCodevPlugin<T : PluginAware> : Plugin<T> {
     private fun applyGradle(gradle: Gradle) = gradle.registerCustomDependency(
@@ -31,7 +25,6 @@ open class MinecraftCodevPlugin<T : PluginAware> : Plugin<T> {
     )
 
     override fun apply(target: T) = applyPlugin(target, ::applyGradle) {
-        handleTransformedDependencies()
         handleCustomQueryResolvers()
 
         extensions.create("minecraft", MinecraftCodevExtension::class.java)
@@ -72,34 +65,6 @@ open class MinecraftCodevPlugin<T : PluginAware> : Plugin<T> {
                 module.allVariants { variant ->
                     variant.withDependencies { dependencies ->
                         dependencies.add("cpw.mods:grossjava9hacks:1.3.3")
-                    }
-                }
-            }
-        }
-
-        if (System.getProperty("idea.sync.active", "false").toBoolean()) {
-            afterEvaluate {
-                fun addConfiguration(name: String) {
-                    val names = configurations
-                        .getByName(name)
-                        .buildDependencies
-                        .getDependencies(null)
-                        .map(Task::getName)
-                        .filter { it.startsWith("resolve") }
-
-                    gradle.startParameter.setTaskRequests(gradle.startParameter.taskRequests + DefaultTaskExecutionRequest(names))
-                }
-
-                plugins.withType(JavaPlugin::class.java) {
-                    extensions.getByType(SourceSetContainer::class.java).all {
-                        addConfiguration(it.compileClasspathConfigurationName)
-                    }
-                }
-
-                plugins.withType(KotlinMultiplatformPluginWrapper::class.java) {
-                    extensions.getByType(KotlinSourceSetContainer::class.java).sourceSets.all {
-                        addConfiguration(it.compileOnlyConfigurationName)
-                        addConfiguration(it.implementationConfigurationName)
                     }
                 }
             }

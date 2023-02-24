@@ -11,12 +11,10 @@ import org.gradle.api.artifacts.component.ModuleComponentSelector
 import org.gradle.api.internal.DomainObjectContext
 import org.gradle.api.internal.GradleInternal
 import org.gradle.api.internal.artifacts.ArtifactDependencyResolver
-import org.gradle.api.internal.artifacts.ConfigurationResolver
 import org.gradle.api.internal.artifacts.configurations.ConfigurationInternal
 import org.gradle.api.internal.artifacts.configurations.DefaultConfiguration
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
 import org.gradle.api.internal.artifacts.dsl.dependencies.DefaultDependencyHandler
-import org.gradle.api.internal.artifacts.ivyservice.DefaultConfigurationResolver
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ComponentResolvers
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ResolverProviderFactory
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.StartParameterResolutionOverride
@@ -26,7 +24,6 @@ import org.gradle.api.internal.artifacts.ivyservice.moduleconverter.dependencies
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.ComponentResolversChain
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.DefaultArtifactDependencyResolver
 import org.gradle.api.internal.artifacts.query.ArtifactResolutionQueryFactory
-import org.gradle.api.internal.artifacts.transform.DefaultArtifactTransforms
 import org.gradle.api.internal.collections.DomainObjectCollectionFactory
 import org.gradle.api.internal.file.FileCollectionFactory
 import org.gradle.api.internal.file.FilePropertyFactory
@@ -36,7 +33,6 @@ import org.gradle.api.internal.model.NamedObjectInstantiator
 import org.gradle.api.internal.provider.PropertyFactory
 import org.gradle.api.invocation.Gradle
 import org.gradle.api.model.ObjectFactory
-import org.gradle.api.specs.Spec
 import org.gradle.api.tasks.util.PatternSet
 import org.gradle.configurationcache.extensions.serviceOf
 import org.gradle.internal.Factory
@@ -53,12 +49,8 @@ private val unsafe = Unsafe::class.java.getDeclaredField("theUnsafe").apply { is
 private val dependencyDescriptorFactoriesField = DefaultDependencyDescriptorFactory::class.java.getDeclaredField("dependencyDescriptorFactories").apply { isAccessible = true }
 private val resolverFactoriesField = DefaultArtifactDependencyResolver::class.java.getDeclaredField("resolverFactories").apply { isAccessible = true }
 private val domainObjectContextField = DefaultConfiguration::class.java.getDeclaredField("domainObjectContext").apply { isAccessible = true }
-private val artifactTransformsField = DefaultConfigurationResolver::class.java.getDeclaredField("artifactTransforms").apply { isAccessible = true }
 
-private val transformedVariantFactoryOffset = unsafe.objectFieldOffset(DefaultArtifactTransforms::class.java.getDeclaredField("transformedVariantFactory"))
 private val resolutionQueryFactoryOffset = unsafe.objectFieldOffset(DefaultDependencyHandler::class.java.getDeclaredField("resolutionQueryFactory"))
-
-private val localEdgeOffset = unsafe.staticFieldOffset(DefaultConfigurationResolver::class.java.getDeclaredField("IS_LOCAL_EDGE"))
 
 val Gradle.resolverFactories: List<ResolverProviderFactory>
     get() {
@@ -122,18 +114,6 @@ private fun addResolvers(resolverProviderFactories: MutableList<ResolverProvider
     })
 }
 
-// Patching dependency transforms to allow 'external' dependencies to still have resolution dependencies, allowing us to recursively resolve configurations
-fun Project.handleTransformedDependencies() {
-    var configurationResolver = serviceOf<ConfigurationResolver>()
-    while (configurationResolver !is DefaultConfigurationResolver) {
-        val delegate = configurationResolver.javaClass.getDeclaredField("delegate").apply { isAccessible = true }
-
-        configurationResolver = delegate[configurationResolver] as ConfigurationResolver
-    }
-
-    unsafe.putObject(artifactTransformsField[configurationResolver], transformedVariantFactoryOffset, objects.newInstance(DependencyHandlingTransformedVariantFactory::class.java))
-}
-
 // Patching artifact resolution queries to allow sources/javadoc artifact types from custom resolvers
 fun Project.handleCustomQueryResolvers() {
     unsafe.putObject(dependencies, resolutionQueryFactoryOffset, ArtifactResolutionQueryFactory {
@@ -149,13 +129,7 @@ fun Gradle.registerCustomDependency(
     componentResolvers: Class<out ComponentResolvers>,
     edgeDependency: Class<out DependencyMetadata>? = null
 ) {
-    val dependency = customDependencies.computeIfAbsent(gradle) {
-        val dependency = DependencyData()
-        val spec = unsafe.getObject(DefaultConfigurationResolver::class.java, localEdgeOffset) as Spec<DependencyMetadata>
-        unsafe.putObject(DefaultConfigurationResolver::class.java, localEdgeOffset, Spec<DependencyMetadata> { spec.isSatisfiedBy(it) || dependency.edgeTypes.any { type -> type.isInstance(it) } })
-
-        dependency
-    }
+    val dependency = customDependencies.computeIfAbsent(gradle) { DependencyData() }
 
     if (name !in dependency.registeredTypeNames) {
         val gradle = gradle

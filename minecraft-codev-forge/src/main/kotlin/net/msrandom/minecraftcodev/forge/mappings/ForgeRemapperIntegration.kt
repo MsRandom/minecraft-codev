@@ -14,16 +14,14 @@ import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
 import net.msrandom.minecraftcodev.core.MinecraftType
+import net.msrandom.minecraftcodev.core.dependency.resolverFactories
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
 import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentIdentifier
-import net.msrandom.minecraftcodev.core.utils.addConfigurationResolutionDependencies
-import net.msrandom.minecraftcodev.core.utils.createIfAbsent
 import net.msrandom.minecraftcodev.core.utils.getCacheProvider
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.forge.McpConfig
 import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin
-import net.msrandom.minecraftcodev.forge.PatchedMinecraftCodevExtension
 import net.msrandom.minecraftcodev.forge.UserdevConfig
 import net.msrandom.minecraftcodev.forge.dependency.PatchedComponentIdentifier
 import net.msrandom.minecraftcodev.forge.resolve.PatchedMinecraftComponentResolvers
@@ -35,11 +33,15 @@ import org.cadixdev.at.io.AccessTransformFormats
 import org.cadixdev.lorenz.MappingSet
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
+import org.gradle.api.internal.artifacts.GlobalDependencyResolutionRules
 import org.gradle.api.internal.artifacts.RepositoriesSupplier
+import org.gradle.api.internal.artifacts.ResolveContext
 import org.gradle.api.internal.artifacts.configurations.ResolutionStrategyInternal
+import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ComponentResolvers
+import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ResolveIvyFactory
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.StartParameterResolutionOverride
-import org.gradle.api.internal.tasks.AbstractTaskDependency
-import org.gradle.api.internal.tasks.TaskDependencyResolveContext
+import org.gradle.api.internal.artifacts.ivyservice.resolveengine.ComponentResolversChain
+import org.gradle.api.internal.attributes.ImmutableAttributes
 import org.gradle.api.model.ObjectFactory
 import org.gradle.configurationcache.extensions.serviceOf
 import org.gradle.internal.component.external.model.DefaultModuleComponentArtifactMetadata
@@ -81,11 +83,29 @@ internal fun Project.setupForgeRemapperIntegration() {
 
                 return if (configPath.exists()) {
                     val mcpLibrary = configPath.inputStream().use { MinecraftCodevPlugin.json.decodeFromStream<UserdevConfig>(it) }.mcp
+                    val resolvers by lazy {
+                        val detachedConfiguration = configurations.detachedConfiguration()
+                        val resolutionStrategy = detachedConfiguration.resolutionStrategy
+                        val resolvers = mutableListOf<ComponentResolvers>()
+                        for (resolverFactory in gradle.resolverFactories) {
+                            resolverFactory.create(detachedConfiguration as ResolveContext, resolvers)
+                        }
 
-                    val mcp = configurations.createIfAbsent(PatchedSetupState.configurationName(mcpLibrary)) {
-                        it.dependencies.add(dependencies.create(mcpLibrary))
-                        it.isVisible = false
-                    }.singleFile
+                        resolvers.add(serviceOf<ResolveIvyFactory>().create(
+                            detachedConfiguration.name,
+                            resolutionStrategy as ResolutionStrategyInternal,
+                            serviceOf<RepositoriesSupplier>().get(),
+                            project.serviceOf<GlobalDependencyResolutionRules>().componentMetadataProcessorFactory,
+                            ImmutableAttributes.EMPTY,
+                            null,
+                            serviceOf(),
+                            serviceOf()
+                        ))
+
+                        ComponentResolversChain(resolvers, serviceOf(), serviceOf())
+                    }
+
+                    val mcp = PatchedSetupState.resolveArtifact({ resolvers }, mcpLibrary)
 
                     zipFileSystem(mcp.toPath()).use { mcpFs ->
                         val config = mcpFs.getPath("config.json").inputStream().decorate().use { MinecraftCodevPlugin.json.decodeFromStream<McpConfig>(it) }
@@ -123,10 +143,7 @@ internal fun Project.setupForgeRemapperIntegration() {
                         }
 
                         if (!config.official) {
-                            val clientMappingsDependency =
-                                extensions.getByType(MinecraftCodevExtension::class.java).extensions.getByType(PatchedMinecraftCodevExtension::class.java)(config.version)
-
-                            val patchState = PatchedMinecraftComponentResolvers.getPatchState(
+                            val patched = PatchedMinecraftComponentResolvers.getPatchedOutput(
                                 PatchedComponentIdentifier(config.version, "", null),
                                 repositoriesSupplier.get().filterIsInstance<MinecraftRepositoryImpl>().map(MinecraftRepositoryImpl::createResolver),
                                 getCacheProvider(gradle),
@@ -134,10 +151,11 @@ internal fun Project.setupForgeRemapperIntegration() {
                                 checksumService,
                                 timeProvider,
                                 path.toFile(),
+                                project,
                                 objects
                             ) ?: return false
 
-                            zipFileSystem(patchState.patchedOutput.toPath()).use { patchedJar ->
+                            zipFileSystem(patched.toPath()).use { patchedJar ->
                                 if (visitor.visitHeader()) {
                                     if (visitor.visitContent()) {
                                         val obfNamespace = existingMappings.getNamespaceId(MappingsNamespace.OBF)
@@ -222,22 +240,6 @@ internal fun Project.setupForgeRemapperIntegration() {
                     true
                 } else {
                     false
-                }
-            }
-
-            override fun resolveBuildDependencies(path: Path, fileSystem: FileSystem, isJar: Boolean) = object : AbstractTaskDependency() {
-                override fun visitDependencies(context: TaskDependencyResolveContext) {
-                    val configPath = fileSystem.getPath("config.json")
-
-                    if (configPath.exists()) {
-                        val mcpLibrary = configPath.inputStream().use { MinecraftCodevPlugin.json.decodeFromStream<UserdevConfig>(it) }.mcp
-                        val configuration = configurations.createIfAbsent(PatchedSetupState.configurationName(mcpLibrary)) {
-                            it.dependencies.add(dependencies.create(mcpLibrary))
-                            it.isVisible = false
-                        }
-
-                        project.addConfigurationResolutionDependencies(context, configuration)
-                    }
                 }
             }
         })

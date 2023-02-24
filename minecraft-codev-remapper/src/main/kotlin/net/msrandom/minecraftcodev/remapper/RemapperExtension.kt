@@ -6,14 +6,23 @@ import net.fabricmc.mappingio.format.ProGuardReader
 import net.fabricmc.mappingio.tree.MappingTreeView
 import net.fabricmc.mappingio.tree.MemoryMappingTree
 import net.msrandom.minecraftcodev.core.MappingsNamespace
+import net.msrandom.minecraftcodev.core.dependency.resolverFactories
+import net.msrandom.minecraftcodev.core.utils.visitConfigurationFiles
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
+import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
-import org.gradle.api.internal.tasks.AbstractTaskDependency
-import org.gradle.api.internal.tasks.TaskDependencyInternal
-import org.gradle.api.internal.tasks.TaskDependencyResolveContext
+import org.gradle.api.internal.artifacts.GlobalDependencyResolutionRules
+import org.gradle.api.internal.artifacts.RepositoriesSupplier
+import org.gradle.api.internal.artifacts.ResolveContext
+import org.gradle.api.internal.artifacts.configurations.ResolutionStrategyInternal
+import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ComponentResolvers
+import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ResolveIvyFactory
+import org.gradle.api.internal.artifacts.ivyservice.resolveengine.ComponentResolversChain
+import org.gradle.api.internal.attributes.ImmutableAttributes
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.ListProperty
-import org.gradle.api.tasks.TaskDependency
+import org.gradle.api.specs.Spec
+import org.gradle.configurationcache.extensions.serviceOf
 import org.gradle.internal.hash.HashCode
 import java.io.InputStream
 import java.nio.file.FileSystem
@@ -34,8 +43,6 @@ fun interface MappingResolutionRule {
         existingMappings: MappingTreeView,
         objects: ObjectFactory
     ): Boolean
-
-    fun resolveBuildDependencies(path: Path, extension: String): TaskDependency = TaskDependencyInternal.EMPTY
 }
 
 fun interface ZipMappingResolutionRule {
@@ -49,15 +56,13 @@ fun interface ZipMappingResolutionRule {
         isJar: Boolean,
         objects: ObjectFactory
     ): Boolean
-
-    fun resolveBuildDependencies(path: Path, fileSystem: FileSystem, isJar: Boolean): TaskDependency = TaskDependencyInternal.EMPTY
 }
 
 fun interface ExtraFileRemapper {
     operator fun invoke(mappings: MappingTreeView, directory: Path, sourceNamespaceId: Int, targetNamespaceId: Int)
 }
 
-open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory) {
+open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory, private val project: Project) {
     val mappingsResolution: ListProperty<MappingResolutionRule> = objectFactory.listProperty(MappingResolutionRule::class.java)
     val zipMappingsResolution: ListProperty<ZipMappingResolutionRule> = objectFactory.listProperty(ZipMappingResolutionRule::class.java)
     val extraFileRemappers: ListProperty<ExtraFileRemapper> = objectFactory.listProperty(ExtraFileRemapper::class.java)
@@ -65,46 +70,22 @@ open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory) {
     private val mappingsCache = ConcurrentHashMap<Configuration, Mappings>()
 
     init {
-        mappingsResolution.add(object : MappingResolutionRule {
-            override fun loadMappings(
-                path: Path,
-                extension: String,
-                visitor: MappingVisitor,
-                configuration: Configuration,
-                decorate: InputStream.() -> InputStream,
-                existingMappings: MappingTreeView,
-                objects: ObjectFactory
-            ): Boolean {
-                val isJar = extension == "jar"
-                var result = false
+        mappingsResolution.add(MappingResolutionRule { path, extension, visitor, configuration, decorate, existingMappings, objects ->
+            val isJar = extension == "jar"
+            var result = false
 
-                if (isJar || extension == "zip") {
-                    zipFileSystem(path).use {
-                        for (rule in zipMappingsResolution.get()) {
-                            if (rule.loadMappings(path, it, visitor, configuration, decorate, existingMappings, isJar, objects)) {
-                                result = true
-                                break
-                            }
-                        }
-                    }
-                }
-
-                return result
-            }
-
-            override fun resolveBuildDependencies(path: Path, extension: String) = object : AbstractTaskDependency() {
-                override fun visitDependencies(context: TaskDependencyResolveContext) {
-                    val isJar = extension == "jar"
-
-                    if (isJar || extension == "zip") {
-                        zipFileSystem(path).use {
-                            for (rule in zipMappingsResolution.get()) {
-                                context.add(rule.resolveBuildDependencies(path, it, isJar))
-                            }
+            if (isJar || extension == "zip") {
+                zipFileSystem(path).use {
+                    for (rule in zipMappingsResolution.get()) {
+                        if (rule.loadMappings(path, it, visitor, configuration, decorate, existingMappings, isJar, objects)) {
+                            result = true
+                            break
                         }
                     }
                 }
             }
+
+            result
         })
 
         mappingsResolution.add { path, extension, visitor, _, decorate, _, _ ->
@@ -120,14 +101,48 @@ open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory) {
         }
     }
 
-    fun loadMappings(files: Configuration, objects: ObjectFactory) = mappingsCache.computeIfAbsent(files) {
+    fun loadMappings(files: Configuration, objects: ObjectFactory, resolve: Boolean) = mappingsCache.computeIfAbsent(files) { configuration ->
         val tree = MemoryMappingTree()
         val md = MessageDigest.getInstance("SHA1")
 
-        for (dependency in it.allDependencies) {
-            for (file in it.files(dependency)) {
+        if (resolve) {
+            for (dependency in configuration.allDependencies) {
+                for (file in configuration.files(dependency)) {
+                    for (rule in mappingsResolution.get()) {
+                        if (rule.loadMappings(file.toPath(), file.extension, tree, configuration, { DigestInputStream(this, md) }, tree, objects)) {
+                            break
+                        }
+                    }
+                }
+            }
+        } else {
+            val resolvers by lazy {
+                val detachedConfiguration = project.configurations.detachedConfiguration()
+                val resolutionStrategy = detachedConfiguration.resolutionStrategy
+                val resolvers = mutableListOf<ComponentResolvers>()
+                for (resolverFactory in project.gradle.resolverFactories) {
+                    resolverFactory.create(detachedConfiguration as ResolveContext, resolvers)
+                }
+
+                resolvers.add(
+                    project.serviceOf<ResolveIvyFactory>().create(
+                        detachedConfiguration.name,
+                        resolutionStrategy as ResolutionStrategyInternal,
+                        project.serviceOf<RepositoriesSupplier>().get(),
+                        project.serviceOf<GlobalDependencyResolutionRules>().componentMetadataProcessorFactory,
+                        ImmutableAttributes.EMPTY,
+                        null,
+                        project.serviceOf(),
+                        project.serviceOf()
+                    )
+                )
+
+                ComponentResolversChain(resolvers, project.serviceOf(), project.serviceOf())
+            }
+
+            project.visitConfigurationFiles({ resolvers }, configuration, configuration.allDependencies.map { dependency -> Spec { it == dependency } }) { file ->
                 for (rule in mappingsResolution.get()) {
-                    if (rule.loadMappings(file.toPath(), file.extension, tree, files, { DigestInputStream(this, md) }, tree, objects)) {
+                    if (rule.loadMappings(file.toPath(), file.extension, tree, configuration, { DigestInputStream(this, md) }, tree, objects)) {
                         break
                     }
                 }
@@ -138,18 +153,6 @@ open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory) {
             tree,
             HashCode.fromBytes(md.digest())
         )
-    }
-
-    fun resolveMappingBuildDependencies(files: Configuration): TaskDependency = object : AbstractTaskDependency() {
-        override fun visitDependencies(context: TaskDependencyResolveContext) {
-            for (dependency in files.allDependencies) {
-                for (file in files.files(dependency)) {
-                    for (rule in mappingsResolution.get()) {
-                        context.add(rule.resolveBuildDependencies(file.toPath(), file.extension))
-                    }
-                }
-            }
-        }
     }
 
     fun remapFiles(mappings: MappingTreeView, directory: Path, sourceNamespaceId: Int, targetNamespaceId: Int) {
