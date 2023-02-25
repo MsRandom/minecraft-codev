@@ -7,6 +7,8 @@ import org.jetbrains.java.decompiler.main.extern.IFernflowerLogger
 import org.jetbrains.java.decompiler.main.extern.IFernflowerPreferences
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.Path
+import kotlin.io.path.readBytes
 
 object SourcesGenerator {
     fun decompile(input: Path, classpath: Collection<Path>, buildOperationExecutor: BuildOperationExecutor): Path = buildOperationExecutor.call(object : CallableBuildOperation<Path> {
@@ -19,6 +21,15 @@ object SourcesGenerator {
 
         override fun call(context: BuildOperationContext): Path {
             val decompiler = BaseDecompiler(
+                { externalPath, internalPath ->
+                    if (internalPath == null) {
+                        Path(externalPath).readBytes()
+                    }
+
+                    zipFileSystem(Path(externalPath)).use {
+                        it.getPath(internalPath).readBytes()
+                    }
+                },
                 SingleFileSaver(output.toFile()),
                 mapOf(IFernflowerPreferences.BYTECODE_SOURCE_MAPPING to 1.toString()),
                 object : IFernflowerLogger() {

@@ -15,6 +15,7 @@ import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
 import net.msrandom.minecraftcodev.core.resolve.getExtractionState
 import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter.withAssets
+import net.msrandom.minecraftcodev.core.utils.asSerializable
 import net.msrandom.minecraftcodev.core.utils.callWithStatus
 import net.msrandom.minecraftcodev.core.utils.walk
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
@@ -372,10 +373,6 @@ open class PatchedSetupState @Inject constructor(
         })
     }
 
-    val patchedOutput by lazy {
-
-    }
-
     private fun executeMcp(
         function: PatchLibrary,
         argumentTemplates: Map<String, Any?>,
@@ -443,6 +440,12 @@ open class PatchedSetupState @Inject constructor(
         ) = patchedStates.computeIfAbsent(manifest.id to userdevConfigFile) { (_, userdevFile) ->
             val patchesHash = project.serviceOf<ChecksumService>().sha1(userdevConfigFile)
 
+            val cache = caches.computeIfAbsent(project.gradle) {
+                cacheManager.getMetadataCache(Path("module-artifact"), { PatchedArtifactIdentifier.ArtifactSerializer }) {
+                    CachedArtifactSerializer(cacheManager.fileStoreDirectory)
+                }.asFile
+            }
+
             val identifier = DefaultModuleComponentArtifactIdentifier(
                 moduleComponentIdentifier,
                 moduleComponentIdentifier.module,
@@ -450,16 +453,15 @@ open class PatchedSetupState @Inject constructor(
                 ArtifactTypeDefinition.JAR_TYPE
             )
 
-            val urlId = PatchedArtifactIdentifier(identifier, patchesHash)
-
-            val cache = caches.computeIfAbsent(project.gradle) {
-                cacheManager.getMetadataCache(Path("module-artifact"), { PatchedArtifactIdentifier.ArtifactSerializer }) {
-                    CachedArtifactSerializer(cacheManager.fileStoreDirectory)
-                }.asFile
-            }
-
             val result = DefaultBuildableArtifactResolveResult()
-            MinecraftArtifactResolver.getOrResolve(DefaultModuleComponentArtifactMetadata(moduleComponentIdentifier, identifier.name), urlId, cache, cachePolicy, project.serviceOf(), result) {
+            MinecraftArtifactResolver.getOrResolve(
+                DefaultModuleComponentArtifactMetadata(moduleComponentIdentifier, identifier.name),
+                PatchedArtifactIdentifier(identifier.asSerializable, patchesHash),
+                cache,
+                cachePolicy,
+                project.serviceOf(),
+                result
+            ) {
                 objectFactory.newInstance(PatchedSetupState::class.java, manifest, clientJar, serverJar, userdevFile, patchesHash, cacheManager).withAssets.toFile()
             }
 

@@ -1,5 +1,3 @@
-import groovy.xml.dom.DOMCategory.attributes
-
 plugins {
     kotlin("plugin.serialization")
     `java-gradle-plugin`
@@ -19,7 +17,7 @@ dependencies {
 
     implementation(api(group = "net.minecraftforge", name = "srgutils", version = "latest.release"))
 
-    implementation(group = "org.quiltmc", name = "quiltflower", version = "1.9.0")
+    implementation(group = "org.quiltmc", name = "quiltflower", version = "1.8.1")
 
     implementation(group = "org.ow2.asm", name = "asm", version = "9.3")
     implementation(group = "org.ow2.asm", name = "asm-tree", version = "9.3")

@@ -224,7 +224,7 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                 val messageDigest = MessageDigest.getInstance("SHA1")
 
                 project.visitConfigurationFiles(resolvers, accessWideners) { accessWidener ->
-                    DigestInputStream(accessWidener.inputStream().buffered(), messageDigest).readAllBytes()
+                    DigestInputStream(accessWidener.inputStream().buffered(), messageDigest).readBytes()
                 }
 
                 val hash = HashCode.fromBytes(messageDigest.digest())

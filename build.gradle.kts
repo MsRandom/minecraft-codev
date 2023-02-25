@@ -10,7 +10,7 @@ subprojects {
     apply(plugin = "java")
 
     java {
-        toolchain.languageVersion.set(JavaLanguageVersion.of(11))
+        toolchain.languageVersion.set(JavaLanguageVersion.of(8))
         withSourcesJar()
         withJavadocJar()
     }

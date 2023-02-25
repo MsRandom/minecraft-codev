@@ -38,26 +38,26 @@ open class MinecraftCodevPlugin<T : PluginAware> : Plugin<T> {
                 it.compatibilityRules.add(VersionPatternCompatibilityRule::class.java)
             }
 
-            schema.attribute(JAR_TRANSFORMED_ATTRIBUTE)
+            schema.attribute(LAUNCH_WRAPPER_TRANSFORMED_ATTRIBUTE)
         }
 
         plugins.withType(JvmEcosystemPlugin::class.java) {
             dependencies.artifactTypes.getByName(ArtifactTypeDefinition.JAR_TYPE) {
-                it.attributes.attribute(JAR_TRANSFORMED_ATTRIBUTE, false)
+                it.attributes.attribute(LAUNCH_WRAPPER_TRANSFORMED_ATTRIBUTE, false)
             }
         }
 
         configurations.all { configuration ->
             configuration.attributes {
-                it.attribute(JAR_TRANSFORMED_ATTRIBUTE, true)
+                it.attribute(LAUNCH_WRAPPER_TRANSFORMED_ATTRIBUTE, true)
                 it.attribute(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE, project.objects.named(OperatingSystem.current().familyName))
             }
         }
 
         @Suppress("UnstableApiUsage")
         dependencies.registerTransform(LaunchWrapperTransformer::class.java) {
-            it.from.attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, ArtifactTypeDefinition.JAR_TYPE).attribute(JAR_TRANSFORMED_ATTRIBUTE, false)
-            it.to.attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, ArtifactTypeDefinition.JAR_TYPE).attribute(JAR_TRANSFORMED_ATTRIBUTE, true)
+            it.from.attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, ArtifactTypeDefinition.JAR_TYPE).attribute(LAUNCH_WRAPPER_TRANSFORMED_ATTRIBUTE, false)
+            it.to.attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, ArtifactTypeDefinition.JAR_TYPE).attribute(LAUNCH_WRAPPER_TRANSFORMED_ATTRIBUTE, true)
         }
 
         dependencies.components { components ->
@@ -76,7 +76,7 @@ open class MinecraftCodevPlugin<T : PluginAware> : Plugin<T> {
         val OPERATING_SYSTEM_VERSION_PATTERN_ATTRIBUTE: Attribute<String> = Attribute.of("net.msrandom.minecraftcodev.operatingSystemVersionPattern", String::class.java)
 
         @JvmField
-        val JAR_TRANSFORMED_ATTRIBUTE: Attribute<Boolean> = Attribute.of("net.msrandom.minecraftcodev.transformed", Boolean::class.javaObjectType)
+        val LAUNCH_WRAPPER_TRANSFORMED_ATTRIBUTE: Attribute<Boolean> = Attribute.of("net.msrandom.minecraftcodev.launchWrapperTransformed", Boolean::class.javaObjectType)
 
         val json = Json {
             ignoreUnknownKeys = true
