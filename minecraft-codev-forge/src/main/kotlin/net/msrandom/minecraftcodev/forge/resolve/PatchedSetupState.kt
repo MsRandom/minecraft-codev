@@ -176,7 +176,7 @@ open class PatchedSetupState @Inject constructor(
                 // Add userdev injects
                 userdevConfig.inject?.let { inject ->
                     zipFileSystem(userdevConfigFile.toPath()).use { userdevZip ->
-                        val injectPath = userdevZip.getPath(inject)
+                        val injectPath = userdevZip.getPath("/${inject}")
                         if (injectPath.exists()) {
                             injectPath.walk {
                                 for (path in filter(Path::isRegularFile)) {
