@@ -3,9 +3,9 @@ package net.msrandom.minecraftcodev.forge.resolve
 import com.google.common.io.ByteStreams.nullOutputStream
 import kotlinx.serialization.json.decodeFromStream
 import net.minecraftforge.accesstransformer.TransformerProcessor
+import net.minecraftforge.srgutils.IMappingBuilder
 import net.minecraftforge.srgutils.IMappingFile
 import net.minecraftforge.srgutils.INamedMappingFile
-import net.minecraftforge.srgutils.IRenamer
 import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
 import net.msrandom.minecraftcodev.core.MinecraftType
@@ -212,7 +212,6 @@ open class PatchedSetupState @Inject constructor(
             val mappings = zipFileSystem(mcpConfigFile).use {
                 val mappingsPath = it.getPath(mcpConfig.data.mappings)
                 val mappings = mappingsPath.inputStream().use(INamedMappingFile::load)
-                val map = mappings.getMap("obf", "srg")
 
                 if (mcpConfig.official) {
                     val result = DefaultBuildableArtifactResolveResult()
@@ -234,19 +233,41 @@ open class PatchedSetupState @Inject constructor(
                     )
 
                     val official = result.result.inputStream().use(INamedMappingFile::load).getMap("left", "right").reverse()
+                    val map = mappings.getMap(mappings.names[0], mappings.names[1])
 
-                    map.rename(object : IRenamer {
-                        override fun rename(value: IMappingFile.IClass) = official.getClass(value.original)?.mapped ?: super.rename(value)
-                    })
+                    IMappingBuilder.create(mappings.names[0], mappings.names[1]).apply {
+                        for (classMapping in map.classes) {
+                            val newClass = addClass(classMapping.original, official.getClass(classMapping.original)?.mapped ?: classMapping.mapped)
+                            classMapping.metadata.forEach(newClass::meta)
+
+                            for (field in classMapping.fields) {
+                                val newField = newClass.field(field.original, field.mapped).descriptor(field.original)
+
+                                field.metadata.forEach(newField::meta)
+                            }
+
+                            for (method in classMapping.methods) {
+                                val newMethod = newClass.method(method.descriptor, method.original, method.mapped)
+
+                                method.metadata.forEach(newMethod::meta)
+
+                                for (parameter in method.parameters) {
+                                    val newParameter = newMethod.parameter(parameter.index, parameter.original, parameter.mapped)
+
+                                    parameter.metadata.forEach(newParameter::meta)
+                                }
+                            }
+                        }
+                    }.build()
                 } else {
-                    map
+                    mappings
                 }
             }
 
             zipFileSystem(mcpConfigFile).use {
                 val mappingsPath = it.getPath(mcpConfig.data.mappings)
                 if (mcpConfig.official) {
-                    mappings.write(fixedMappingsPath, IMappingFile.Format.TSRG2, false)
+                    mappings.write(fixedMappingsPath, IMappingFile.Format.TSRG2)
                 } else {
                     mappingsPath.copyTo(fixedMappingsPath, StandardCopyOption.REPLACE_EXISTING)
                 }

@@ -19,6 +19,7 @@ import java.io.IOException
 import java.nio.file.FileSystem
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.nio.file.StandardOpenOption
 import kotlin.io.path.*
 import kotlin.reflect.KMutableProperty1
 
@@ -254,7 +255,7 @@ object LegacyJarSplitter {
 
                             val path = commonFs.getPath(pathName)
                             serverEntry.copyTo(path, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
-                            path.writeBytes(writer.toByteArray())
+                            path.writeBytes(writer.toByteArray(), StandardOpenOption.WRITE, StandardOpenOption.CREATE)
 
                             newClientFs.getPath(pathName).deleteExisting()
                         } else {
@@ -281,7 +282,7 @@ object LegacyJarSplitter {
                         val writer = ClassWriter(reader, 0)
                         node.accept(writer)
 
-                        commonPath.writeBytes(writer.toByteArray())
+                        commonPath.writeBytes(writer.toByteArray(), StandardOpenOption.WRITE, StandardOpenOption.CREATE)
                     }
                 }
             }
@@ -301,7 +302,7 @@ object LegacyJarSplitter {
                             val writer = ClassWriter(reader, 0)
                             node.accept(writer)
 
-                            output.writeBytes(writer.toByteArray())
+                            output.writeBytes(writer.toByteArray(), StandardOpenOption.WRITE, StandardOpenOption.CREATE)
                         }
                     } else {
                         output.deleteExisting()

@@ -31,7 +31,6 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
-import java.time.Instant
 import javax.inject.Inject
 import kotlin.io.path.Path
 import kotlin.io.path.copyTo
@@ -74,7 +73,7 @@ open class DefaultCacheAwareExternalResourceAccessor @Inject constructor(
             }
 
             // We might be able to use a cached/locally available version
-            if (cached != null && !externalResourceCachePolicy.mustRefreshExternalResource(timeProvider.currentTime - cached.cachedAt)) {
+            if (cached != null && cached.cachedFile?.exists() == true && !externalResourceCachePolicy.mustRefreshExternalResource(timeProvider.currentTime - cached.cachedAt)) {
                 return@guardByKey fileResourceRepository.resource(cached.cachedFile, location.uri, cached.externalResourceMetaData)
             }
 
@@ -84,10 +83,10 @@ open class DefaultCacheAwareExternalResourceAccessor @Inject constructor(
             // Is the cached version still current?
             if (cached != null) {
                 val isUnchanged = ExternalResourceMetaDataCompare.isDefinitelyUnchanged(cached.externalResourceMetaData) { remoteMetaData }
-                if (isUnchanged) {
+                if (cached.cachedFile?.exists() == true && isUnchanged) {
                     LOGGER.info("Cached resource {} is up-to-date (lastModified: {}).", location, cached.externalLastModified)
                     // Update the cache entry in the index: this resets the age of the cached entry to zero
-                    cachedExternalResourceIndex[location.toString()] = DefaultCachedExternalResource(cached.cachedFile, Instant.now().toEpochMilli(), cached.externalResourceMetaData)
+                    cachedExternalResourceIndex[location.toString()] = DefaultCachedExternalResource(cached.cachedFile, timeProvider.currentTime, cached.externalResourceMetaData)
                     return@guardByKey fileResourceRepository.resource(cached.cachedFile, location.uri, cached.externalResourceMetaData)
                 }
             }
@@ -175,7 +174,7 @@ open class DefaultCacheAwareExternalResourceAccessor @Inject constructor(
         val fileInFileStore = output.toFile()
         output.parent?.createDirectories()
         destination?.toPath()?.copyTo(output, StandardCopyOption.REPLACE_EXISTING)
-        cachedExternalResourceIndex[source.toString()] = DefaultCachedExternalResource(fileInFileStore, Instant.now().toEpochMilli(), metaData)
+        cachedExternalResourceIndex[source.toString()] = DefaultCachedExternalResource(fileInFileStore, timeProvider.currentTime, metaData)
         return fileResourceRepository.resource(fileInFileStore, source.uri, metaData)
     }
 

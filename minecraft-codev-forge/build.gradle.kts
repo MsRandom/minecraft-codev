@@ -15,12 +15,17 @@ dependencies {
     implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version = "1.3.3")
 
     implementation(group = "net.fabricmc", name = "access-widener", version = "2.1.0")
-    implementation(group = "net.minecraftforge", name = "accesstransformers", version = "8.0.7")
+
+    implementation(group = "net.minecraftforge", name = "accesstransformers", version = "8.0.7") {
+        exclude(group = "org.apache.logging.log4j", module = "log4j-core")
+    }
+
     implementation(group = "org.cadixdev", name = "at", version = "0.1.0-rc1")
     implementation(group = "org.cadixdev", name = "lorenz", version = "0.5.8")
 
     implementation(group = "de.siegmar", name = "fastcsv", version = "2.2.0")
     implementation(group = "org.apache.commons", name = "commons-lang3", version = "3.12.0")
+    implementation(group = "org.apache.logging.log4j", name = "log4j-core", version = "2.12.4")
 
     compileOnly(projects.minecraftCodevGradleLinkage)
 

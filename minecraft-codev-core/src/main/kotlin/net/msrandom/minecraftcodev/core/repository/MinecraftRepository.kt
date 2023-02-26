@@ -165,7 +165,10 @@ open class MinecraftRepositoryImpl @Inject constructor(
             ) = result.missing()
 
             override fun resolveArtifactsWithType(component: ComponentResolveMetadata, artifactType: ArtifactType, result: BuildableArtifactSetResolveResult) = Unit
-            override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactResolveResult) = Unit
+
+            override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactResolveResult){
+                result.notFound(artifact.id)
+            }
 
             override fun estimateMetadataFetchingCost(moduleComponentIdentifier: ModuleComponentIdentifier) = MetadataFetchingCost.CHEAP
         }

@@ -35,7 +35,6 @@ import org.gradle.util.internal.BuildCommencedTimeProvider
 import java.io.File
 import java.nio.file.Path
 import java.time.Duration
-import java.time.Instant
 import javax.inject.Inject
 import kotlin.io.path.Path
 import kotlin.io.path.exists
@@ -207,7 +206,7 @@ open class MinecraftArtifactResolver @Inject constructor(
 
                 if (file != null) {
                     result.resolved(file)
-                    artifactCache[id] = DefaultCachedArtifact(file, Instant.now().toEpochMilli(), artifact.hash())
+                    artifactCache[id] = DefaultCachedArtifact(file, timeProvider.currentTime, artifact.hash())
                 }
             } else {
                 if (!cached.isMissing) {

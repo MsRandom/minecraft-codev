@@ -6,7 +6,6 @@ import net.msrandom.minecraftcodev.core.utils.applyPlugin
 import net.msrandom.minecraftcodev.core.utils.createSourceSetElements
 import net.msrandom.minecraftcodev.core.utils.extendKotlinConfigurations
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
-import net.msrandom.minecraftcodev.runs.task.GenerateIdeaRuns
 import org.apache.commons.lang3.StringUtils
 import org.gradle.api.Plugin
 import org.gradle.api.plugins.ApplicationPlugin
@@ -54,9 +53,7 @@ class MinecraftCodevRunsPlugin<T : PluginAware> @Inject constructor(cacheDir: Gl
 
         runs.extensions.create("defaults", RunConfigurationDefaultsContainer::class.java)
 
-        tasks.register("generateIdeaRuns", GenerateIdeaRuns::class.java)
-
-        // val ideaRunConfigurations = extensions.getByType(RunConfigurationContainer::class.java)
+        project.integrateIdeaRuns(runs)
 
         runs.all { builder ->
             val name = "${ApplicationPlugin.TASK_RUN_NAME}${StringUtils.capitalize(builder.name)}"
@@ -76,21 +73,6 @@ class MinecraftCodevRunsPlugin<T : PluginAware> @Inject constructor(cacheDir: Gl
 
                 javaExec.dependsOn(*configuration.beforeRunTasks.get().toTypedArray())
             }
-
-/*            ideaRunConfigurations.register(name, Application::class.java) { application ->
-                val configuration = builder.build(project)
-
-                application.envs.putAll(configuration.environment.get().mapValues { it.value.parts.joinToString("") })
-                application.programParameters = configuration.arguments.map { arguments -> arguments.map { it.parts.joinToString("") } }.get().joinToString(" ")
-                application.jvmArgs = configuration.jvmArguments.map { arguments -> arguments.map { it.parts.joinToString("") } }.get().joinToString(" ")
-                application.workingDirectory = configuration.workingDirectory.asFile.get().absolutePath
-                application.mainClass = configuration.mainClass.get()
-                application.moduleName = configuration.sourceSet.map(SourceSet::getName).orElse(configuration.kotlinSourceSet.map(KotlinSourceSet::getName)).get()
-
-                for (task in configuration.beforeRunTasks.get()) {
-                    application.beforeRun.create(task, GradleTask::class.java).task = tasks.getByName(task)
-                }
-            }*/
         }
     }
 

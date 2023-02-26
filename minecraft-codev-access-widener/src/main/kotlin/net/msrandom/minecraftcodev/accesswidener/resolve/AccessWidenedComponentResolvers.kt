@@ -342,4 +342,6 @@ class AccessWidenedComponentIdentifier(
         AccessWidenedComponentIdentifier(original, accessWidenersConfiguration, moduleConfiguration, false)
 
     override fun getDisplayName() = "${original.displayName} (Access Widened)"
+
+    override fun toString() = displayName
 }

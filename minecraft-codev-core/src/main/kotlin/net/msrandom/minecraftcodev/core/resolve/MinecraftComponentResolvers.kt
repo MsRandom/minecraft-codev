@@ -223,6 +223,8 @@ open class MinecraftComponentIdentifier(module: String, private val version: Str
     override fun getModule(): String = moduleIdentifier.name
     override fun getVersion() = version
     override fun getModuleIdentifier(): ModuleIdentifier = moduleIdentifier
+
+    override fun toString() = displayName
 }
 
 interface MayNeedSources {

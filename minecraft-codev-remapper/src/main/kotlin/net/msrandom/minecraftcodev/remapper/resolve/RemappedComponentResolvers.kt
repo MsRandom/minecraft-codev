@@ -421,4 +421,6 @@ class RemappedComponentIdentifier(
         RemappedComponentIdentifier(original, sourceNamespace, targetNamespace, mappingsConfiguration, moduleConfiguration, false)
 
     override fun getDisplayName() = "${original.displayName} (Remapped to $targetNamespace)"
+
+    override fun toString() = displayName
 }
