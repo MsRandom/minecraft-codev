@@ -82,7 +82,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
     override fun resolve(identifier: ComponentIdentifier, componentOverrideMetadata: ComponentOverrideMetadata, result: BuildableComponentResolveResult) {
         if (identifier is PatchedComponentIdentifier) {
             val patches = mutableListOf<File>()
-            project.visitConfigurationFiles(resolvers, project.configurations.getByName(identifier.patches), emptyList(), patches::add)
+            project.visitConfigurationFiles(resolvers, project.configurations.getByName(identifier.patches), patches::add)
 
             val config = UserdevConfig.fromFile(patches.first())
 
@@ -136,7 +136,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
         if (artifact.componentId is PatchedComponentIdentifier) {
             val moduleComponentIdentifier = artifact.componentId as PatchedComponentIdentifier
             val patches = mutableListOf<File>()
-            project.visitConfigurationFiles(resolvers, project.configurations.getByName(moduleComponentIdentifier.patches), emptyList(), patches::add)
+            project.visitConfigurationFiles(resolvers, project.configurations.getByName(moduleComponentIdentifier.patches), patches::add)
 
             getPatchedOutput(
                 moduleComponentIdentifier,
@@ -149,7 +149,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
                 patches.first(),
                 project,
                 objectFactory
-            )?.let(result::resolved)
+            )?.let(result::resolved) ?: result.notFound(artifact.id)
         }
     }
 
@@ -219,7 +219,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
                     )
 
                     if (clientJar != null && serverJar != null) {
-                        return PatchedSetupState.getPatchedOutput(moduleComponentIdentifier, manifest, clientJar, serverJar, patches, patchedCacheManager, cachePolicy, project, objectFactory)
+                        return PatchedSetupState.getPatchedOutput(moduleComponentIdentifier, manifest, clientJar, serverJar, patches, minecraftCacheManager, patchedCacheManager, cachePolicy, project, objectFactory)
                     }
                 }
             }

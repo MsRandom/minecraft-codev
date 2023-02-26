@@ -382,6 +382,10 @@ open class RemappedComponentResolvers @Inject constructor(
                     result.resolved(output.toFile())
                 }
             }
+
+            if (!result.hasResult()) {
+                result.notFound(artifact.id)
+            }
         } else {
             if (!reentrantLock.isLocked) {
                 reentrantLock.withLock {

@@ -50,8 +50,10 @@ java {
 }
 
 dependencies {
-    val latestVersion = URL("https://maven.msrandom.net/repository/root/minecraft-latest-version.txt").openStream().use {
-        String(it.readAllBytes()).trim()
+    val latestVersionFile = `java.nio.file`.Files.createTempFile("latest-version", ".tmp.txt")
+    ant.invokeMethod("get", mapOf("src" to "https://maven.msrandom.net/repository/root/minecraft-latest-version.txt", "dest" to latestVersionFile.toAbsolutePath().toString()))
+    val latestVersion = `java.nio.file`.Files.newBufferedReader(latestVersionFile).use {
+        it.readText().trim()
     }
 
     commonUniqueSnapshot.implementationConfigurationName(minecraft(MinecraftType.Common, "1.12-20170918.113946-1"))

@@ -4,7 +4,7 @@ import net.msrandom.minecraftcodev.core.dependency.AsmJarTransformer
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.tree.*
 
-abstract class ForgeJarTransformer : AsmJarTransformer("net/minecraftforge/fml/loading/targets/ForgeClientUserdevLaunchHandler.class") {
+abstract class ForgeJarTransformer : AsmJarTransformer("net/minecraftforge/fml/loading/targets/CommonUserdevLaunchHandler.class") {
     private fun MethodNode.loadPaths(property: String, index: Int) {
         // ArrayList var1 = new ArrayList();
         instructions.add(TypeInsnNode(Opcodes.NEW, "java/util/ArrayList"))
@@ -63,6 +63,8 @@ abstract class ForgeJarTransformer : AsmJarTransformer("net/minecraftforge/fml/l
 
     override fun editNode(node: ClassNode) {
         val methodIndex = node.methods.indexOfFirst { it.name == "getMinecraftPaths" }
+
+        if (methodIndex == -1) return
 
         node.methods[methodIndex] = MethodNode().apply {
             val old = node.methods[methodIndex]

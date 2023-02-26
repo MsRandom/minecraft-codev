@@ -4,29 +4,24 @@ import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.allArtifacts
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
-import org.gradle.api.artifacts.Dependency
 import org.gradle.api.artifacts.component.ModuleComponentSelector
-import org.gradle.api.internal.artifacts.ConfigurationResolver
-import org.gradle.api.internal.artifacts.DefaultResolverResults
 import org.gradle.api.internal.artifacts.ResolveContext
 import org.gradle.api.internal.artifacts.dependencies.DefaultImmutableVersionConstraint
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.UnionVersionSelector
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionSelectorScheme
 import org.gradle.api.internal.attributes.AttributeContainerInternal
 import org.gradle.api.internal.attributes.AttributesSchemaInternal
-import org.gradle.api.specs.Spec
 import org.gradle.configurationcache.extensions.serviceOf
 import org.gradle.internal.component.local.model.LocalConfigurationMetadata
+import org.gradle.internal.component.model.ComponentArtifactMetadata
 import org.gradle.internal.component.model.DefaultComponentOverrideMetadata
 import org.gradle.internal.resolve.result.DefaultBuildableArtifactResolveResult
 import org.gradle.internal.resolve.result.DefaultBuildableComponentIdResolveResult
 import org.gradle.internal.resolve.result.DefaultBuildableComponentResolveResult
 import java.io.File
 
-// FIXME: This is broken, attempts to acquire lock.
-fun Project.visitConfigurationFiles(resolvers: ComponentResolversChainProvider, configuration: Configuration, specs: List<Spec<in Dependency>> = emptyList(), visit: (File) -> Unit) {
-    val results = DefaultResolverResults()
-    val configurationResolver = serviceOf<ConfigurationResolver>()
+// TODO Follow DefaultConfigurationResolver more to have more parity with regular resolution.
+fun Project.visitConfigurationFiles(resolvers: ComponentResolversChainProvider, configuration: Configuration, visit: (File) -> Unit) {
     val versionSelectorSchema = serviceOf<VersionSelectorScheme>()
     val context = configuration as ResolveContext
 
@@ -61,48 +56,18 @@ fun Project.visitConfigurationFiles(resolvers: ComponentResolversChainProvider, 
             project.dependencies.attributesSchema as AttributesSchemaInternal,
             configuration.outgoing.capabilities
         )) {
+            fun resolve(artifact: ComponentArtifactMetadata) {
+                val artifactResult = DefaultBuildableArtifactResolveResult()
+                resolvers.get().artifactResolver.resolveArtifact(artifact, metadata.sources, artifactResult)
+
+                visit(artifactResult.result)
+            }
+
             if (dependency.artifacts.isEmpty()) {
-                for (artifact in selectedConfiguration.allArtifacts) {
-                    val artifactResult = DefaultBuildableArtifactResolveResult()
-                    resolvers.get().artifactResolver.resolveArtifact(artifact, metadata.sources, artifactResult)
-
-                    visit(artifactResult.result)
-                }
+                selectedConfiguration.allArtifacts.forEach(::resolve)
             } else {
-                for (artifactName in dependency.artifacts) {
-                    val artifact = selectedConfiguration.artifact(artifactName)
-                    val artifactResult = DefaultBuildableArtifactResolveResult()
-                    resolvers.get().artifactResolver.resolveArtifact(artifact, metadata.sources, artifactResult)
-
-                    visit(artifactResult.result)
-                }
+                dependency.artifacts.asSequence().map(selectedConfiguration::artifact).forEach(::resolve)
             }
         }
     }
-/*
-    configurationResolver.resolveGraph(configuration as ConfigurationInternal, results)
-    configurationResolver.resolveArtifacts(configuration, results)
-
-    if (specs.isEmpty()) {
-        results.resolvedConfiguration.lenientConfiguration.artifacts
-        results.visitedArtifacts.select(Specs.satisfyAll(), configuration.attributes, Specs.satisfyAll(), false).visitArtifacts(object : ArtifactVisitor {
-            override fun visitArtifact(variantName: DisplayName, variantAttributes: AttributeContainer, capabilities: MutableList<out Capability>, artifact: ResolvableArtifact) {
-                visit(artifact.file)
-            }
-
-            override fun requireArtifactFiles() = true
-            override fun visitFailure(failure: Throwable) = throw failure
-        }, false)
-    } else {
-        for (spec in specs) {
-            results.visitedArtifacts.select(spec, configuration.attributes, Specs.satisfyAll(), false).visitArtifacts(object : ArtifactVisitor {
-                override fun visitArtifact(variantName: DisplayName, variantAttributes: AttributeContainer, capabilities: MutableList<out Capability>, artifact: ResolvableArtifact) {
-                    visit(artifact.file)
-                }
-
-                override fun requireArtifactFiles() = true
-                override fun visitFailure(failure: Throwable) = throw failure
-            }, false)
-        }
-    }*/
 }

@@ -11,7 +11,9 @@ import org.objectweb.asm.ClassWriter
 import org.objectweb.asm.tree.ClassNode
 import java.net.URL
 import java.net.URLClassLoader
+import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.nio.file.StandardOpenOption
 import kotlin.io.path.copyTo
 import kotlin.io.path.exists
 import kotlin.io.path.inputStream
@@ -69,7 +71,7 @@ abstract class AsmJarTransformer(private val className: String) : TransformActio
 
                 node.accept(writer)
 
-                path.writeBytes(writer.toByteArray())
+                path.writeBytes(writer.toByteArray(), StandardOpenOption.WRITE, StandardOpenOption.CREATE)
             }
         } else {
             outputs.file(input)

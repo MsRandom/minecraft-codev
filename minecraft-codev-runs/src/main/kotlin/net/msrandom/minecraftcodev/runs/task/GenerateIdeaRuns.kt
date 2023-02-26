@@ -33,14 +33,19 @@ open class GenerateIdeaRuns : GenerateRuns() {
     }
 
     private fun relativize(path: Path): String {
-        val projectRelative = rootPath.relativize(path)
-        if (!projectRelative.startsWith("..")) {
-            return Path("\$PROJECT_DIR$").resolve(projectRelative).toString()
+        if (rootPath.root == path.root) {
+            val projectRelative = rootPath.relativize(path)
+            if (!projectRelative.startsWith("..")) {
+                return Path("\$PROJECT_DIR$").resolve(projectRelative).toString()
+            }
         }
 
-        val homeRelative = Path(SystemUtils.USER_HOME).relativize(path)
-        if (!homeRelative.startsWith("..")) {
-            return Path("\$USER_HOME$").resolve(homeRelative).toString()
+        val home = Path(SystemUtils.USER_HOME)
+        if (home.root == path.root) {
+            val homeRelative = home.relativize(path)
+            if (!homeRelative.startsWith("..")) {
+                return Path("\$USER_HOME$").resolve(homeRelative).toString()
+            }
         }
 
         return path.toAbsolutePath().toString()

@@ -1,5 +1,6 @@
 package net.msrandom.minecraftcodev.core.resolve
 
+import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
 import net.msrandom.minecraftcodev.core.resolve.bundled.BundledClientJarSplitter
 import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter
 import net.msrandom.minecraftcodev.core.utils.callWithStatus
@@ -20,6 +21,7 @@ private val bundledClientJarStates = ConcurrentHashMap<Pair<Path, Path>, Lazy<Pa
 private val bundledCommonJarStates = ConcurrentHashMap<Path, Lazy<Path>>()
 
 fun getCommonJar(
+    cacheManager: CodevCacheManager,
     buildOperationExecutor: BuildOperationExecutor,
     checksumService: ChecksumService,
     pathFunction: (artifact: ModuleComponentArtifactIdentifier, sha1: String) -> Path,
@@ -27,7 +29,7 @@ fun getCommonJar(
     serverJar: File,
     clientJar: () -> File
 ): Lazy<Path> {
-    val (extractedServer, isBundled) = getExtractionState(buildOperationExecutor, manifest, serverJar, clientJar).value
+    val (extractedServer, isBundled) = getExtractionState(cacheManager, buildOperationExecutor, manifest, serverJar, clientJar).value
     return if (isBundled) {
         bundledCommonJarStates.computeIfAbsent(extractedServer) {
             lazy {
@@ -44,6 +46,7 @@ fun getCommonJar(
 }
 
 fun getClientJar(
+    cacheManager: CodevCacheManager,
     buildOperationExecutor: BuildOperationExecutor,
     checksumService: ChecksumService,
     pathFunction: (artifact: ModuleComponentArtifactIdentifier, sha1: String) -> Path,
@@ -51,10 +54,10 @@ fun getClientJar(
     clientJar: File,
     serverJar: File
 ): Path {
-    val (extractedServer, isBundled) = getExtractionState(buildOperationExecutor, manifest, serverJar) { clientJar }.value
+    val (extractedServer, isBundled) = getExtractionState(cacheManager, buildOperationExecutor, manifest, serverJar) { clientJar }.value
 
     return if (isBundled) {
-        val commonJar = getCommonJar(buildOperationExecutor, checksumService, pathFunction, manifest, serverJar) { clientJar }.value
+        val commonJar = getCommonJar(cacheManager, buildOperationExecutor, checksumService, pathFunction, manifest, serverJar) { clientJar }.value
         getBundledClientJarState(buildOperationExecutor, checksumService, pathFunction, manifest, clientJar.toPath(), commonJar).value
     } else {
         getLegacySplitJarsState(buildOperationExecutor, checksumService, pathFunction, manifest, clientJar.toPath(), extractedServer).value.client

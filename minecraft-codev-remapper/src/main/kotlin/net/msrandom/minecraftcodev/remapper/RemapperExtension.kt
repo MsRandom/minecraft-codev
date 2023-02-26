@@ -21,7 +21,6 @@ import org.gradle.api.internal.artifacts.ivyservice.resolveengine.ComponentResol
 import org.gradle.api.internal.attributes.ImmutableAttributes
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.ListProperty
-import org.gradle.api.specs.Spec
 import org.gradle.configurationcache.extensions.serviceOf
 import org.gradle.internal.hash.HashCode
 import java.io.InputStream
@@ -140,7 +139,7 @@ open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory, p
                 ComponentResolversChain(resolvers, project.serviceOf(), project.serviceOf())
             }
 
-            project.visitConfigurationFiles({ resolvers }, configuration, configuration.allDependencies.map { dependency -> Spec { it == dependency } }) { file ->
+            project.visitConfigurationFiles({ resolvers }, configuration) { file ->
                 for (rule in mappingsResolution.get()) {
                     if (rule.loadMappings(file.toPath(), file.extension, tree, configuration, { DigestInputStream(this, md) }, tree, objects)) {
                         break

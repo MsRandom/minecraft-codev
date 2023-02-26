@@ -5,15 +5,15 @@ import kotlinx.serialization.json.decodeFromStream
 import net.minecraftforge.accesstransformer.TransformerProcessor
 import net.minecraftforge.srgutils.IMappingFile
 import net.minecraftforge.srgutils.INamedMappingFile
+import net.minecraftforge.srgutils.IRenamer
 import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
+import net.msrandom.minecraftcodev.core.MinecraftType
 import net.msrandom.minecraftcodev.core.ModuleLibraryIdentifier
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
-import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
-import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver
-import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
-import net.msrandom.minecraftcodev.core.resolve.getExtractionState
+import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
+import net.msrandom.minecraftcodev.core.resolve.*
 import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter.withAssets
 import net.msrandom.minecraftcodev.core.utils.asSerializable
 import net.msrandom.minecraftcodev.core.utils.callWithStatus
@@ -28,6 +28,7 @@ import org.gradle.api.Project
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.internal.ProcessOperations
 import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
+import org.gradle.api.internal.artifacts.RepositoriesSupplier
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.artifacts.CachedArtifact
 import org.gradle.api.invocation.Gradle
@@ -38,6 +39,7 @@ import org.gradle.internal.component.external.model.DefaultModuleComponentArtifa
 import org.gradle.internal.component.external.model.DefaultModuleComponentIdentifier
 import org.gradle.internal.component.model.DefaultComponentOverrideMetadata
 import org.gradle.internal.component.model.DefaultIvyArtifactName
+import org.gradle.internal.component.model.ImmutableModuleSources
 import org.gradle.internal.hash.ChecksumService
 import org.gradle.internal.hash.HashCode
 import org.gradle.internal.operations.*
@@ -61,14 +63,17 @@ open class PatchedSetupState @Inject constructor(
     private val serverJar: File,
     private val userdevConfigFile: File,
     private val patchesHash: HashCode,
-    private val cacheManager: CodevCacheManager,
+    private val minecraftCacheManager: CodevCacheManager,
+    private val patchedCacheManager: CodevCacheManager,
 
     private val buildOperationExecutor: BuildOperationExecutor,
     private val processOperations: ProcessOperations,
     private val checksumService: ChecksumService,
-    private val resolvers: ComponentResolversChainProvider
+    private val resolvers: ComponentResolversChainProvider,
+    private val objects: ObjectFactory,
+    private val repositoriesSupplier: RepositoriesSupplier
 ) {
-    private val extractionState = getExtractionState(buildOperationExecutor, manifest, serverJar) { clientJar }
+    private val extractionState = getExtractionState(minecraftCacheManager, buildOperationExecutor, manifest, serverJar) { clientJar }
 
     private val userdevConfig by lazy {
         zipFileSystem(userdevConfigFile.toPath()).use { fs ->
@@ -191,7 +196,7 @@ open class PatchedSetupState @Inject constructor(
     })
 
     private fun renamed(): Path = buildOperationExecutor.call(object : CallableBuildOperation<Path> {
-        val extractionState = getExtractionState(buildOperationExecutor, manifest, serverJar) { clientJar }
+        val extractionState = getExtractionState(minecraftCacheManager, buildOperationExecutor, manifest, serverJar) { clientJar }
         val input = if (userdevConfig.notchObf) patched() else merged()
         val renamed = Files.createTempFile("renamed-", ".tmp.jar")
         val fixedMappingsPath = Files.createTempFile("mappings-", ".tmp.tsrg")
@@ -207,19 +212,41 @@ open class PatchedSetupState @Inject constructor(
             val mappings = zipFileSystem(mcpConfigFile).use {
                 val mappingsPath = it.getPath(mcpConfig.data.mappings)
                 val mappings = mappingsPath.inputStream().use(INamedMappingFile::load)
+                val map = mappings.getMap("obf", "srg")
 
                 if (mcpConfig.official) {
-                    // Filter class names and fix them
-                    TODO("Not yet implemented")
-                }
+                    val result = DefaultBuildableArtifactResolveResult()
+                    val repositories = repositoriesSupplier.get()
+                        .filterIsInstance<MinecraftRepositoryImpl>()
+                        .map(MinecraftRepositoryImpl::createResolver)
 
-                mappings
+                    objects.newInstance(MinecraftArtifactResolver::class.java, repositories).resolveArtifact(
+                        DefaultModuleComponentArtifactMetadata(
+                            MinecraftComponentIdentifier(MinecraftType.ClientMappings.module, manifest.id, false),
+                            DefaultIvyArtifactName(
+                                MinecraftType.ClientMappings.module,
+                                "txt",
+                                "txt"
+                            )
+                        ),
+                        ImmutableModuleSources.of(),
+                        result
+                    )
+
+                    val official = result.result.inputStream().use(INamedMappingFile::load).getMap("left", "right").reverse()
+
+                    map.rename(object : IRenamer {
+                        override fun rename(value: IMappingFile.IClass) = official.getClass(value.original)?.mapped ?: super.rename(value)
+                    })
+                } else {
+                    map
+                }
             }
 
             zipFileSystem(mcpConfigFile).use {
                 val mappingsPath = it.getPath(mcpConfig.data.mappings)
                 if (mcpConfig.official) {
-                    mappings.write(fixedMappingsPath, IMappingFile.Format.TSRG2)
+                    mappings.write(fixedMappingsPath, IMappingFile.Format.TSRG2, false)
                 } else {
                     mappingsPath.copyTo(fixedMappingsPath, StandardCopyOption.REPLACE_EXISTING)
                 }
@@ -355,7 +382,7 @@ open class PatchedSetupState @Inject constructor(
                     }
                 }
 
-                val path = cacheManager.fileStoreDirectory.resolve(patchesHash.toString())
+                val path = patchedCacheManager.fileStoreDirectory.resolve(patchesHash.toString())
                     .resolve(manifest.id)
                     .resolve(checksumService.sha1(output.toFile()).toString())
                     .resolve("forge-${manifest.id}.${ArtifactTypeDefinition.JAR_TYPE}")
@@ -433,7 +460,8 @@ open class PatchedSetupState @Inject constructor(
             clientJar: File,
             serverJar: File,
             userdevConfigFile: File,
-            cacheManager: CodevCacheManager,
+            minecraftCacheManager: CodevCacheManager,
+            patchedCacheManager: CodevCacheManager,
             cachePolicy: CachePolicy,
             project: Project,
             objectFactory: ObjectFactory
@@ -441,8 +469,8 @@ open class PatchedSetupState @Inject constructor(
             val patchesHash = project.serviceOf<ChecksumService>().sha1(userdevConfigFile)
 
             val cache = caches.computeIfAbsent(project.gradle) {
-                cacheManager.getMetadataCache(Path("module-artifact"), { PatchedArtifactIdentifier.ArtifactSerializer }) {
-                    CachedArtifactSerializer(cacheManager.fileStoreDirectory)
+                patchedCacheManager.getMetadataCache(Path("module-artifact"), { PatchedArtifactIdentifier.ArtifactSerializer }) {
+                    CachedArtifactSerializer(patchedCacheManager.fileStoreDirectory)
                 }.asFile
             }
 
@@ -462,7 +490,7 @@ open class PatchedSetupState @Inject constructor(
                 project.serviceOf(),
                 result
             ) {
-                objectFactory.newInstance(PatchedSetupState::class.java, manifest, clientJar, serverJar, userdevFile, patchesHash, cacheManager).withAssets.toFile()
+                objectFactory.newInstance(PatchedSetupState::class.java, manifest, clientJar, serverJar, userdevFile, patchesHash, minecraftCacheManager, patchedCacheManager).withAssets.toFile()
             }
 
             result.result

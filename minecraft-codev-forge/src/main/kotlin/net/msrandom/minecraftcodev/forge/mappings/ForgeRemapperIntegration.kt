@@ -115,7 +115,11 @@ internal fun Project.setupForgeRemapperIntegration() {
 
                         val classFixer = if (config.official) {
                             val result = DefaultBuildableArtifactResolveResult()
-                            objects.newInstance(MinecraftArtifactResolver::class.java).resolveArtifact(
+                            val repositories = repositoriesSupplier.get()
+                                .filterIsInstance<MinecraftRepositoryImpl>()
+                                .map(MinecraftRepositoryImpl::createResolver)
+
+                            objects.newInstance(MinecraftArtifactResolver::class.java, repositories).resolveArtifact(
                                 DefaultModuleComponentArtifactMetadata(
                                     MinecraftComponentIdentifier(MinecraftType.ClientMappings.module, config.version, false),
                                     DefaultIvyArtifactName(
@@ -329,7 +333,10 @@ internal fun Project.setupForgeRemapperIntegration() {
         }
 
         remapper.extraFileRemappers.add { mappings, directory, sourceNamespaceId, targetNamespaceId ->
-            val manifest = directory.resolve("META-INF/MANIFEST.MF").inputStream().use(::Manifest)
+            val meta = directory.resolve("META-INF/MANIFEST.MF")
+            if (meta.notExists()) return@add
+
+            val manifest = meta.inputStream().use(::Manifest)
             val accessTransformerName = manifest.mainAttributes.getValue("FMLAT") ?: "accesstransformer.cfg"
             val path = directory.resolve("META-INF/$accessTransformerName")
 

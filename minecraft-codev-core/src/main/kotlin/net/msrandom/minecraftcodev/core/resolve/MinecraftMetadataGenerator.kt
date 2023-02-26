@@ -83,7 +83,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
         return if (serverJar == null) {
             null
         } else {
-            getExtractionState(buildOperationExecutor, manifest, serverJar) {
+            getExtractionState(cacheManager, buildOperationExecutor, manifest, serverJar) {
                 resolveMojangFile(
                     manifest,
                     cacheManager,

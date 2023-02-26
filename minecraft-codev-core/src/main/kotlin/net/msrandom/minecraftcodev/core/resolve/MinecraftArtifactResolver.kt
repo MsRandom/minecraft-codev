@@ -9,13 +9,11 @@ import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Comp
 import net.msrandom.minecraftcodev.core.utils.asSerializable
 import org.gradle.api.artifacts.component.ComponentArtifactIdentifier
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
-import org.gradle.api.internal.artifacts.ivyservice.modulecache.FileStoreAndIndexProvider
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.artifacts.CachedArtifact
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.artifacts.DefaultCachedArtifact
 import org.gradle.api.internal.artifacts.metadata.ComponentArtifactIdentifierSerializer
 import org.gradle.api.internal.artifacts.metadata.ModuleComponentFileArtifactIdentifierSerializer
 import org.gradle.api.internal.component.ArtifactType
-import org.gradle.cache.scopes.GlobalScopedCache
 import org.gradle.internal.component.external.model.DefaultModuleComponentArtifactIdentifier
 import org.gradle.internal.component.external.model.ModuleComponentArtifactIdentifier
 import org.gradle.internal.component.external.model.ModuleComponentArtifactMetadata
@@ -45,8 +43,6 @@ import kotlin.io.path.exists
 open class MinecraftArtifactResolver @Inject constructor(
     private val repositories: List<MinecraftRepositoryImpl.Resolver>,
     private val cachePolicy: CachePolicy,
-    private val globalScopedCache: GlobalScopedCache,
-    private val fileStoreAndIndexProvider: FileStoreAndIndexProvider,
     private val timeProvider: BuildCommencedTimeProvider,
     private val buildOperationExecutor: BuildOperationExecutor,
     private val checksumService: ChecksumService,
@@ -81,7 +77,7 @@ open class MinecraftArtifactResolver @Inject constructor(
                                     val serverJar = resolveMojangFile(manifest, cacheManager, checksumService, repository, MinecraftComponentResolvers.SERVER_DOWNLOAD)
 
                                     if (serverJar != null) {
-                                        val splitCommonJar by getCommonJar(buildOperationExecutor, checksumService, ::getArtifactPath, manifest, serverJar) {
+                                        val splitCommonJar by getCommonJar(cacheManager, buildOperationExecutor, checksumService, ::getArtifactPath, manifest, serverJar) {
                                             resolveMojangFile(manifest, cacheManager, checksumService, repository, MinecraftComponentResolvers.CLIENT_DOWNLOAD)!!
                                         }
 
@@ -102,7 +98,7 @@ open class MinecraftArtifactResolver @Inject constructor(
                                         val client = if (serverJar == null) {
                                             clientJar
                                         } else {
-                                            getClientJar(buildOperationExecutor, checksumService, ::getArtifactPath, manifest, clientJar, serverJar).toFile()
+                                            getClientJar(cacheManager, buildOperationExecutor, checksumService, ::getArtifactPath, manifest, clientJar, serverJar).toFile()
                                         }
 
                                         return@getOrResolve client
@@ -139,6 +135,10 @@ open class MinecraftArtifactResolver @Inject constructor(
                     }
                     null
                 }
+            }
+
+            if (!result.hasResult()) {
+                result.notFound(artifact.id)
             }
         }
     }
