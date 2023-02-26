@@ -11,28 +11,19 @@ import javax.inject.Inject
 fun Project.integrateIdeaRuns(container: RunsContainer) {
     plugins.apply(IdeaExtPlugin::class.java)
 
-    val builtConfigs = hashMapOf<MinecraftRunConfigurationBuilder, MinecraftRunConfiguration>()
-
     container.all { builder ->
-        fun configName(gradleName: String, run: MinecraftRunConfiguration) = when {
-            run.name.isPresent -> run.name.get()
-            project == project.rootProject -> "${ApplicationPlugin.TASK_RUN_NAME}${StringUtils.capitalize(gradleName)}"
-            else -> "${project.path}:${ApplicationPlugin.TASK_RUN_NAME}${StringUtils.capitalize(gradleName)}"
-        }
-
-        val config = builtConfigs.computeIfAbsent(builder) { it.build(project) }
-
-        extensions
-            .getByType(IdeaModel::class.java)
+        extensions.getByType(IdeaModel::class.java)
             .project
             .settings
             .runConfigurations
-            .register(configName(builder.name, config), Application::class.java) { application ->
+            .register("${ApplicationPlugin.TASK_RUN_NAME}${StringUtils.capitalize(builder.name)}", Application::class.java) { application ->
+                val config = builder.build(project)
+
                 application.mainClass = config.mainClass.get()
                 application.workingDirectory = config.workingDirectory.get().asFile.absolutePath
-                application.envs.putAll(config.environment.get().mapValues { it.value.parts.joinToString("") })
-                application.programParameters = config.arguments.get().joinToString(" ") { it.parts.joinToString("") }
-                application.jvmArgs = config.jvmArguments.get().joinToString(" ") { it.parts.joinToString("") }
+                application.envs = config.environment.get().mapValues { it.value.compile() }
+                application.programParameters = config.arguments.get().joinToString(" ", transform = MinecraftRunConfiguration.Argument::compile)
+                application.jvmArgs = config.jvmArguments.get().joinToString(" ", transform = MinecraftRunConfiguration.Argument::compile)
 
                 if (config.sourceSet.isPresent) {
                     application.moduleRef(project, config.sourceSet.get())
@@ -48,17 +39,17 @@ fun Project.integrateIdeaRuns(container: RunsContainer) {
                     application.moduleRef(project)
                 }
 
-                for (other in config.beforeRunConfigs.get()) {
+                for (other in config.dependsOn.get()) {
                     application.beforeRun.add(objects.newInstance(RunConfigurationBeforeRunTask::class.java, other.name).apply {
                         configuration.set(provider {
-                            "Application.${configName(other.name, builtConfigs.computeIfAbsent(other) { it.build(project) })}"
+                            "Application.${ApplicationPlugin.TASK_RUN_NAME}${StringUtils.capitalize(other.name)}"
                         })
                     })
                 }
 
-                for (task in config.beforeRunTasks.get()) {
-                    application.beforeRun.register(task, GradleTask::class.java) {
-                        it.task = tasks.getByName(task)
+                for (task in config.beforeRun.get()) {
+                    application.beforeRun.register(task.name, GradleTask::class.java) {
+                        it.task = task
                     }
                 }
             }

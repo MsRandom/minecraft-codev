@@ -3,6 +3,7 @@ package net.msrandom.minecraftcodev.runs
 import org.gradle.api.Action
 import org.gradle.api.Named
 import org.gradle.api.Project
+import org.gradle.api.Task
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
@@ -32,10 +33,6 @@ abstract class MinecraftRunConfigurationBuilder @Inject constructor(private val 
     }
 
     fun action(action: MinecraftRunConfiguration.() -> Unit) = action(Action(action))
-
-    fun name(name: String) = apply {
-        action { this.name.set(name) }
-    }
 
     fun mainClass(mainClass: String) = apply {
         action { this.mainClass.set(mainClass) }
@@ -69,12 +66,24 @@ abstract class MinecraftRunConfigurationBuilder @Inject constructor(private val 
         setup { this.kotlinSourceSet.set(sourceSet) }
     }
 
+    fun beforeRun(task: Provider<Task>) = apply {
+        action { beforeRun.add(task) }
+    }
+
+    fun beforeRun(vararg tasks: Task) = apply {
+        action { beforeRun.addAll(tasks.toList()) }
+    }
+
     fun beforeRun(vararg taskNames: String) = apply {
-        action { beforeRunTasks.addAll(taskNames.toList()) }
+        action {
+            for (taskName in taskNames) {
+                beforeRun.add(project.tasks.named(taskName))
+            }
+        }
     }
 
     fun dependsOn(vararg runConfigurations: MinecraftRunConfigurationBuilder) = apply {
-        action { beforeRunConfigs.addAll(runConfigurations.toList()) }
+        action { dependsOn.addAll(runConfigurations.toList()) }
     }
 
     fun args(vararg args: Any?) = arguments(*args)

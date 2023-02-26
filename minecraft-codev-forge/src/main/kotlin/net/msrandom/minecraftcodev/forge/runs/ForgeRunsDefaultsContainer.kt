@@ -181,10 +181,10 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
 
         @Suppress("UnstableApiUsage")
         val sourceSetName = sourceSet.get().takeUnless(SourceSet::isMain)?.name?.let(StringUtils::capitalize).orEmpty()
-        val taskName = "extract${sourceSetName}Natives"
+        val taskName = "extract${sourceSetName}${StringUtils.capitalize(MinecraftCodevRunsPlugin.NATIVES_CONFIGURATION)}"
 
         if (hasNatives) {
-            beforeRunTasks.add(taskName)
+            beforeRun.add(project.tasks.named(taskName))
         }
 
         val runProvider = configProvider.map {

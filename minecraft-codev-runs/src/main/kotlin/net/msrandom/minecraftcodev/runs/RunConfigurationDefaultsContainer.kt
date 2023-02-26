@@ -50,9 +50,9 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
 
             @Suppress("UnstableApiUsage")
             val sourceSetName = sourceSet.get().takeUnless(SourceSet::isMain)?.name?.let(StringUtils::capitalize).orEmpty()
-            val task = project.tasks.withType(ExtractNatives::class.java).getByName("extract${sourceSetName}Natives")
+            val task = project.tasks.withType(ExtractNatives::class.java).named("extract${sourceSetName}${StringUtils.capitalize(MinecraftCodevRunsPlugin.NATIVES_CONFIGURATION)}")
 
-            beforeRunTasks.add(task.name)
+            beforeRun.add(task)
 
             mainClass.set(manifest.map(MinecraftVersionMetadata::mainClass))
 
@@ -143,7 +143,7 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
                                 if (templateStart != -1) {
                                     val template = value.subSequence(templateStart + 2, value.indexOf('}'))
                                     if (template == "natives_directory") {
-                                        fixedJvmArguments.add(MinecraftRunConfiguration.Argument(value.substring(0, templateStart), task.destinationDirectory.get().asFile.toPath()))
+                                        fixedJvmArguments.add(MinecraftRunConfiguration.Argument(value.substring(0, templateStart), task.flatMap(ExtractNatives::destinationDirectory)))
                                     } else {
                                         continue
                                     }

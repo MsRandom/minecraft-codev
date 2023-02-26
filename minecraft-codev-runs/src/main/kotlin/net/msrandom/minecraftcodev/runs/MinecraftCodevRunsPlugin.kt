@@ -61,17 +61,17 @@ class MinecraftCodevRunsPlugin<T : PluginAware> @Inject constructor(cacheDir: Gl
                 val configuration = builder.build(project)
 
                 javaExec.doFirst { task ->
-                    (task as JavaExec).environment = configuration.environment.get().mapValues { it.value.parts.joinToString("") }
+                    (task as JavaExec).environment = configuration.environment.get().mapValues { it.value.compile() }
                 }
 
-                javaExec.argumentProviders.add(configuration.arguments.map { arguments -> arguments.map { it.parts.joinToString("") } }::get)
-                javaExec.jvmArgumentProviders.add(configuration.jvmArguments.map { arguments -> arguments.map { it.parts.joinToString("") } }::get)
+                javaExec.argumentProviders.add(configuration.arguments.map { arguments -> arguments.map(MinecraftRunConfiguration.Argument::compile) }::get)
+                javaExec.jvmArgumentProviders.add(configuration.jvmArguments.map { arguments -> arguments.map(MinecraftRunConfiguration.Argument::compile) }::get)
                 javaExec.workingDir(configuration.workingDirectory)
                 javaExec.mainClass.set(configuration.mainClass)
                 javaExec.classpath = configuration.sourceSet.get().runtimeClasspath
                 javaExec.group = ApplicationPlugin.APPLICATION_GROUP
 
-                javaExec.dependsOn(*configuration.beforeRunTasks.get().toTypedArray())
+                javaExec.dependsOn(configuration.beforeRun)
             }
         }
     }
