@@ -237,7 +237,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
                         val configuration = project.configurations.getByName(sourceSet.get().runtimeClasspathConfigurationName).resolvedConfiguration.resolvedArtifacts
 
                         val minecraftJars = configuration.filter {
-                            it.moduleVersion.id.group == MinecraftComponentResolvers.GROUP && (it.moduleVersion.id.name == MinecraftComponentResolvers.COMMON_MODULE || it.moduleVersion.id.name == MinecraftComponentResolvers.CLIENT_MODULE)
+                            it.moduleVersion.id.group == MinecraftComponentResolvers.GROUP && it.moduleVersion.id.name == "forge"
                         }.joinToString(",") { it.file.absolutePath }
 
                         val fmlJars = configuration.filter {
