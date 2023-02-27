@@ -4,6 +4,9 @@ import org.gradle.internal.component.external.model.DefaultModuleComponentArtifa
 import org.gradle.internal.component.external.model.ModuleComponentArtifactIdentifier
 import org.gradle.internal.component.external.model.ModuleComponentArtifactMetadata
 import org.gradle.internal.component.external.model.ModuleComponentFileArtifactIdentifier
+import org.gradle.internal.component.model.ComponentArtifactMetadata
+
+class PassthroughAccessWidenedArtifactMetadata(val original: ComponentArtifactMetadata): ComponentArtifactMetadata by original
 
 class AccessWidenedComponentArtifactMetadata(
     val delegate: ModuleComponentArtifactMetadata,

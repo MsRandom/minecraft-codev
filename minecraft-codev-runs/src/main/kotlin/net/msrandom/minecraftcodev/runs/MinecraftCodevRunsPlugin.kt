@@ -53,12 +53,12 @@ class MinecraftCodevRunsPlugin<T : PluginAware> @Inject constructor(cacheDir: Gl
 
         runs.extensions.create("defaults", RunConfigurationDefaultsContainer::class.java)
 
-        project.integrateIdeaRuns(runs)
+        project.integrateIdeaRuns()
 
         runs.all { builder ->
             val name = "${ApplicationPlugin.TASK_RUN_NAME}${StringUtils.capitalize(builder.name)}"
             tasks.register(name, JavaExec::class.java) { javaExec ->
-                val configuration = builder.build(project)
+                val configuration = builder.build()
 
                 javaExec.doFirst { task ->
                     (task as JavaExec).environment = configuration.environment.get().mapValues { it.value.compile() }

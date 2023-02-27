@@ -28,16 +28,13 @@ import org.gradle.api.artifacts.component.ModuleComponentSelector
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.attributes.Category
 import org.gradle.api.attributes.LibraryElements
-import org.gradle.api.internal.artifacts.VariantTransformRegistry
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
 import org.gradle.api.internal.artifacts.dependencies.DefaultImmutableVersionConstraint
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ComponentResolvers
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.UnionVersionSelector
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionSelector
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionSelectorScheme
-import org.gradle.api.internal.artifacts.ivyservice.resolveengine.excludes.ModuleExclusions
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.excludes.specs.ExcludeSpec
-import org.gradle.api.internal.artifacts.transform.TransformedVariantFactory
 import org.gradle.api.internal.artifacts.type.ArtifactTypeRegistry
 import org.gradle.api.internal.attributes.*
 import org.gradle.api.internal.component.ArtifactType
@@ -58,9 +55,7 @@ import org.gradle.util.internal.BuildCommencedTimeProvider
 import java.io.File
 import java.nio.file.Path
 import java.util.*
-import java.util.concurrent.locks.ReentrantLock
 import javax.inject.Inject
-import kotlin.concurrent.withLock
 import kotlin.io.path.*
 
 open class RemappedComponentResolvers @Inject constructor(
@@ -76,9 +71,6 @@ open class RemappedComponentResolvers @Inject constructor(
     private val attributesFactory: ImmutableAttributesFactory,
     private val instantiator: NamedObjectInstantiator,
     private val versionSelectorSchema: VersionSelectorScheme,
-    private val moduleExclusions: ModuleExclusions,
-    private val variantTransforms: VariantTransformRegistry,
-    private val transformedVariantFactory: TransformedVariantFactory,
 
     cacheProvider: CodevCacheProvider
 ) : ComponentResolvers, DependencyToComponentIdResolver, ComponentMetaDataResolver, OriginArtifactSelector, ArtifactResolver {
@@ -387,17 +379,9 @@ open class RemappedComponentResolvers @Inject constructor(
             if (!result.hasResult()) {
                 result.notFound(artifact.id)
             }
-        } else {
-            if (!reentrantLock.isLocked) {
-                reentrantLock.withLock {
-                    resolvers.get().artifactResolver.resolveArtifact(artifact, moduleSources, result)
-                }
-            }
+        } else if (artifact is PassthroughRemappedArtifactMetadata) {
+            resolvers.get().artifactResolver.resolveArtifact(artifact.original, moduleSources, result)
         }
-    }
-
-    companion object {
-        private val reentrantLock = ReentrantLock()
     }
 }
 

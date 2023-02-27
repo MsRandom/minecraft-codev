@@ -411,6 +411,10 @@ open class PatchedSetupState @Inject constructor(
             }
 
             spec.args(*args.toTypedArray())
+
+            // TODO maybe add logging instead of nullifying output?
+            @Suppress("UnstableApiUsage")
+            spec.standardOutput = nullOutputStream()
         }
 
         result.assertNormalExitValue()
@@ -533,7 +537,7 @@ open class PatchedSetupState @Inject constructor(
                 val path = patchedCacheManager.fileStoreDirectory.resolve(patchesHash.toString())
                     .resolve(manifest.id)
                     .resolve(checksumService.sha1(output.toFile()).toString())
-                    .resolve("forge-${manifest.id}-${parseLibrary(userdevConfig.universal).id.version}.${ArtifactTypeDefinition.JAR_TYPE}")
+                    .resolve("forge-${parseLibrary(userdevConfig.universal).id.version}.${ArtifactTypeDefinition.JAR_TYPE}")
 
                 path.parent.createDirectories()
                 output.copyTo(path, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)

@@ -25,6 +25,7 @@ import org.gradle.api.plugins.JvmEcosystemPlugin
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
 import java.io.File
+import kotlin.io.path.createDirectories
 import kotlin.io.path.reader
 import kotlin.io.path.writeLines
 
@@ -171,6 +172,8 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
 
             "minecraft_classpath_file" -> {
                 val path = project.layout.buildDirectory.dir("legacyClasspath").get().file("legacyClasspath.txt").asFile.toPath()
+
+                path.parent.createDirectories()
                 path.writeLines(project.configurations.getByName(sourceSet.get().runtimeClasspathConfigurationName).map(File::getAbsolutePath))
 
                 path.toAbsolutePath().toString()

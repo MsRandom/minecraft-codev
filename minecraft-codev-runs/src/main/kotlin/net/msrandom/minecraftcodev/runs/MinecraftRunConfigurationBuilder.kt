@@ -11,7 +11,7 @@ import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSetContainer
 import javax.inject.Inject
 
-abstract class MinecraftRunConfigurationBuilder @Inject constructor(private val name: String, private val runsContainer: RunsContainer) : Named {
+abstract class MinecraftRunConfigurationBuilder @Inject constructor(private val project: Project, private val name: String, private val runsContainer: RunsContainer) : Named {
     private val setupActions = mutableListOf<Action<MinecraftRunConfiguration>>()
     private val configurationActions = mutableListOf<Action<MinecraftRunConfiguration>>()
 
@@ -19,6 +19,13 @@ abstract class MinecraftRunConfigurationBuilder @Inject constructor(private val 
         get() = runsContainer.extensions
             .getByType(RunConfigurationDefaultsContainer::class.java)
             .also { it.builder = this }
+
+    val friendlyName
+        get() = if (project == project.rootProject) {
+            "Run $name"
+        } else {
+            "Run ${project.path} $name"
+        }
 
     override fun getName() = name
 
@@ -130,7 +137,7 @@ abstract class MinecraftRunConfigurationBuilder @Inject constructor(private val 
         if (it is MinecraftRunConfiguration.Argument) it else MinecraftRunConfiguration.Argument(it)
     }
 
-    internal fun build(project: Project) = project.objects.newInstance(MinecraftRunConfiguration::class.java).also {
+    internal fun build() = project.objects.newInstance(MinecraftRunConfiguration::class.java).also {
         for (action in setupActions) {
             action.execute(it)
         }

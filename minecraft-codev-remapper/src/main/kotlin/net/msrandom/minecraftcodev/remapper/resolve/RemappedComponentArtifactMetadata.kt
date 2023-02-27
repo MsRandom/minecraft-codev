@@ -58,3 +58,5 @@ class RemappedComponentArtifactMetadata(
 
     override fun getComponentId() = id
 }
+
+class PassthroughRemappedArtifactMetadata(val original: ComponentArtifactMetadata): ComponentArtifactMetadata by original

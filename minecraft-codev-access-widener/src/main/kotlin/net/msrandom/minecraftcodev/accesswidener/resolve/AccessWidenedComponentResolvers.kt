@@ -48,9 +48,7 @@ import org.gradle.util.internal.BuildCommencedTimeProvider
 import java.nio.file.Path
 import java.security.DigestInputStream
 import java.security.MessageDigest
-import java.util.concurrent.locks.ReentrantLock
 import javax.inject.Inject
-import kotlin.concurrent.withLock
 import kotlin.io.path.Path
 import kotlin.io.path.copyTo
 import kotlin.io.path.createDirectories
@@ -134,7 +132,7 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                                 AccessWidenedComponentArtifactMetadata(artifact as ModuleComponentArtifactMetadata, identifier, namespace)
                             }
                         } else {
-                            artifact
+                            PassthroughAccessWidenedArtifactMetadata(artifact)
                         }
                     },
                     emptyList(),
@@ -309,17 +307,13 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                     output.toFile()
                 }
             }
-        } else {
-            if (!reentrantLock.isLocked) {
-                reentrantLock.withLock {
-                    resolvers.get().artifactResolver.resolveArtifact(artifact, moduleSources, result)
-                }
-            }
-        }
-    }
 
-    companion object {
-        private val reentrantLock = ReentrantLock()
+            if (!result.hasResult()) {
+                result.notFound(artifact.id)
+            }
+        } else if (artifact is PassthroughAccessWidenedArtifactMetadata) {
+            resolvers.get().artifactResolver.resolveArtifact(artifact.original, moduleSources, result)
+        }
     }
 }
 

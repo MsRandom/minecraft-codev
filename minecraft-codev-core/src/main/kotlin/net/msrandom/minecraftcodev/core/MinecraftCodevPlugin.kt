@@ -9,10 +9,12 @@ import net.msrandom.minecraftcodev.core.dependency.handleCustomQueryResolvers
 import net.msrandom.minecraftcodev.core.dependency.registerCustomDependency
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
 import net.msrandom.minecraftcodev.core.utils.applyPlugin
+import net.msrandom.minecraftcodev.core.utils.named
 import org.gradle.api.Plugin
 import org.gradle.api.attributes.Attribute
 import org.gradle.api.invocation.Gradle
 import org.gradle.api.plugins.PluginAware
+import org.gradle.internal.os.OperatingSystem
 import org.gradle.nativeplatform.OperatingSystemFamily
 
 open class MinecraftCodevPlugin<T : PluginAware> : Plugin<T> {
@@ -37,14 +39,17 @@ open class MinecraftCodevPlugin<T : PluginAware> : Plugin<T> {
                 it.compatibilityRules.add(VersionPatternCompatibilityRule::class.java)
             }
         }
+
+        project.configurations.all { configuration ->
+            configuration.attributes {
+                it.attribute(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE, project.objects.named(OperatingSystem.current().familyName))
+            }
+        }
     }
 
     companion object {
         @JvmField
         val OPERATING_SYSTEM_VERSION_PATTERN_ATTRIBUTE: Attribute<String> = Attribute.of("net.msrandom.minecraftcodev.operatingSystemVersionPattern", String::class.java)
-
-        @JvmField
-        val LAUNCH_WRAPPER_TRANSFORMED_ATTRIBUTE: Attribute<Boolean> = Attribute.of("net.msrandom.minecraftcodev.launchWrapperTransformed", Boolean::class.javaObjectType)
 
         val json = Json {
             ignoreUnknownKeys = true
