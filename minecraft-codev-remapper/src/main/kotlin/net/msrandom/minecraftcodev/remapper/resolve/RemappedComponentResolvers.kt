@@ -188,7 +188,7 @@ open class RemappedComponentResolvers @Inject constructor(
                                 selectedArtifacts
                             )
                         } else {
-                            artifact
+                            PassthroughRemappedArtifactMetadata(artifact)
                         }
                     },
 
