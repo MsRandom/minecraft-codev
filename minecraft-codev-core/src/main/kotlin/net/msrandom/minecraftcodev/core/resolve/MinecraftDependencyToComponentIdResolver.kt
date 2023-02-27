@@ -61,7 +61,11 @@ open class MinecraftDependencyToComponentIdResolver @Inject constructor(
         identifierFactory: (String, String) -> ModuleComponentIdentifier
     ) {
         val componentSelector = dependency.selector as ModuleComponentSelector
-        if (acceptor?.isDynamic != false) {
+        if (acceptor == null) {
+            return
+        }
+
+        if (acceptor.isDynamic) {
             val attributesSchema = project.dependencies.attributesSchema as AttributesSchemaInternal
 
             for (repository in repositories) {
@@ -91,9 +95,7 @@ open class MinecraftDependencyToComponentIdResolver @Inject constructor(
                             override fun getStatusScheme() = scheme
                         }
 
-                        val accepted = if (acceptor == null) {
-                            true
-                        } else if (acceptor is VersionRangeSelector) {
+                        val accepted = if (acceptor is VersionRangeSelector) {
                             VersionRangeSelector(acceptor.selector, { x, y -> compareVersions(x.source, y.source) }, versionParser).accept(id)
                         } else if (acceptor.requiresMetadata()) {
                             acceptor.accept(metadata)

@@ -69,7 +69,7 @@ open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory, p
     private val mappingsCache = ConcurrentHashMap<Configuration, Mappings>()
 
     init {
-        mappingsResolution.add(MappingResolutionRule { path, extension, visitor, configuration, decorate, existingMappings, objects ->
+        mappingsResolution.add { path, extension, visitor, configuration, decorate, existingMappings, objects ->
             val isJar = extension == "jar"
             var result = false
 
@@ -85,7 +85,7 @@ open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory, p
             }
 
             result
-        })
+        }
 
         mappingsResolution.add { path, extension, visitor, _, decorate, _, _ ->
             if (extension == "txt") {

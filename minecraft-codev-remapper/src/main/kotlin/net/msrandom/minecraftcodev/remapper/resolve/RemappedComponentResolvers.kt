@@ -99,12 +99,13 @@ open class RemappedComponentResolvers @Inject constructor(
         for (dependency in dependencies) {
             val selector = dependency.selector
             val constraint = if (selector is ModuleComponentSelector) selector.versionConstraint else DefaultImmutableVersionConstraint.of()
+            val strictly = if (constraint.strictVersion.isEmpty()) null else versionSelectorSchema.parseSelector(constraint.strictVersion)
             val require = if (constraint.requiredVersion.isEmpty()) null else versionSelectorSchema.parseSelector(constraint.requiredVersion)
             val preferred = if (constraint.preferredVersion.isEmpty()) null else versionSelectorSchema.parseSelector(constraint.preferredVersion)
             val reject = UnionVersionSelector(constraint.rejectedVersions.map(versionSelectorSchema::parseSelector))
             val idResult = DefaultBuildableComponentIdResolveResult()
 
-            resolvers.get().componentIdResolver.resolve(dependency, preferred ?: require, reject, idResult)
+            resolvers.get().componentIdResolver.resolve(dependency, strictly ?: preferred ?: require, reject, idResult)
 
             val metadata = idResult.metadata ?: run {
                 val componentResult = DefaultBuildableComponentResolveResult()

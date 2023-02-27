@@ -21,6 +21,7 @@ import org.gradle.api.plugins.ExtensionAware
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.SourceSet
 import org.gradle.configurationcache.extensions.serviceOf
+import org.gradle.internal.component.external.model.DefaultModuleComponentIdentifier
 import org.gradle.internal.os.OperatingSystem
 import java.util.jar.Attributes
 import java.util.jar.JarFile
@@ -222,11 +223,12 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
 
                 repositories.firstNotNullOfOrNull { repository ->
                     val cachePolicy = (configuration.resolutionStrategy as ResolutionStrategyInternal).cachePolicy
+                    val id = artifact.id.componentIdentifier as ModuleComponentIdentifier
 
                     project.serviceOf<StartParameterResolutionOverride>().applyToCachePolicy(cachePolicy)
 
                     MinecraftMetadataGenerator.getVersionManifest(
-                        artifact.id.componentIdentifier as ModuleComponentIdentifier,
+                        DefaultModuleComponentIdentifier(id.moduleIdentifier, artifact.moduleVersion.id.version),
                         repository.url,
                         getCacheProvider(project.gradle).manager("minecraft"),
                         cachePolicy,
