@@ -14,8 +14,10 @@ import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin
 import net.msrandom.minecraftcodev.forge.UserdevConfig
 import net.msrandom.minecraftcodev.forge.dependency.PatchedComponentIdentifier
 import net.msrandom.minecraftcodev.forge.dependency.PatchedMinecraftDependencyMetadata
+import net.msrandom.minecraftcodev.forge.resolve.PatchedSetupState.Companion.getClientExtrasOutput
 import org.gradle.api.Project
 import org.gradle.api.artifacts.component.ComponentIdentifier
+import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.internal.artifacts.RepositoriesSupplier
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ComponentResolvers
@@ -25,6 +27,8 @@ import org.gradle.api.internal.artifacts.type.ArtifactTypeRegistry
 import org.gradle.api.internal.attributes.ImmutableAttributes
 import org.gradle.api.internal.component.ArtifactType
 import org.gradle.api.model.ObjectFactory
+import org.gradle.internal.component.external.model.DefaultModuleComponentArtifactIdentifier
+import org.gradle.internal.component.external.model.DefaultModuleComponentArtifactMetadata
 import org.gradle.internal.component.external.model.MetadataSourcedComponentArtifacts
 import org.gradle.internal.component.model.*
 import org.gradle.internal.hash.ChecksumService
@@ -91,6 +95,17 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
                     objectFactory.newInstance(MinecraftMetadataGenerator::class.java, minecraftCacheManager).resolveMetadata(
                         repository,
                         config.libraries,
+                        listOf(
+                            DefaultModuleComponentArtifactMetadata(
+                                DefaultModuleComponentArtifactIdentifier(
+                                    identifier,
+                                    identifier.module,
+                                    ArtifactTypeDefinition.ZIP_TYPE,
+                                    ArtifactTypeDefinition.ZIP_TYPE,
+                                    PatchedSetupState.CLIENT_EXTRA
+                                )
+                            )
+                        ),
                         repository.resourceAccessor,
                         identifier,
                         componentOverrideMetadata,
@@ -135,21 +150,65 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
     override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactResolveResult) {
         if (artifact.componentId is PatchedComponentIdentifier) {
             val moduleComponentIdentifier = artifact.componentId as PatchedComponentIdentifier
-            val patches = mutableListOf<File>()
-            project.visitConfigurationFiles(resolvers, project.configurations.getByName(moduleComponentIdentifier.patches), patches::add)
 
-            getPatchedOutput(
-                moduleComponentIdentifier,
-                repositories,
-                minecraftCacheManager,
-                patchedCacheManager,
-                cachePolicy,
-                checksumService,
-                timeProvider,
-                patches.first(),
-                project,
-                objectFactory
-            )?.let(result::resolved) ?: result.notFound(artifact.id)
+            if (artifact.name.classifier == PatchedSetupState.CLIENT_EXTRA) {
+                for (repository in repositories) {
+                    val manifest = MinecraftMetadataGenerator.getVersionManifest(
+                        moduleComponentIdentifier,
+                        repository.url,
+                        minecraftCacheManager,
+                        cachePolicy,
+                        repository.resourceAccessor,
+                        checksumService,
+                        timeProvider,
+                        null
+                    )
+
+                    if (manifest != null) {
+                        val clientJar = resolveMojangFile(
+                            manifest,
+                            minecraftCacheManager,
+                            checksumService,
+                            repository,
+                            MinecraftComponentResolvers.CLIENT_DOWNLOAD
+                        )
+
+                        if (clientJar != null) {
+                            val clientExtra = getClientExtrasOutput(
+                                moduleComponentIdentifier,
+                                manifest,
+                                minecraftCacheManager,
+                                patchedCacheManager,
+                                cachePolicy,
+                                clientJar,
+                                project
+                            )
+
+                            result.resolved(clientExtra)
+
+                            return
+                        }
+                    }
+                }
+
+                result.notFound(artifact.id)
+            } else {
+                val patches = mutableListOf<File>()
+                project.visitConfigurationFiles(resolvers, project.configurations.getByName(moduleComponentIdentifier.patches), patches::add)
+
+                getPatchedOutput(
+                    moduleComponentIdentifier,
+                    repositories,
+                    minecraftCacheManager,
+                    patchedCacheManager,
+                    cachePolicy,
+                    checksumService,
+                    timeProvider,
+                    patches.first(),
+                    project,
+                    objectFactory
+                )?.let(result::resolved) ?: result.notFound(artifact.id)
+            }
         }
     }
 
@@ -219,7 +278,18 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
                     )
 
                     if (clientJar != null && serverJar != null) {
-                        return PatchedSetupState.getPatchedOutput(moduleComponentIdentifier, manifest, clientJar, serverJar, patches, minecraftCacheManager, patchedCacheManager, cachePolicy, project, objectFactory)
+                        return PatchedSetupState.getForgePatchedOutput(
+                            moduleComponentIdentifier,
+                            manifest,
+                            clientJar,
+                            serverJar,
+                            patches,
+                            minecraftCacheManager,
+                            patchedCacheManager,
+                            cachePolicy,
+                            project,
+                            objectFactory
+                        )
                     }
                 }
             }

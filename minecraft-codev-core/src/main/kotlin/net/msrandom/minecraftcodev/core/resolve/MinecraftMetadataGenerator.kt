@@ -98,6 +98,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
     fun resolveMetadata(
         repository: MinecraftRepositoryImpl.Resolver,
         extraLibraries: List<ModuleLibraryIdentifier>,
+        extraArtifacts: List<ComponentArtifactMetadata>,
         resourceAccessor: DefaultCacheAwareExternalResourceAccessor,
         moduleComponentIdentifier: ModuleComponentIdentifier,
         requestMetaData: ComponentOverrideMetadata,
@@ -154,7 +155,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
             val extractionResult = extractionState(repository, manifest)?.value
             val libraries = collectLibraries(manifest, extractionResult?.libraries ?: emptyList())
             val artifact = artifact(ArtifactTypeDefinition.JAR_TYPE)
-            val artifacts = listOf(artifact)
+            val artifacts = listOf(artifact) + extraArtifacts
 
             val variants = mutableListOf<ConfigurationMetadata>()
 

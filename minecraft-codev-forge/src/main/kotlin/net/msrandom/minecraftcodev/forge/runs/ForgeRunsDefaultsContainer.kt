@@ -26,6 +26,7 @@ import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
 import java.io.File
 import kotlin.io.path.reader
+import kotlin.io.path.writeLines
 
 open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefaultsContainer) {
     private fun MinecraftRunConfiguration.getUserdevData() = sourceSet.flatMap {
@@ -168,7 +169,15 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
                 path
             }
 
+            "minecraft_classpath_file" -> {
+                val path = project.layout.buildDirectory.dir("legacyClasspath").get().file("legacyClasspath.txt").asFile.toPath()
+                path.writeLines(project.configurations.getByName(sourceSet.get().runtimeClasspathConfigurationName).map(File::getAbsolutePath))
+
+                path.toAbsolutePath().toString()
+            }
+
             "natives" -> project.tasks.withType(ExtractNatives::class.java).getByName(extractNativesName).destinationDirectory.get()
+
             else -> {
                 project.logger.warn("Unknown Forge userdev run configuration template $template")
                 template
@@ -233,22 +242,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
             for ((key, value) in run.props) {
                 if (value.startsWith('{')) {
                     val template = value.substring(1, value.length - 1)
-                    if (template == "minecraft_classpath_file") {
-                        val configuration = project.configurations.getByName(sourceSet.get().runtimeClasspathConfigurationName).resolvedConfiguration.resolvedArtifacts
-
-                        val minecraftJars = configuration.filter {
-                            it.moduleVersion.id.group == MinecraftComponentResolvers.GROUP && it.moduleVersion.id.name == "forge" && it.extension == "jar"
-                        }.joinToString(",") { it.file.absolutePath }
-
-                        val fmlJars = configuration.filter {
-                            it.moduleVersion.id.group == "net.minecraftforge" && (it.moduleVersion.id.name == "fmlcore" || it.moduleVersion.id.name == "javafmllanguage" || it.moduleVersion.id.name == "mclanguage")
-                        }.joinToString(",") { it.file.absolutePath }
-
-                        jvmArguments.add(MinecraftRunConfiguration.Argument("-DminecraftCodev.minecraftJars=$minecraftJars"))
-                        jvmArguments.add(MinecraftRunConfiguration.Argument("-DminecraftCodev.fmlJars=$fmlJars"))
-                    } else {
-                        jvmArguments.add(MinecraftRunConfiguration.Argument("-D$key=", resolveTemplate(manifest, config, template, taskName)))
-                    }
+                    jvmArguments.add(MinecraftRunConfiguration.Argument("-D$key=", resolveTemplate(manifest, config, template, taskName)))
                 } else {
                     jvmArguments.add(MinecraftRunConfiguration.Argument("-D$key=$value"))
                 }
