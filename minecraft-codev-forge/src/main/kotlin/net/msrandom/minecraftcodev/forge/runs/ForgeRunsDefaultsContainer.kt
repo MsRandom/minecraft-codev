@@ -131,7 +131,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
                     .firstOrNull {
                         it.moduleVersion.id.group == MinecraftComponentResolvers.GROUP &&
                                 it.moduleVersion.id.name == "forge" &&
-                                it.name == "mappings" &&
+                                it.classifier == "mappings" &&
                                 it.extension == ArtifactTypeDefinition.ZIP_TYPE
                     }
                     ?.file

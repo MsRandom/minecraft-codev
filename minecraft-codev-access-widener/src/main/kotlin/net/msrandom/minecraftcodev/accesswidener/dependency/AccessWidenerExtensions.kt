@@ -1,14 +1,45 @@
 package net.msrandom.minecraftcodev.accesswidener.dependency
 
+import groovy.lang.Closure
+import net.msrandom.minecraftcodev.accesswidener.MinecraftCodevAccessWidenerPlugin
+import net.msrandom.minecraftcodev.core.utils.sourceSetName
 import org.gradle.api.Action
+import org.gradle.api.Named
+import org.gradle.api.artifacts.Dependency
+import org.gradle.api.artifacts.ExternalModuleDependency
 import org.gradle.api.artifacts.FileCollectionDependency
 import org.gradle.api.artifacts.ModuleDependency
+import org.gradle.api.tasks.SourceSet
+import org.jetbrains.kotlin.gradle.plugin.HasKotlinDependencies
+import org.jetbrains.kotlin.gradle.plugin.KotlinDependencyHandler
+import org.jetbrains.kotlin.gradle.plugin.mpp.DefaultKotlinDependencyHandler
+
+val SourceSet.accessWidenersConfigurationName get() = sourceSetName(name, MinecraftCodevAccessWidenerPlugin.ACCESS_WIDENERS_CONFIGURATION)
+val HasKotlinDependencies.accessWidenersConfigurationName get() = sourceSetName((this as Named).name, MinecraftCodevAccessWidenerPlugin.ACCESS_WIDENERS_CONFIGURATION)
 
 val <T : ModuleDependency> T.accessWidened
     get() = accessWidened()
 
 val FileCollectionDependency.accessWidened
     get() = accessWidened()
+
+fun KotlinDependencyHandler.accessWideners(dependencyNotation: Any) = (this as DefaultKotlinDependencyHandler).let {
+    it.project.dependencies.add(it.parent.accessWidenersConfigurationName, dependencyNotation)
+}
+
+fun KotlinDependencyHandler.accessWideners(dependencyNotation: String, configure: ExternalModuleDependency.() -> Unit) =
+    (accessWideners(dependencyNotation) as ExternalModuleDependency).also(configure)
+
+fun <T : Dependency> KotlinDependencyHandler.accessWideners(dependency: T, configure: T.() -> Unit) = (this as DefaultKotlinDependencyHandler).let {
+    configure(dependency)
+    it.project.dependencies.add(it.parent.accessWidenersConfigurationName, dependency)
+}
+
+fun KotlinDependencyHandler.accessWideners(dependencyNotation: String, configure: Closure<*>) =
+    accessWideners(dependencyNotation) { project.configure(this, configure) }
+
+fun <T : Dependency> KotlinDependencyHandler.accessWideners(dependency: T, configure: Closure<*>) =
+    accessWideners(dependency) { project.configure(this, configure) }
 
 @JvmOverloads
 fun <T : ModuleDependency> T.accessWidened(arguments: Map<String, Any>, configure: Action<T>? = null) = getAccessWidened(arguments, configure)

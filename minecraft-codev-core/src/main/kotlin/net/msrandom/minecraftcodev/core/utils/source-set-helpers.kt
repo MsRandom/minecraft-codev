@@ -13,6 +13,12 @@ import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSetContainer
 import org.jetbrains.kotlin.gradle.plugin.KotlinTargetsContainer
 import org.jetbrains.kotlin.gradle.utils.extendsFrom
 
+fun sourceSetName(sourceSet: String, configuration: String) = if (sourceSet == SourceSet.MAIN_SOURCE_SET_NAME) {
+    configuration
+} else {
+    "$sourceSet${StringUtils.capitalize(configuration)}"
+}
+
 /**
  * Find a matching configuration name by attempting to find which source set the resolving module configuration is from.
  */

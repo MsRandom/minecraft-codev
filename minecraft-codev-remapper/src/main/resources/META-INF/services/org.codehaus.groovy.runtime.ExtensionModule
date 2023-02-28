@@ -1,0 +1,3 @@
+moduleName = remapper
+moduleVersion = 1.0
+extensionClasses = net.msrandom.minecraftcodev.remapper.dependency.RemapperExtensionsKt

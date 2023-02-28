@@ -86,7 +86,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
     override fun resolve(identifier: ComponentIdentifier, componentOverrideMetadata: ComponentOverrideMetadata, result: BuildableComponentResolveResult) {
         if (identifier is PatchedComponentIdentifier) {
             val patches = mutableListOf<File>()
-            project.visitConfigurationFiles(resolvers, project.configurations.getByName(identifier.patches), patches::add)
+            project.visitConfigurationFiles(resolvers, project.configurations.getByName(identifier.patches), null, patches::add)
 
             val config = UserdevConfig.fromFile(patches.first())
 
@@ -194,7 +194,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
                 result.notFound(artifact.id)
             } else {
                 val patches = mutableListOf<File>()
-                project.visitConfigurationFiles(resolvers, project.configurations.getByName(moduleComponentIdentifier.patches), patches::add)
+                project.visitConfigurationFiles(resolvers, project.configurations.getByName(moduleComponentIdentifier.patches), null, patches::add)
 
                 getPatchedOutput(
                     moduleComponentIdentifier,

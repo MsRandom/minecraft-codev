@@ -24,7 +24,7 @@ class MappingsArtifact(private val componentIdentifier: ModuleComponentIdentifie
     ModuleComponentArtifactMetadata {
     override fun getId() = DefaultModuleComponentArtifactIdentifier(componentIdentifier, name)
     override fun getComponentId() = componentIdentifier
-    override fun getName() = DefaultIvyArtifactName("mappings", ArtifactTypeDefinition.ZIP_TYPE, ArtifactTypeDefinition.ZIP_TYPE)
+    override fun getName() = DefaultIvyArtifactName(componentIdentifier.module, ArtifactTypeDefinition.ZIP_TYPE, ArtifactTypeDefinition.ZIP_TYPE, "mappings")
     override fun getBuildDependencies(): TaskDependency = TaskDependencyInternal.EMPTY
 
     override fun toArtifactIdentifier() = DefaultArtifactIdentifier(

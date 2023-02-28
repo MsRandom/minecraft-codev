@@ -139,10 +139,12 @@ open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory, p
                 ComponentResolversChain(resolvers, project.serviceOf(), project.serviceOf())
             }
 
-            project.visitConfigurationFiles({ resolvers }, configuration) { file ->
-                for (rule in mappingsResolution.get()) {
-                    if (rule.loadMappings(file.toPath(), file.extension, tree, configuration, { DigestInputStream(this, md) }, tree, objects)) {
-                        break
+            for (dependency in configuration.allDependencies) {
+                project.visitConfigurationFiles({ resolvers }, configuration, dependency) { file ->
+                    for (rule in mappingsResolution.get()) {
+                        if (rule.loadMappings(file.toPath(), file.extension, tree, configuration, { DigestInputStream(this, md) }, tree, objects)) {
+                            break
+                        }
                     }
                 }
             }
