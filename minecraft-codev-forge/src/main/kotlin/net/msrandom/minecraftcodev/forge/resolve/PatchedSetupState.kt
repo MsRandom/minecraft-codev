@@ -67,7 +67,9 @@ open class PatchedSetupState @Inject constructor(
     private val objects: ObjectFactory,
     private val repositoriesSupplier: RepositoriesSupplier
 ) {
-    private val extractionState = getExtractionState(cacheManager, buildOperationExecutor, manifest, serverJar) { clientJar }
+    private val extractionState by lazy {
+        getExtractionState(cacheManager, buildOperationExecutor, manifest, { serverJar }) { clientJar }.value!!
+    }
 
     private val userdevConfig by lazy {
         zipFileSystem(userdevConfigFile.toPath()).use { fs ->
@@ -89,7 +91,7 @@ open class PatchedSetupState @Inject constructor(
         val merged = Files.createTempFile("merged-", ".tmp.jar")
 
         override fun description() = BuildOperationDescriptor
-            .displayName("Merging ${clientJar.toPath()} and ${extractionState.value.result}")
+            .displayName("Merging ${clientJar.toPath()} and ${extractionState.result}")
             .progressDisplayName("Merging to $merged")
             .metadata(BuildOperationCategory.TASK)
 
@@ -98,7 +100,7 @@ open class PatchedSetupState @Inject constructor(
                 mcpConfig.functions.getValue("merge"),
                 mapOf(
                     "client" to clientJar.absolutePath,
-                    "server" to extractionState.value.result.toAbsolutePath(),
+                    "server" to extractionState.result.toAbsolutePath(),
                     "version" to manifest.id,
                     "output" to merged.toAbsolutePath()
                 )
@@ -190,7 +192,6 @@ open class PatchedSetupState @Inject constructor(
     })
 
     private fun renamed(): Path = buildOperationExecutor.call(object : CallableBuildOperation<Path> {
-        val extractionState = getExtractionState(cacheManager, buildOperationExecutor, manifest, serverJar) { clientJar }
         val input = if (userdevConfig.notchObf) patched() else merged()
         val renamed = Files.createTempFile("renamed-", ".tmp.jar")
         val fixedMappingsPath = Files.createTempFile("mappings-", ".tmp.tsrg")
@@ -277,7 +278,7 @@ open class PatchedSetupState @Inject constructor(
                 Triple(
                     "libraries",
                     "-e",
-                    extractionState.value
+                    extractionState
                         .libraries
                         .map { resolveArtifact(resolvers, LibraryInfo(it, null)).toString() }
                 )

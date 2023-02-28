@@ -14,9 +14,9 @@ import java.nio.file.StandardCopyOption
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.*
 
-private val extractionStates = ConcurrentHashMap<String, Lazy<ServerExtractionResult>>()
+private val extractionStates = ConcurrentHashMap<String, Lazy<ServerExtractionResult?>>()
 
-fun getExtractionState(cacheManager: CodevCacheManager, buildOperationExecutor: BuildOperationExecutor, manifest: MinecraftVersionMetadata, serverJarProvider: () -> File, clientJar: () -> File) =
+fun getExtractionState(cacheManager: CodevCacheManager, buildOperationExecutor: BuildOperationExecutor, manifest: MinecraftVersionMetadata, serverJarProvider: () -> File?, clientJar: () -> File) =
     extractionStates.computeIfAbsent(manifest.id) {
         lazy {
             val extractedServerData = cacheManager.rootPath
@@ -33,45 +33,50 @@ fun getExtractionState(cacheManager: CodevCacheManager, buildOperationExecutor: 
 
                 ServerExtractionResult(extractedJar, isBundled, commonLibraries)
             } else {
-                buildOperationExecutor.call(object : CallableBuildOperation<ServerExtractionResult> {
-                    val serverJar = serverJarProvider()
+                val serverJar = serverJarProvider()
 
-                    override fun description() = BuildOperationDescriptor
-                        .displayName("Extracting $serverJar")
-                        .progressDisplayName(extractedJar.toString())
-                        .metadata(BuildOperationCategory.TASK)
+                if (serverJar == null) {
+                    null
+                } else {
+                    buildOperationExecutor.call(object : CallableBuildOperation<ServerExtractionResult> {
 
-                    override fun call(context: BuildOperationContext) = context.callWithStatus {
-                        val temporaryServer = Files.createTempFile("server-", ".tmp.jar")
-                        val commonLibraries: Collection<ModuleLibraryIdentifier>
-                        val isBundled: Boolean
+                        override fun description() = BuildOperationDescriptor
+                            .displayName("Extracting $serverJar")
+                            .progressDisplayName(extractedJar.toString())
+                            .metadata(BuildOperationCategory.TASK)
 
-                        zipFileSystem(serverJar.toPath()).use { serverFs ->
-                            val librariesPath = serverFs.getPath("META-INF/libraries.list")
+                        override fun call(context: BuildOperationContext) = context.callWithStatus {
+                            val temporaryServer = Files.createTempFile("server-", ".tmp.jar")
+                            val commonLibraries: Collection<ModuleLibraryIdentifier>
+                            val isBundled: Boolean
 
-                            if (librariesPath.exists()) {
-                                // New server Jar, just extract it and populate the library list
-                                isBundled = true
-                                commonLibraries = ServerExtractor.extract(manifest.id, temporaryServer, serverFs, librariesPath)
-                            } else {
-                                // Old server Jar, strip the libraries out manually
-                                isBundled = false
-                                serverJar.toPath().copyTo(temporaryServer, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES)
-                                commonLibraries = ServerFixer.removeLibraries(manifest, temporaryServer, serverFs, clientJar().toPath())
+                            zipFileSystem(serverJar.toPath()).use { serverFs ->
+                                val librariesPath = serverFs.getPath("META-INF/libraries.list")
+
+                                if (librariesPath.exists()) {
+                                    // New server Jar, just extract it and populate the library list
+                                    isBundled = true
+                                    commonLibraries = ServerExtractor.extract(manifest.id, temporaryServer, serverFs, librariesPath)
+                                } else {
+                                    // Old server Jar, strip the libraries out manually
+                                    isBundled = false
+                                    serverJar.toPath().copyTo(temporaryServer, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES)
+                                    commonLibraries = ServerFixer.removeLibraries(manifest, temporaryServer, serverFs, clientJar().toPath())
+                                }
                             }
+
+                            extractedServerData.createDirectories()
+                            temporaryServer.copyTo(extractedJar, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES)
+                            libraries.writeLines(commonLibraries.map(ModuleLibraryIdentifier::toString))
+
+                            if (isBundled) {
+                                Files.createFile(bundledMark)
+                            }
+
+                            ServerExtractionResult(extractedJar, isBundled, commonLibraries)
                         }
-
-                        extractedServerData.createDirectories()
-                        temporaryServer.copyTo(extractedJar, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES)
-                        libraries.writeLines(commonLibraries.map(ModuleLibraryIdentifier::toString))
-
-                        if (isBundled) {
-                            Files.createFile(bundledMark)
-                        }
-
-                        ServerExtractionResult(extractedJar, isBundled, commonLibraries)
-                    }
-                })
+                    })
+                }
             }
         }
     }

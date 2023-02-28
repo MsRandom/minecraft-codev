@@ -29,7 +29,7 @@ fun getCommonJar(
     serverJar: File,
     clientJar: () -> File
 ): Lazy<Path> {
-    val (extractedServer, isBundled) = getExtractionState(cacheManager, buildOperationExecutor, manifest, serverJar, clientJar).value
+    val (extractedServer, isBundled) = getExtractionState(cacheManager, buildOperationExecutor, manifest, { serverJar }, clientJar).value!!
     return if (isBundled) {
         bundledCommonJarStates.computeIfAbsent(extractedServer) {
             lazy {
@@ -54,7 +54,7 @@ fun getClientJar(
     clientJar: File,
     serverJar: File
 ): Path {
-    val (extractedServer, isBundled) = getExtractionState(cacheManager, buildOperationExecutor, manifest, serverJar) { clientJar }.value
+    val (extractedServer, isBundled) = getExtractionState(cacheManager, buildOperationExecutor, manifest, { serverJar }) { clientJar }.value!!
 
     return if (isBundled) {
         val commonJar = getCommonJar(cacheManager, buildOperationExecutor, checksumService, pathFunction, manifest, serverJar) { clientJar }.value

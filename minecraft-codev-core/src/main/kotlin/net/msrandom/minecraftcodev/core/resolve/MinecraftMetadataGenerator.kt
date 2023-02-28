@@ -71,29 +71,24 @@ open class MinecraftMetadataGenerator @Inject constructor(
     private val timeProvider: BuildCommencedTimeProvider,
     private val cachePolicy: CachePolicy
 ) {
-    private fun extractionState(repository: MinecraftRepositoryImpl.Resolver, manifest: MinecraftVersionMetadata): Lazy<ServerExtractionResult>? {
-        val serverJar = resolveMojangFile(
-            manifest,
-            cacheManager,
-            checksumService,
-            repository,
-            MinecraftComponentResolvers.SERVER_DOWNLOAD
-        )
-
-        return if (serverJar == null) {
-            null
-        } else {
-            getExtractionState(cacheManager, buildOperationExecutor, manifest, serverJar) {
-                resolveMojangFile(
-                    manifest,
-                    cacheManager,
-                    checksumService,
-                    repository,
-                    MinecraftComponentResolvers.CLIENT_DOWNLOAD
-                )!!
-            }
+    private fun extractionState(repository: MinecraftRepositoryImpl.Resolver, manifest: MinecraftVersionMetadata) =
+        getExtractionState(cacheManager, buildOperationExecutor, manifest, {
+            resolveMojangFile(
+                manifest,
+                cacheManager,
+                checksumService,
+                repository,
+                MinecraftComponentResolvers.SERVER_DOWNLOAD
+            )
+        }) {
+            resolveMojangFile(
+                manifest,
+                cacheManager,
+                checksumService,
+                repository,
+                MinecraftComponentResolvers.CLIENT_DOWNLOAD
+            )!!
         }
-    }
 
     fun resolveMetadata(
         repository: MinecraftRepositoryImpl.Resolver,
@@ -152,7 +147,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
             }
 
             val defaultAttributes = ImmutableAttributes.EMPTY.addNamed(MappingsNamespace.attribute, mappingsNamespace)
-            val extractionResult = extractionState(repository, manifest)?.value
+            val extractionResult = extractionState(repository, manifest).value
             val libraries = collectLibraries(manifest, extractionResult?.libraries ?: emptyList())
             val artifact = artifact(ArtifactTypeDefinition.JAR_TYPE)
             val artifacts = listOf(artifact) + extraArtifacts
@@ -294,12 +289,12 @@ open class MinecraftMetadataGenerator @Inject constructor(
             val defaultAttributes = ImmutableAttributes.EMPTY.addNamed(MappingsNamespace.attribute, MappingsNamespace.OBF)
             when (moduleComponentIdentifier.module) {
                 MinecraftComponentResolvers.COMMON_MODULE -> {
-                    val extractionState = extractionState(repository, manifest) ?: return
+                    val extractionState = extractionState(repository, manifest).value ?: return
 
                     val library = CodevGradleLinkageLoader.ConfigurationMetadata(
                         Dependency.DEFAULT_CONFIGURATION,
                         moduleComponentIdentifier,
-                        collectLibraries(manifest, extractionState.value.libraries).common.map(::mapLibrary),
+                        collectLibraries(manifest, extractionState.libraries).common.map(::mapLibrary),
                         listOf(artifact),
                         defaultAttributes(manifest, defaultAttributes).libraryAttributes(),
                         ImmutableCapabilities.EMPTY,
@@ -335,7 +330,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                 }
 
                 MinecraftComponentResolvers.CLIENT_MODULE -> {
-                    val extractionResult = extractionState(repository, manifest)?.value
+                    val extractionResult = extractionState(repository, manifest).value
 
                     val commonDependency = extractionResult?.let {
                         MinecraftDependencyMetadataWrapper(
@@ -439,7 +434,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                 }
 
                 MinecraftComponentResolvers.CLIENT_NATIVES_MODULE -> {
-                    val extractionResult = extractionState(repository, manifest)?.value
+                    val extractionResult = extractionState(repository, manifest).value
                     val libraries = collectLibraries(manifest, extractionResult?.libraries ?: emptyList())
                     val variants = mutableListOf<ConfigurationMetadata>()
 
