@@ -669,7 +669,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
             return if (expiry.isMustCheck) {
                 null
             } else {
-                MinecraftVersionList(list)
+                MinecraftVersionList(list, versionManifest.parent)
             }
         }
 
@@ -693,7 +693,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
 
             return resource?.file?.let { file ->
                 file.inputStream().use {
-                    MinecraftVersionList(json.decodeFromStream(it))
+                    MinecraftVersionList(json.decodeFromStream(it), versionManifest.parent)
                 }
             }
         }
