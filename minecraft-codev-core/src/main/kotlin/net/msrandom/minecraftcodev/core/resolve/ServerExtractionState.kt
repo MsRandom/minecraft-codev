@@ -14,10 +14,10 @@ import java.nio.file.StandardCopyOption
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.*
 
-private val extractionStates = ConcurrentHashMap<File, Lazy<ServerExtractionResult>>()
+private val extractionStates = ConcurrentHashMap<String, Lazy<ServerExtractionResult>>()
 
-fun getExtractionState(cacheManager: CodevCacheManager, buildOperationExecutor: BuildOperationExecutor, manifest: MinecraftVersionMetadata, serverJar: File, clientJar: () -> File) =
-    extractionStates.computeIfAbsent(serverJar) {
+fun getExtractionState(cacheManager: CodevCacheManager, buildOperationExecutor: BuildOperationExecutor, manifest: MinecraftVersionMetadata, serverJarProvider: () -> File, clientJar: () -> File) =
+    extractionStates.computeIfAbsent(manifest.id) {
         lazy {
             val extractedServerData = cacheManager.rootPath
                 .resolve("extracted-servers")
@@ -34,6 +34,8 @@ fun getExtractionState(cacheManager: CodevCacheManager, buildOperationExecutor: 
                 ServerExtractionResult(extractedJar, isBundled, commonLibraries)
             } else {
                 buildOperationExecutor.call(object : CallableBuildOperation<ServerExtractionResult> {
+                    val serverJar = serverJarProvider()
+
                     override fun description() = BuildOperationDescriptor
                         .displayName("Extracting $serverJar")
                         .progressDisplayName(extractedJar.toString())
