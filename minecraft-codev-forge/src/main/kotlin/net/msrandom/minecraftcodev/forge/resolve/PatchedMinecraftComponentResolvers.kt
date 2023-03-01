@@ -178,7 +178,6 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
                                 moduleComponentIdentifier,
                                 manifest,
                                 minecraftCacheManager,
-                                patchedCacheManager,
                                 cachePolicy,
                                 clientJar,
                                 project

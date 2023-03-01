@@ -434,7 +434,6 @@ open class PatchedSetupState @Inject constructor(
             moduleComponentIdentifier: PatchedComponentIdentifier,
             manifest: MinecraftVersionMetadata,
             minecraftCacheManager: CodevCacheManager,
-            patchedCacheManager: CodevCacheManager,
             cachePolicy: CachePolicy,
             clientJar: File,
             project: Project
@@ -476,10 +475,11 @@ open class PatchedSetupState @Inject constructor(
                     }
 
                     val checksumService = project.serviceOf<ChecksumService>()
-                    val path = patchedCacheManager.fileStoreDirectory.resolve(CLIENT_EXTRA)
+                    val path = minecraftCacheManager.fileStoreDirectory
+                        .resolve("client-assets")
                         .resolve(manifest.id)
                         .resolve(checksumService.sha1(output.toFile()).toString())
-                        .resolve("forge-${manifest.id}-${CLIENT_EXTRA}.${ArtifactTypeDefinition.ZIP_TYPE}")
+                        .resolve("${manifest.id}-${CLIENT_EXTRA}.${ArtifactTypeDefinition.ZIP_TYPE}")
 
                     path.parent.createDirectories()
                     output.copyTo(path, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
