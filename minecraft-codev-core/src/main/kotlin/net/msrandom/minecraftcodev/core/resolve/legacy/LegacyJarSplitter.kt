@@ -2,6 +2,7 @@ package net.msrandom.minecraftcodev.core.resolve.legacy
 
 import net.msrandom.minecraftcodev.core.resolve.JarSplittingResult
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
+import net.msrandom.minecraftcodev.core.utils.LockingFileSystem
 import net.msrandom.minecraftcodev.core.utils.walk
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
@@ -85,8 +86,8 @@ object LegacyJarSplitter {
         value.add(AnnotationNode(annotation))
     }
 
-    fun <R> useFileSystems(action: ((FileSystem) -> Unit) -> R): R {
-        val fileSystems = mutableListOf<FileSystem>()
+    fun <R> useFileSystems(action: ((LockingFileSystem) -> Unit) -> R): R {
+        val fileSystems = mutableListOf<LockingFileSystem>()
         try {
             return action(fileSystems::add)
         } finally {
@@ -217,11 +218,11 @@ object LegacyJarSplitter {
 
             val extraCommonTypes = hashSetOf<Type>()
 
-            clientFs.getPath("/").walk {
+            clientFs.base.getPath("/").walk {
                 for (clientEntry in filter(Path::isRegularFile)) {
                     val pathName = clientEntry.toString()
                     if (pathName.endsWith(".class")) {
-                        val serverEntry = serverFs.getPath(pathName)
+                        val serverEntry = serverFs.base.getPath(pathName)
 
                         if (serverEntry.exists()) {
                             // Shared entry
@@ -253,16 +254,16 @@ object LegacyJarSplitter {
                             val writer = ClassWriter(serverReader, 0)
                             serverNode.accept(writer)
 
-                            val path = commonFs.getPath(pathName)
+                            val path = commonFs.base.getPath(pathName)
                             serverEntry.copyTo(path, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
                             path.writeBytes(writer.toByteArray(), StandardOpenOption.WRITE, StandardOpenOption.CREATE)
 
-                            newClientFs.getPath(pathName).deleteExisting()
+                            newClientFs.base.getPath(pathName).deleteExisting()
                         } else {
-                            clientEntry.copyTo(newClientFs.getPath(pathName), StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
+                            clientEntry.copyTo(newClientFs.base.getPath(pathName), StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
                         }
                     } else {
-                        newClientFs.getPath(pathName).deleteExisting()
+                        newClientFs.base.getPath(pathName).deleteExisting()
                     }
                 }
             }
@@ -271,7 +272,7 @@ object LegacyJarSplitter {
                 if (extraCommonType.sort == Type.OBJECT) {
                     val name = "${extraCommonType.internalName}.class"
 
-                    val commonPath = commonFs.getPath(name)
+                    val commonPath = commonFs.base.getPath(name)
                     if (commonPath.exists()) {
                         val reader = commonPath.inputStream().use(::ClassReader)
                         val node = ClassNode()
@@ -287,10 +288,10 @@ object LegacyJarSplitter {
                 }
             }
 
-            serverFs.getPath("/").walk {
+            serverFs.base.getPath("/").walk {
                 for (serverEntry in filter(Path::isRegularFile)) {
                     val name = serverEntry.toString()
-                    val output = commonFs.getPath(name)
+                    val output = commonFs.base.getPath(name)
                     if (name.endsWith(".class")) {
                         if (output.notExists()) {
                             val reader = serverEntry.inputStream().use(::ClassReader)
@@ -310,7 +311,7 @@ object LegacyJarSplitter {
                 }
             }
 
-            copyAssets(clientFs, serverFs, commonFs, newClientFs)
+            copyAssets(clientFs.base, serverFs.base, commonFs.base, newClientFs.base)
         }
 
         val commonPath = pathFunction(makeId(MinecraftComponentResolvers.COMMON_MODULE, version), checksumService.sha1(outputCommon.toFile()).toString())

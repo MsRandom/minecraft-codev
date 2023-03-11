@@ -1,5 +1,6 @@
 package net.msrandom.minecraftcodev.runs
 
+import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
 import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
@@ -8,6 +9,7 @@ import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
 import net.msrandom.minecraftcodev.core.utils.getCacheProvider
 import net.msrandom.minecraftcodev.core.utils.osVersion
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
+import net.msrandom.minecraftcodev.runs.task.DownloadAssets
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
 import org.apache.commons.lang3.StringUtils
 import org.apache.commons.lang3.SystemUtils
@@ -44,16 +46,17 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
 
     fun client(): RunConfigurationDefaultsContainer = apply {
         builder.action {
-            val plugin = project.plugins.getPlugin(MinecraftCodevRunsPlugin::class.java)
             val configuration = getConfiguration()
             val artifact = configuration.findMinecraft(MinecraftComponentResolvers.CLIENT_MODULE, ::client.name)
             val manifest = getManifest(configuration, artifact)
 
             @Suppress("UnstableApiUsage")
             val sourceSetName = sourceSet.get().takeUnless(SourceSet::isMain)?.name?.let(StringUtils::capitalize).orEmpty()
-            val task = project.tasks.withType(ExtractNatives::class.java).named("extract${sourceSetName}${StringUtils.capitalize(MinecraftCodevRunsPlugin.NATIVES_CONFIGURATION)}")
+            val extractNativesTask = project.tasks.withType(ExtractNatives::class.java).named("extract${sourceSetName}${StringUtils.capitalize(MinecraftCodevRunsPlugin.NATIVES_CONFIGURATION)}")
+            val downloadAssetsTask = project.tasks.withType(DownloadAssets::class.java).named("download${sourceSetName}Assets")
 
-            beforeRun.add(task)
+            beforeRun.add(extractNativesTask)
+            beforeRun.add(downloadAssetsTask)
 
             mainClass.set(manifest.map(MinecraftVersionMetadata::mainClass))
 
@@ -72,17 +75,27 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
                     if (argument.rules.isEmpty()) {
                         for (value in argument.value) {
                             if (value.startsWith("\${") && value.endsWith("}")) {
+                                val runs = project.extensions.getByType(MinecraftCodevExtension::class.java).extensions.getByType(RunsContainer::class.java)
+
                                 when (value.subSequence(2, value.length - 1)) {
                                     "version_name" -> fixedArguments.add(MinecraftRunConfiguration.Argument(it.id))
                                     "assets_root" -> {
-                                        AssetDownloader.downloadAssets(project, it.assetIndex)
-                                        fixedArguments.add(MinecraftRunConfiguration.Argument(plugin.assets))
+                                        downloadAssetsTask.configure { task ->
+                                            task.assetIndex.convention(it.assetIndex)
+                                        }
+
+                                        fixedArguments.add(MinecraftRunConfiguration.Argument(runs.assetsDirectory.asFile.get()))
                                     }
+
                                     "assets_index_name" -> fixedArguments.add(MinecraftRunConfiguration.Argument(it.assets))
                                     "game_assets" -> {
-                                        AssetDownloader.downloadAssets(project, it.assetIndex)
-                                        fixedArguments.add(MinecraftRunConfiguration.Argument(plugin.resources))
+                                        downloadAssetsTask.configure { task ->
+                                            task.assetIndex.convention(it.assetIndex)
+                                        }
+
+                                        fixedArguments.add(MinecraftRunConfiguration.Argument(runs.resourcesDirectory.asFile.get()))
                                     }
+
                                     "auth_access_token" -> fixedArguments.add(MinecraftRunConfiguration.Argument(Random.nextLong()))
                                     "user_properties" -> fixedArguments.add(MinecraftRunConfiguration.Argument("{}"))
                                     else -> fixedArguments.removeLastOrNull()
@@ -144,7 +157,7 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
                                 if (templateStart != -1) {
                                     val template = value.subSequence(templateStart + 2, value.indexOf('}'))
                                     if (template == "natives_directory") {
-                                        fixedJvmArguments.add(MinecraftRunConfiguration.Argument(value.substring(0, templateStart), task.flatMap(ExtractNatives::destinationDirectory)))
+                                        fixedJvmArguments.add(MinecraftRunConfiguration.Argument(value.substring(0, templateStart), extractNativesTask.flatMap(ExtractNatives::destinationDirectory)))
                                     } else {
                                         continue
                                     }
@@ -189,11 +202,11 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
                             } ?: throw UnsupportedOperationException("Version $artifactProvider does not have a server.")
 
                         zipFileSystem(serverJar.toPath()).use {
-                            val mainPath = it.getPath("META-INF/main-class")
+                            val mainPath = it.base.getPath("META-INF/main-class")
                             if (mainPath.exists()) {
                                 String(mainPath.readBytes())
                             } else {
-                                it.getPath(JarFile.MANIFEST_NAME).inputStream().use(::Manifest).mainAttributes.getValue(Attributes.Name.MAIN_CLASS)
+                                it.base.getPath(JarFile.MANIFEST_NAME).inputStream().use(::Manifest).mainAttributes.getValue(Attributes.Name.MAIN_CLASS)
                             }
                         }
                     }

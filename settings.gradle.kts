@@ -11,7 +11,8 @@ dependencyResolutionManagement {
         gradlePluginPortal()
         maven(url = "https://maven.msrandom.net/repository/root/")
         maven(url = "https://maven.fabricmc.net/")
-        maven(url = "https://maven.quiltmc.org/repository/release/") // Used for decompilation
+        maven(url = "https://maven.quiltmc.org/repository/release/")
+        maven(url = "https://repo.spongepowered.org/repository/maven-public/")
         maven(url = "https://maven.minecraftforge.net/")
     }
 }
@@ -23,4 +24,4 @@ include("minecraft-codev-forge", "minecraft-codev-forge:forge-runtime")
 include("minecraft-codev-fabric")
 include("minecraft-codev-runs")
 include("minecraft-codev-access-widener")
-include("minecraft-codev-mixin")
+include("minecraft-codev-mixins")

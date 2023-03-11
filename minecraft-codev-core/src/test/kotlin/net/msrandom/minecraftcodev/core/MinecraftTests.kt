@@ -7,6 +7,27 @@ import java.io.File
 
 @Testable
 class MinecraftTests {
+    private fun getJar() {}
+
+    @Test
+    fun `Legacy Server Stripping`() {
+    }
+
+    @Test
+    fun `Legacy Jar Splitting`() {
+
+    }
+
+    @Test
+    fun `Bundled Server Extraction`() {
+
+    }
+
+    @Test
+    fun `Bundled Jar Splitting`() {
+
+    }
+
     @Test
     fun `Basic Minecraft Build`() {
         GradleRunner.create()

@@ -3,7 +3,6 @@ package net.msrandom.minecraftcodev.core
 import kotlinx.serialization.json.Json
 import net.msrandom.minecraftcodev.core.attributes.OperatingSystemDisambiguationRule
 import net.msrandom.minecraftcodev.core.attributes.VersionPatternCompatibilityRule
-import net.msrandom.minecraftcodev.core.dependency.MinecraftDependencyFactory
 import net.msrandom.minecraftcodev.core.dependency.MinecraftIvyDependencyDescriptorFactory
 import net.msrandom.minecraftcodev.core.dependency.handleCustomQueryResolvers
 import net.msrandom.minecraftcodev.core.dependency.registerCustomDependency
@@ -21,7 +20,6 @@ open class MinecraftCodevPlugin<T : PluginAware> : Plugin<T> {
     private fun applyGradle(gradle: Gradle) = gradle.registerCustomDependency(
         "minecraft",
         MinecraftIvyDependencyDescriptorFactory::class.java,
-        MinecraftDependencyFactory::class.java,
         MinecraftComponentResolvers::class.java
     )
 

@@ -95,7 +95,7 @@ object JarRemapper {
         }
 
         zipFileSystem(output).use {
-            remapperExtension.remapFiles(mappings, it.getPath("/"), sourceNamespaceId, targetNamespaceId)
+            remapperExtension.remapFiles(mappings, it.base.getPath("/"), sourceNamespaceId, targetNamespaceId)
         }
 
         return output

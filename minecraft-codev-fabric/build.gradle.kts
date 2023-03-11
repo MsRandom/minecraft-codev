@@ -12,6 +12,7 @@ gradlePlugin {
 
 dependencies {
     implementation(projects.minecraftCodevRemapper)
+    implementation(projects.minecraftCodevMixins)
 }
 
 tasks.test {

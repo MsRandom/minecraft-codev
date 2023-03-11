@@ -63,7 +63,7 @@ abstract class ExtractNatives : DefaultTask() {
                 val extension = artifact.extension
                 if (extension == "jar" || extension == "zip") {
                     zipFileSystem(artifact.file.toPath()).use {
-                        val root = it.getPath("/")
+                        val root = it.base.getPath("/")
                         root.walk {
                             for (path in filter(Path::isRegularFile)) {
                                 val name = root.relativize(path).toString()

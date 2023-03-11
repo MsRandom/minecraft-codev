@@ -27,7 +27,7 @@ object SourcesGenerator {
                     }
 
                     zipFileSystem(Path(externalPath)).use {
-                        it.getPath(internalPath).readBytes()
+                        it.base.getPath(internalPath).readBytes()
                     }
                 },
                 SingleFileSaver(output.toFile()),

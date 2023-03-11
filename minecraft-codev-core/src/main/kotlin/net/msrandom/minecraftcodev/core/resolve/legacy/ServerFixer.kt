@@ -58,8 +58,8 @@ object ServerFixer {
             zipFileSystem(client).use { clientFs ->
                 val root = serverFs.getPath("/")
                 WALK@ for (path in Files.walk(root).filter(Path::isRegularFile)) {
-                    val newPath = fixedFs.getPath(path.toString())
-                    if (clientFs.getPath(path.toString()).notExists()) {
+                    val newPath = fixedFs.base.getPath(path.toString())
+                    if (clientFs.base.getPath(path.toString()).notExists()) {
                         for (entry in libraryGroups) {
                             val library = testLibraryPath(path, entry)
 

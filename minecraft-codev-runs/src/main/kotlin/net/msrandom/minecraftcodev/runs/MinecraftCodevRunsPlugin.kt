@@ -5,6 +5,7 @@ import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
 import net.msrandom.minecraftcodev.core.utils.applyPlugin
 import net.msrandom.minecraftcodev.core.utils.createSourceSetElements
 import net.msrandom.minecraftcodev.core.utils.extendKotlinConfigurations
+import net.msrandom.minecraftcodev.runs.task.DownloadAssets
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
 import org.apache.commons.lang3.StringUtils
 import org.gradle.api.Plugin
@@ -18,17 +19,17 @@ import javax.inject.Inject
 class MinecraftCodevRunsPlugin<T : PluginAware> @Inject constructor(cacheDir: GlobalCacheDir) : Plugin<T> {
     private val cache: Path = cacheDir.dir.toPath().resolve(CodevCacheManager.ROOT_NAME)
 
-    // Asset indexes and objects
-    val assets: Path = cache.resolve("assets")
-
-    // Legacy assets
-    val resources: Path = cache.resolve("resources")
-
     // Log4j configs
     val logging: Path = cache.resolve("logging")
 
     override fun apply(target: T) = applyPlugin(target) {
         val capitalizedNatives = StringUtils.capitalize(NATIVES_CONFIGURATION)
+
+        createSourceSetElements { name, isSourceSet ->
+            if (isSourceSet) {
+                tasks.register("download${StringUtils.capitalize(name)}Assets", DownloadAssets::class.java)
+            }
+        }
 
         createSourceSetElements { name, isSourceSet ->
             val configurationName = if (name.isEmpty()) NATIVES_CONFIGURATION else name + capitalizedNatives
@@ -72,6 +73,10 @@ class MinecraftCodevRunsPlugin<T : PluginAware> @Inject constructor(cacheDir: Gl
                 javaExec.group = ApplicationPlugin.APPLICATION_GROUP
 
                 javaExec.dependsOn(configuration.beforeRun)
+
+                javaExec.dependsOn(configuration.dependsOn.map {
+                    it.map { other -> "${ApplicationPlugin.TASK_RUN_NAME}${StringUtils.capitalize(other.name)}" }
+                })
             }
         }
     }

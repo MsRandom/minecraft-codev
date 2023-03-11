@@ -5,9 +5,6 @@ import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
 import net.msrandom.minecraftcodev.core.utils.getCacheProvider
 import org.gradle.api.Project
-import org.gradle.api.artifacts.Dependency
-import org.gradle.api.artifacts.ExternalModuleDependency
-import org.gradle.api.artifacts.component.ModuleComponentSelector
 import org.gradle.api.internal.DomainObjectContext
 import org.gradle.api.internal.GradleInternal
 import org.gradle.api.internal.artifacts.ArtifactDependencyResolver
@@ -36,8 +33,6 @@ import org.gradle.api.model.ObjectFactory
 import org.gradle.api.tasks.util.PatternSet
 import org.gradle.configurationcache.extensions.serviceOf
 import org.gradle.internal.Factory
-import org.gradle.internal.component.local.model.DslOriginDependencyMetadata
-import org.gradle.internal.component.model.DependencyMetadata
 import org.gradle.internal.instantiation.InstantiatorFactory
 import org.gradle.internal.service.DefaultServiceRegistry
 import sun.misc.Unsafe
@@ -125,9 +120,7 @@ fun Project.handleCustomQueryResolvers() {
 fun Gradle.registerCustomDependency(
     name: String,
     descriptorFactory: Class<out IvyDependencyDescriptorFactory>,
-    dependencyFactory: Class<out DependencyFactory>,
-    componentResolvers: Class<out ComponentResolvers>,
-    edgeDependency: Class<out DependencyMetadata>? = null
+    componentResolvers: Class<out ComponentResolvers>
 ) {
     val dependency = customDependencies.computeIfAbsent(gradle) { DependencyData() }
 
@@ -144,55 +137,13 @@ fun Gradle.registerCustomDependency(
         ivyDependencyDescriptorFactories.add(objectFactory.newInstance(descriptorFactory))
 
         addResolvers(resolverProviderFactories, componentResolvers)
+
         dependency.componentResolvers.add(componentResolvers)
-
-        dependency.dependencyFactories.add(objectFactory.newInstance(dependencyFactory))
         dependency.registeredTypeNames.add(name)
-        edgeDependency?.let(dependency.edgeTypes::add)
     }
-}
-
-fun Project.convertDescriptor(descriptor: DependencyMetadata): Dependency {
-    if (descriptor is DslOriginDependencyMetadata) {
-        return descriptor.source
-    }
-
-    for (factory in customDependencies[gradle]?.dependencyFactories.orEmpty()) {
-        if (factory.canConvert(descriptor)) {
-            return factory.createDependency(project, descriptor)
-        }
-    }
-
-    val selector = descriptor.selector
-
-    if (selector is ModuleComponentSelector) {
-        return (project.dependencies.create(selector.moduleIdentifier.toString()) as ExternalModuleDependency).apply {
-            version { versionConstraint ->
-                selector.versionConstraint.requiredVersion.takeUnless(String::isEmpty)?.let(versionConstraint::require)
-                selector.versionConstraint.preferredVersion.takeUnless(String::isEmpty)?.let(versionConstraint::require)
-                selector.versionConstraint.rejectedVersions.takeUnless(List<*>::isEmpty)?.let { versionConstraint.reject(*it.toTypedArray()) }
-                selector.versionConstraint.strictVersion.takeUnless(String::isEmpty)?.let(versionConstraint::require)
-            }
-
-            for (artifact in descriptor.artifacts) {
-                artifact {
-                    it.name = artifact.name
-                    it.type = artifact.type
-
-                    artifact.extension?.let { extension -> it.extension = extension }
-                    artifact.classifier?.let { classifier -> it.classifier = classifier }
-                }
-            }
-
-        }
-    }
-
-    throw UnsupportedOperationException("Don't know how to convert dependency metadata $descriptor into a DSL dependency for resolution.")
 }
 
 private class DependencyData(
     val registeredTypeNames: MutableSet<String> = hashSetOf(),
-    val dependencyFactories: MutableList<DependencyFactory> = mutableListOf(),
-    val edgeTypes: MutableList<Class<out DependencyMetadata>> = mutableListOf(),
     val componentResolvers: MutableList<Class<out ComponentResolvers>> = mutableListOf()
 )

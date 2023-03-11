@@ -73,7 +73,7 @@ open class PatchedSetupState @Inject constructor(
 
     private val userdevConfig by lazy {
         zipFileSystem(userdevConfigFile.toPath()).use { fs ->
-            fs.getPath("config.json").inputStream().use { json.decodeFromStream<UserdevConfig>(it) }
+            fs.base.getPath("config.json").inputStream().use { json.decodeFromStream<UserdevConfig>(it) }
         }
     }
 
@@ -83,7 +83,7 @@ open class PatchedSetupState @Inject constructor(
 
     private val mcpConfig by lazy {
         zipFileSystem(mcpConfigFile).use { fs ->
-            fs.getPath("config.json").inputStream().use { json.decodeFromStream<McpConfig>(it) }
+            fs.base.getPath("config.json").inputStream().use { json.decodeFromStream<McpConfig>(it) }
         }
     }
 
@@ -123,7 +123,7 @@ open class PatchedSetupState @Inject constructor(
             // Extract patches
             val userdevConfig = userdevConfig
             zipFileSystem(userdevConfigFile.toPath()).use {
-                it.getPath(userdevConfig.binpatches).copyTo(patchesPath, StandardCopyOption.REPLACE_EXISTING)
+                it.base.getPath(userdevConfig.binpatches).copyTo(patchesPath, StandardCopyOption.REPLACE_EXISTING)
             }
 
             // Binary Patch Minecraft
@@ -139,9 +139,9 @@ open class PatchedSetupState @Inject constructor(
             zipFileSystem(patched).use { patchedZip ->
                 // Add missing non-patched files
                 zipFileSystem(input).use { inputZip ->
-                    inputZip.getPath("/").walk {
+                    inputZip.base.getPath("/").walk {
                         for (path in filter(Path::isRegularFile)) {
-                            val output = patchedZip.getPath(path.toString())
+                            val output = patchedZip.base.getPath(path.toString())
 
                             if (output.notExists()) {
                                 output.parent?.createDirectories()
@@ -154,13 +154,13 @@ open class PatchedSetupState @Inject constructor(
                 val universal = resolveArtifact(resolvers, userdevConfig.universal)
                 val filters = userdevConfig.universalFilters.map(::Regex)
                 zipFileSystem(universal.toPath()).use { universalZip ->
-                    val root = universalZip.getPath("/")
+                    val root = universalZip.base.getPath("/")
                     root.walk {
                         for (path in filter(Path::isRegularFile)) {
                             val name = root.relativize(path).toString()
 
                             if (filters.all { name matches it }) {
-                                val output = patchedZip.getPath(name)
+                                val output = patchedZip.base.getPath(name)
 
                                 output.parent?.createDirectories()
                                 path.copyTo(output, StandardCopyOption.COPY_ATTRIBUTES)
@@ -172,11 +172,11 @@ open class PatchedSetupState @Inject constructor(
                 // Add userdev injects
                 userdevConfig.inject?.let { inject ->
                     zipFileSystem(userdevConfigFile.toPath()).use { userdevZip ->
-                        val injectPath = userdevZip.getPath("/${inject}")
+                        val injectPath = userdevZip.base.getPath("/${inject}")
                         if (injectPath.exists()) {
                             injectPath.walk {
                                 for (path in filter(Path::isRegularFile)) {
-                                    val output = patchedZip.getPath(injectPath.relativize(path).toString())
+                                    val output = patchedZip.base.getPath(injectPath.relativize(path).toString())
 
                                     output.parent?.createDirectories()
                                     path.copyTo(output, StandardCopyOption.COPY_ATTRIBUTES)
@@ -205,7 +205,7 @@ open class PatchedSetupState @Inject constructor(
             val mcpConfig = mcpConfig
 
             val mappings = zipFileSystem(mcpConfigFile).use {
-                val mappingsPath = it.getPath(mcpConfig.data.mappings)
+                val mappingsPath = it.base.getPath(mcpConfig.data.mappings)
                 val mappings = mappingsPath.inputStream().use(INamedMappingFile::load)
 
                 if (mcpConfig.official) {
@@ -260,7 +260,7 @@ open class PatchedSetupState @Inject constructor(
             }
 
             zipFileSystem(mcpConfigFile).use {
-                val mappingsPath = it.getPath(mcpConfig.data.mappings)
+                val mappingsPath = it.base.getPath(mcpConfig.data.mappings)
                 if (mcpConfig.official) {
                     mappings.write(fixedMappingsPath, IMappingFile.Format.TSRG2)
                 } else {
@@ -303,9 +303,9 @@ open class PatchedSetupState @Inject constructor(
             val exceptions = Files.createTempFile("exceptions-", ".tmp.txt")
 
             zipFileSystem(mcpConfigFile).use {
-                it.getPath(mcpConfig.data.access!!).copyTo(access, StandardCopyOption.REPLACE_EXISTING)
-                it.getPath(mcpConfig.data.constructors!!).copyTo(constructors, StandardCopyOption.REPLACE_EXISTING)
-                it.getPath(mcpConfig.data.exceptions!!).copyTo(exceptions, StandardCopyOption.REPLACE_EXISTING)
+                it.base.getPath(mcpConfig.data.access!!).copyTo(access, StandardCopyOption.REPLACE_EXISTING)
+                it.base.getPath(mcpConfig.data.constructors!!).copyTo(constructors, StandardCopyOption.REPLACE_EXISTING)
+                it.base.getPath(mcpConfig.data.exceptions!!).copyTo(exceptions, StandardCopyOption.REPLACE_EXISTING)
             }
 
             executeMcp(
@@ -334,7 +334,7 @@ open class PatchedSetupState @Inject constructor(
         val atFiles = zipFileSystem(userdevConfigFile.toPath()).use { fs ->
             userdevConfig.ats.map {
                 val temp = Files.createTempFile("at-", ".tmp.cfg")
-                fs.getPath(it).copyTo(temp, StandardCopyOption.REPLACE_EXISTING)
+                fs.base.getPath(it).copyTo(temp, StandardCopyOption.REPLACE_EXISTING)
 
                 temp
             }
@@ -465,7 +465,7 @@ open class PatchedSetupState @Inject constructor(
                     val output = clientJar.toPath().createDeterministicCopy(CLIENT_EXTRA, ".tmp.zip")
 
                     zipFileSystem(output).use { clientZip ->
-                        clientZip.getPath("/").walk {
+                        clientZip.base.getPath("/").walk {
                             for (path in filter(Path::isRegularFile)) {
                                 if (path.toString().endsWith(".class") || path.startsWith("/META-INF")) {
                                     path.deleteExisting()

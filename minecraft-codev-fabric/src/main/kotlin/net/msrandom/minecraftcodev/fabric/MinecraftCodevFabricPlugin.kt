@@ -1,5 +1,8 @@
 package net.msrandom.minecraftcodev.fabric
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.decodeFromStream
 import net.fabricmc.mappingio.MappingVisitor
 import net.fabricmc.mappingio.adapter.MappingNsCompleter
 import net.fabricmc.mappingio.adapter.MappingNsRenamer
@@ -7,8 +10,10 @@ import net.fabricmc.mappingio.format.Tiny1Reader
 import net.fabricmc.mappingio.format.Tiny2Reader
 import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
 import net.msrandom.minecraftcodev.core.utils.applyPlugin
+import net.msrandom.minecraftcodev.fabric.mixin.FabricMixinConfigHandler
+import net.msrandom.minecraftcodev.mixins.MinecraftCodevMixinsPlugin
+import net.msrandom.minecraftcodev.mixins.MixinsExtension
 import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
 import net.msrandom.minecraftcodev.remapper.RemapperExtension
 import org.gradle.api.Plugin
@@ -39,6 +44,29 @@ class MinecraftCodevFabricPlugin<T : PluginAware> : Plugin<T> {
                     true
                 } else {
                     false
+                }
+            }
+        }
+
+        plugins.withType(MinecraftCodevMixinsPlugin::class.java) {
+            val mixins = extensions.getByType(MinecraftCodevExtension::class.java).extensions.getByType(MixinsExtension::class.java)
+
+            mixins.rules.add { root ->
+                val mod = root.resolve(MOD_JSON)
+
+                if (mod.exists()) {
+                    mod.inputStream().use {
+                        val json = Json.decodeFromStream<JsonObject>(it)
+                        val mixinsElement = json["mixins"]
+
+                        if (mixinsElement != null) {
+                            FabricMixinConfigHandler(mixinsElement, json, MOD_JSON)
+                        } else {
+                            null
+                        }
+                    }
+                } else {
+                    null
                 }
             }
         }
@@ -76,5 +104,7 @@ class MinecraftCodevFabricPlugin<T : PluginAware> : Plugin<T> {
 
     companion object {
         const val INTERMEDIARY_MAPPINGS_NAMESPACE = "intermediary"
+
+        private const val MOD_JSON = "fabric.mod.json"
     }
 }

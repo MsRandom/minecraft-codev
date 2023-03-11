@@ -24,7 +24,7 @@ abstract class MinecraftRunConfigurationBuilder @Inject constructor(private val 
         get() = if (project == project.rootProject) {
             "Run $name"
         } else {
-            "Run ${project.path} $name"
+            "Run ${project.path}:$name"
         }
 
     override fun getName() = name

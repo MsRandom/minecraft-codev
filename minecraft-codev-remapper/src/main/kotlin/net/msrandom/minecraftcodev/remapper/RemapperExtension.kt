@@ -76,7 +76,7 @@ open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory, p
             if (isJar || extension == "zip") {
                 zipFileSystem(path).use {
                     for (rule in zipMappingsResolution.get()) {
-                        if (rule.loadMappings(path, it, visitor, configuration, decorate, existingMappings, isJar, objects)) {
+                        if (rule.loadMappings(path, it.base, visitor, configuration, decorate, existingMappings, isJar, objects)) {
                             result = true
                             break
                         }

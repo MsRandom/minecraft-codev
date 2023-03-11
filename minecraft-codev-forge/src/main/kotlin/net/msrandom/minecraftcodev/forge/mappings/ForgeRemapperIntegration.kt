@@ -108,8 +108,8 @@ internal fun Project.setupForgeRemapperIntegration() {
                     val mcp = PatchedSetupState.resolveArtifact({ resolvers }, mcpLibrary)
 
                     zipFileSystem(mcp.toPath()).use { mcpFs ->
-                        val config = mcpFs.getPath("config.json").inputStream().decorate().use { MinecraftCodevPlugin.json.decodeFromStream<McpConfig>(it) }
-                        val mappings = mcpFs.getPath(config.data.mappings)
+                        val config = mcpFs.base.getPath("config.json").inputStream().decorate().use { MinecraftCodevPlugin.json.decodeFromStream<McpConfig>(it) }
+                        val mappings = mcpFs.base.getPath(config.data.mappings)
 
                         val namespaceCompleter = MappingNsCompleter(visitor, mapOf(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE to MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE), true)
 
@@ -168,7 +168,7 @@ internal fun Project.setupForgeRemapperIntegration() {
 
                                         for (classMapping in existingMappings.classes) {
                                             if (visitor.visitClass(classMapping.getName(obfNamespace))) {
-                                                val classPath = patchedJar.getPath(classMapping.getName(srgNamespace) + ".class")
+                                                val classPath = patchedJar.base.getPath(classMapping.getName(srgNamespace) + ".class")
                                                 if (classPath.notExists()) continue
 
                                                 val reader = classPath.inputStream().use(::ClassReader)

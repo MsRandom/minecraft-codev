@@ -7,16 +7,11 @@ import net.msrandom.minecraftcodev.core.dependency.registerCustomDependency
 import net.msrandom.minecraftcodev.core.utils.applyPlugin
 import net.msrandom.minecraftcodev.core.utils.createSourceSetConfigurations
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
-import net.msrandom.minecraftcodev.forge.dependency.PatchedMinecraftDependencyFactory
-import net.msrandom.minecraftcodev.forge.dependency.PatchedMinecraftDependencyMetadata
 import net.msrandom.minecraftcodev.forge.dependency.PatchedMinecraftIvyDependencyDescriptorFactory
 import net.msrandom.minecraftcodev.forge.mappings.setupForgeRemapperIntegration
 import net.msrandom.minecraftcodev.forge.resolve.PatchedMinecraftComponentResolvers
 import org.gradle.api.Plugin
-import org.gradle.api.artifacts.type.ArtifactTypeDefinition
-import org.gradle.api.attributes.Attribute
 import org.gradle.api.invocation.Gradle
-import org.gradle.api.plugins.JvmEcosystemPlugin
 import org.gradle.api.plugins.PluginAware
 import java.io.File
 import java.nio.file.FileSystem
@@ -27,9 +22,7 @@ open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
     private fun applyGradle(gradle: Gradle) = gradle.registerCustomDependency(
         "patched",
         PatchedMinecraftIvyDependencyDescriptorFactory::class.java,
-        PatchedMinecraftDependencyFactory::class.java,
-        PatchedMinecraftComponentResolvers::class.java,
-        PatchedMinecraftDependencyMetadata::class.java
+        PatchedMinecraftComponentResolvers::class.java
     )
 
     override fun apply(target: T) = applyPlugin(target, ::applyGradle) {
@@ -45,9 +38,9 @@ open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
         const val PATCHES_CONFIGURATION = "patches"
 
         internal fun userdevConfig(file: File, action: FileSystem.(config: UserdevConfig) -> Unit) = zipFileSystem(file.toPath()).use { fs ->
-            val configPath = fs.getPath("config.json")
+            val configPath = fs.base.getPath("config.json")
             if (configPath.exists()) {
-                fs.action(configPath.inputStream().use(json::decodeFromStream))
+                fs.base.action(configPath.inputStream().use(json::decodeFromStream))
                 true
             } else {
                 false

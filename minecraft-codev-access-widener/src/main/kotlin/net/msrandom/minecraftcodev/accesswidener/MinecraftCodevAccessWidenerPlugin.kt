@@ -1,7 +1,5 @@
 package net.msrandom.minecraftcodev.accesswidener
 
-import net.msrandom.minecraftcodev.accesswidener.dependency.AccessWidenedDependencyFactory
-import net.msrandom.minecraftcodev.accesswidener.dependency.AccessWidenedDependencyMetadata
 import net.msrandom.minecraftcodev.accesswidener.dependency.AccessWidenedIvyDependencyDescriptorFactory
 import net.msrandom.minecraftcodev.accesswidener.resolve.AccessWidenedComponentResolvers
 import net.msrandom.minecraftcodev.core.dependency.registerCustomDependency
@@ -14,11 +12,9 @@ import org.gradle.api.plugins.PluginAware
 class MinecraftCodevAccessWidenerPlugin<T : PluginAware> : Plugin<T> {
     private fun applyGradle(gradle: Gradle) {
         gradle.registerCustomDependency(
-            "accessWidened",
+            "access-widened",
             AccessWidenedIvyDependencyDescriptorFactory::class.java,
-            AccessWidenedDependencyFactory::class.java,
-            AccessWidenedComponentResolvers::class.java,
-            AccessWidenedDependencyMetadata::class.java
+            AccessWidenedComponentResolvers::class.java
         )
     }
 

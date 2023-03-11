@@ -27,14 +27,14 @@ object BundledClientJarSplitter {
         val serverFs = zipFileSystem(server).also(handle)
         val newClientFs = zipFileSystem(outputClient, true).also(handle)
 
-        clientFs.getPath("/").walk {
+        clientFs.base.getPath("/").walk {
             for (clientEntry in this) {
                 val name = clientEntry.toString()
                 if (name.endsWith(".class")) {
-                    val serverEntry = serverFs.getPath(name)
+                    val serverEntry = serverFs.base.getPath(name)
 
                     if (serverEntry.notExists()) {
-                        val output = newClientFs.getPath(name)
+                        val output = newClientFs.base.getPath(name)
                         output.parent?.createDirectories()
                         clientEntry.copyTo(output, StandardCopyOption.COPY_ATTRIBUTES)
                     }
@@ -42,10 +42,10 @@ object BundledClientJarSplitter {
             }
         }
 
-        clientFs.withAssets { path ->
+        clientFs.base.withAssets { path ->
             val name = path.toString()
-            if (serverFs.getPath(name).notExists() || ("lang" in name || (path.parent.name == "assets" && path.name.startsWith('.')))) {
-                val newPath = newClientFs.getPath(name)
+            if (serverFs.base.getPath(name).notExists() || ("lang" in name || (path.parent.name == "assets" && path.name.startsWith('.')))) {
+                val newPath = newClientFs.base.getPath(name)
                 newPath.parent?.createDirectories()
                 path.copyTo(newPath, StandardCopyOption.COPY_ATTRIBUTES)
             }

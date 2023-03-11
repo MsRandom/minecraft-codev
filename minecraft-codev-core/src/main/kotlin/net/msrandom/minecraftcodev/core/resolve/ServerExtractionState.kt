@@ -51,17 +51,17 @@ fun getExtractionState(cacheManager: CodevCacheManager, buildOperationExecutor: 
                             val isBundled: Boolean
 
                             zipFileSystem(serverJar.toPath()).use { serverFs ->
-                                val librariesPath = serverFs.getPath("META-INF/libraries.list")
+                                val librariesPath = serverFs.base.getPath("META-INF/libraries.list")
 
                                 if (librariesPath.exists()) {
                                     // New server Jar, just extract it and populate the library list
                                     isBundled = true
-                                    commonLibraries = ServerExtractor.extract(manifest.id, temporaryServer, serverFs, librariesPath)
+                                    commonLibraries = ServerExtractor.extract(manifest.id, temporaryServer, serverFs.base, librariesPath)
                                 } else {
                                     // Old server Jar, strip the libraries out manually
                                     isBundled = false
                                     serverJar.toPath().copyTo(temporaryServer, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES)
-                                    commonLibraries = ServerFixer.removeLibraries(manifest, temporaryServer, serverFs, clientJar().toPath())
+                                    commonLibraries = ServerFixer.removeLibraries(manifest, temporaryServer, serverFs.base, clientJar().toPath())
                                 }
                             }
 

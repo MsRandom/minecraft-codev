@@ -39,7 +39,7 @@ fun Project.visitConfigurationFiles(resolvers: ComponentResolversChainProvider, 
     }
 
     for (dependency in localConfigurationMetadata.dependencies) {
-        if (dependency is DslOriginDependencyMetadata && (source == null || dependency.source == source)) {
+        if (source == null || dependency is DslOriginDependencyMetadata && dependency.source == source) {
             val selector = (dependency as LocalOriginDependencyMetadata).selector
             val constraint = if (selector is ModuleComponentSelector) selector.versionConstraint else DefaultImmutableVersionConstraint.of()
             val strictly = if (constraint.strictVersion.isEmpty()) null else versionSelectorSchema.parseSelector(constraint.strictVersion)

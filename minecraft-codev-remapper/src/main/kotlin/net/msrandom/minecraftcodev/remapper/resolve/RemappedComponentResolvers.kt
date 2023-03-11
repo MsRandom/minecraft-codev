@@ -354,7 +354,7 @@ open class RemappedComponentResolvers @Inject constructor(
                         output.parent.createDirectories()
 
                         zipFileSystem(output, true).use {
-                            val directory = it.getPath("mappings")
+                            val directory = it.base.getPath("mappings")
                             directory.createDirectory()
 
                             directory.resolve("mappings.tiny").writer().use { writer ->

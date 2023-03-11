@@ -20,10 +20,10 @@ object JarAccessWidener {
 
         zipFileSystem(input).use { inputZip ->
             zipFileSystem(output, true).use { outputZip ->
-                inputZip.getPath("/").walk {
+                inputZip.base.getPath("/").walk {
                     for (path in filter(Path::isRegularFile)) {
                         val name = path.toString()
-                        val outputPath = outputZip.getPath(name)
+                        val outputPath = outputZip.base.getPath(name)
                         outputPath.parent?.createDirectories()
 
                         if (name.endsWith(".class")) {

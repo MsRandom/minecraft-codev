@@ -4,8 +4,6 @@ import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.dependency.registerCustomDependency
 import net.msrandom.minecraftcodev.core.utils.applyPlugin
 import net.msrandom.minecraftcodev.core.utils.createSourceSetConfigurations
-import net.msrandom.minecraftcodev.remapper.dependency.RemappedDependencyFactory
-import net.msrandom.minecraftcodev.remapper.dependency.RemappedDependencyMetadata
 import net.msrandom.minecraftcodev.remapper.dependency.RemappedIvyDependencyDescriptorFactory
 import net.msrandom.minecraftcodev.remapper.resolve.RemappedComponentResolvers
 import org.gradle.api.Plugin
@@ -16,9 +14,7 @@ class MinecraftCodevRemapperPlugin<T : PluginAware> : Plugin<T> {
     private fun applyGradle(gradle: Gradle) = gradle.registerCustomDependency(
         "remapped",
         RemappedIvyDependencyDescriptorFactory::class.java,
-        RemappedDependencyFactory::class.java,
-        RemappedComponentResolvers::class.java,
-        RemappedDependencyMetadata::class.java
+        RemappedComponentResolvers::class.java
     )
 
     override fun apply(target: T) = applyPlugin(target, ::applyGradle) {

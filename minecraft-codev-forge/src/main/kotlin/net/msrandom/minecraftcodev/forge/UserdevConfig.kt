@@ -49,7 +49,7 @@ data class UserdevConfig(
 
         fun fromFile(file: File) = cache.computeIfAbsent(file) {
             zipFileSystem(it.toPath()).use { fs ->
-                val path = fs.getPath("config.json")
+                val path = fs.base.getPath("config.json")
                 if (path.exists()) {
                     path.inputStream().use(json::decodeFromStream)
                 } else {
