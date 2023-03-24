@@ -1,5 +1,7 @@
 package net.msrandom.minecraftcodev.runs
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.encodeToStream
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
 import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver
@@ -53,7 +55,7 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
             @Suppress("UnstableApiUsage")
             val sourceSetName = sourceSet.get().takeUnless(SourceSet::isMain)?.name?.let(StringUtils::capitalize).orEmpty()
             val extractNativesTask = project.tasks.withType(ExtractNatives::class.java).named("extract${sourceSetName}${StringUtils.capitalize(MinecraftCodevRunsPlugin.NATIVES_CONFIGURATION)}")
-            val downloadAssetsTask = project.tasks.withType(DownloadAssets::class.java).named("download${sourceSetName}Assets")
+            val downloadAssetsTask = project.tasks.withType(DownloadAssets::class.java).getByName("download${sourceSetName}Assets")
 
             beforeRun.add(extractNativesTask)
             beforeRun.add(downloadAssetsTask)
@@ -80,18 +82,14 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
                                 when (value.subSequence(2, value.length - 1)) {
                                     "version_name" -> fixedArguments.add(MinecraftRunConfiguration.Argument(it.id))
                                     "assets_root" -> {
-                                        downloadAssetsTask.configure { task ->
-                                            task.assetIndex.convention(it.assetIndex)
-                                        }
+                                        downloadAssetsTask.useAssetIndex(it.assetIndex)
 
                                         fixedArguments.add(MinecraftRunConfiguration.Argument(runs.assetsDirectory.asFile.get()))
                                     }
 
                                     "assets_index_name" -> fixedArguments.add(MinecraftRunConfiguration.Argument(it.assets))
                                     "game_assets" -> {
-                                        downloadAssetsTask.configure { task ->
-                                            task.assetIndex.convention(it.assetIndex)
-                                        }
+                                        downloadAssetsTask.useAssetIndex(it.assetIndex)
 
                                         fixedArguments.add(MinecraftRunConfiguration.Argument(runs.resourcesDirectory.asFile.get()))
                                     }

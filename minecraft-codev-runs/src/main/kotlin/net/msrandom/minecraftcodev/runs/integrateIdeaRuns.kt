@@ -46,6 +46,7 @@ fun Project.integrateIdeaRuns() {
                                 application.moduleRef(otherProject)
                             }
 
+                            // TODO Make this transitive
                             for (other in config.dependsOn.get()) {
                                 application.beforeRun.add(objects.newInstance(RunConfigurationBeforeRunTask::class.java, other.name).apply {
                                     configuration.set(provider {

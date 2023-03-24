@@ -2,6 +2,7 @@ package net.msrandom.minecraftcodev.runs.task
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
+import kotlinx.serialization.json.encodeToStream
 import net.msrandom.minecraftcodev.core.AssetsIndex
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
@@ -9,10 +10,9 @@ import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
 import net.msrandom.minecraftcodev.runs.RunsContainer
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.RegularFile
+import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.internal.artifacts.RepositoriesSupplier
-import org.gradle.api.provider.Property
-import org.gradle.api.tasks.Input
-import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.TaskAction
 import org.gradle.internal.hash.ChecksumService
 import org.gradle.internal.operations.BuildOperationContext
@@ -22,22 +22,39 @@ import org.gradle.internal.operations.RunnableBuildOperation
 import org.gradle.internal.resource.ExternalResourceName
 import org.gradle.internal.resource.local.LazyLocallyAvailableResourceCandidates
 import java.net.URI
+import javax.inject.Inject
+import kotlin.io.path.createDirectories
+import kotlin.io.path.outputStream
 
 abstract class DownloadAssets : DefaultTask() {
-    abstract val assetIndex: Property<MinecraftVersionMetadata.AssetIndex>
-        @Input get
+    abstract val assetIndexFile: RegularFileProperty
+        @InputFile get
 
     abstract val repositoriesSupplier: RepositoriesSupplier
-        @Internal get
+        @Inject get
 
     abstract val checksumService: ChecksumService
-        @Internal get
+        @Inject get
 
     abstract val buildOperationExecutor: BuildOperationExecutor
-        @Internal get
+        @Inject get
+
+    fun useAssetIndex(assetIndex: MinecraftVersionMetadata.AssetIndex) {
+        val path = assetIndexFile.asFile.get().toPath()
+
+        path.parent.createDirectories()
+
+        path.outputStream().use { output ->
+            Json.encodeToStream(assetIndex, output)
+        }
+    }
 
     @TaskAction
     fun download() {
+        val assetIndex = assetIndexFile.asFile.get().inputStream().use {
+            Json.decodeFromStream<MinecraftVersionMetadata.AssetIndex>(it)
+        }
+
         val codev = project.extensions.getByType(MinecraftCodevExtension::class.java).extensions.getByType(RunsContainer::class.java)
         val assetsDirectory = codev.assetsDirectory
         val resourcesDirectory = codev.resourcesDirectory.get()
@@ -58,7 +75,7 @@ abstract class DownloadAssets : DefaultTask() {
             LazyLocallyAvailableResourceCandidates({ listOf(output.asFile) }, checksumService)
         )!!.file
 
-        val assetIndexJson = downloadFile(assetIndex.get().url, assetIndex.get().sha1, indexesDirectory.file("${assetIndex.get().id}.json"))
+        val assetIndexJson = downloadFile(assetIndex.url, assetIndex.sha1, indexesDirectory.file("${assetIndex.id}.json"))
 
         val index = assetIndexJson.inputStream().use { Json.decodeFromStream<AssetsIndex>(it) }
 
@@ -77,7 +94,7 @@ abstract class DownloadAssets : DefaultTask() {
 
                     override fun run(context: BuildOperationContext) {
                         downloadFile(
-                            URI("https", "resources.download.minecraft.net", "$section/${asset.hash}", null),
+                            URI("https", "resources.download.minecraft.net", "/$section/${asset.hash}", null),
                             asset.hash,
                             file
                         )

@@ -77,11 +77,9 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
         return when (template) {
             "asset_index" -> manifest.assets
             "assets_root" -> {
-                val task = project.tasks.withType(DownloadAssets::class.java).named(downloadAssetsName)
+                val task = project.tasks.withType(DownloadAssets::class.java).getByName(downloadAssetsName)
 
-                task.configure {
-                    it.assetIndex.set(manifest.assetIndex)
-                }
+                task.useAssetIndex(manifest.assetIndex)
 
                 beforeRun.add(task)
 

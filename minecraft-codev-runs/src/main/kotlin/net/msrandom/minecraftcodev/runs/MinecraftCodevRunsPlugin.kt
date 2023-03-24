@@ -12,6 +12,7 @@ import org.gradle.api.Plugin
 import org.gradle.api.plugins.ApplicationPlugin
 import org.gradle.api.plugins.PluginAware
 import org.gradle.api.tasks.JavaExec
+import org.gradle.api.tasks.SourceSet
 import org.gradle.initialization.layout.GlobalCacheDir
 import java.nio.file.Path
 import javax.inject.Inject
@@ -27,7 +28,11 @@ class MinecraftCodevRunsPlugin<T : PluginAware> @Inject constructor(cacheDir: Gl
 
         createSourceSetElements { name, isSourceSet ->
             if (isSourceSet) {
-                tasks.register("download${StringUtils.capitalize(name)}Assets", DownloadAssets::class.java)
+                tasks.register("download${StringUtils.capitalize(name)}Assets", DownloadAssets::class.java) { task ->
+                    val fileName = if (name.isEmpty()) "${SourceSet.MAIN_SOURCE_SET_NAME}.json" else "$name.json"
+
+                    task.assetIndexFile.set(layout.buildDirectory.dir("assetIndices").map { it.file(fileName) })
+                }
             }
         }
 
@@ -50,7 +55,7 @@ class MinecraftCodevRunsPlugin<T : PluginAware> @Inject constructor(cacheDir: Gl
         val runs = extensions
             .getByType(MinecraftCodevExtension::class.java)
             .extensions
-            .create(RunsContainer::class.java, "runs", RunsContainerImpl::class.java)
+            .create(RunsContainer::class.java, "runs", RunsContainerImpl::class.java, cache)
 
         runs.extensions.create("defaults", RunConfigurationDefaultsContainer::class.java)
 
