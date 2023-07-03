@@ -19,8 +19,8 @@ dependencies {
 
     implementation(group = "org.quiltmc", name = "quiltflower", version = "1.8.1")
 
-    implementation(group = "org.ow2.asm", name = "asm", version = "9.3")
-    implementation(group = "org.ow2.asm", name = "asm-tree", version = "9.3")
+    implementation(api(group = "org.ow2.asm", name = "asm", version = "9.3"))
+    implementation(api(group = "org.ow2.asm", name = "asm-tree", version = "9.3"))
 
     implementation(api(group = "com.google.guava", name = "guava", version = "31.1-jre"))
     implementation(group = "org.apache.commons", name = "commons-lang3", version = "3.12.0")

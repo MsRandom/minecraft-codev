@@ -10,7 +10,7 @@ interface MixinConfigHandler {
      * List all the mixin config paths
      * @param root New root that matches the format for the root this handler was loaded with
      */
-    fun list(root: Path): List<Path>
+    fun list(root: Path): List<String>
 
     /**
      * Remove mixin configs & their listing from their owner

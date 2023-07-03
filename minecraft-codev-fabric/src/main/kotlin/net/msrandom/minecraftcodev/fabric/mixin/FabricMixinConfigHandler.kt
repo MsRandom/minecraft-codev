@@ -12,7 +12,7 @@ class FabricMixinConfigHandler(mixins: JsonElement, private val json: JsonObject
         listOf(mixins.jsonPrimitive.content)
     }
 
-    override fun list(root: Path) = paths.map(root::resolve)
+    override fun list(root: Path) = paths
 
     override fun remove(root: Path) {
         root.resolve(jsonName).outputStream().use { output ->

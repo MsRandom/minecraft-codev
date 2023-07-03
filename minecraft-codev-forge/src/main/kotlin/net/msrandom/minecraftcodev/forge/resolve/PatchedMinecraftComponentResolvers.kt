@@ -8,7 +8,6 @@ import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Compan
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
 import net.msrandom.minecraftcodev.core.resolve.MinecraftDependencyToComponentIdResolver
 import net.msrandom.minecraftcodev.core.resolve.MinecraftMetadataGenerator
-import net.msrandom.minecraftcodev.core.utils.getSourceSetConfigurationName
 import net.msrandom.minecraftcodev.core.utils.visitConfigurationFiles
 import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin
 import net.msrandom.minecraftcodev.forge.UserdevConfig
@@ -76,7 +75,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
             componentIdResolver.resolveVersion(dependency, acceptor, rejector, result) { _, version ->
                 PatchedComponentIdentifier(
                     version,
-                    project.getSourceSetConfigurationName(dependency, MinecraftCodevForgePlugin.PATCHES_CONFIGURATION),
+                    dependency.relatedConfiguration ?: MinecraftCodevForgePlugin.PATCHES_CONFIGURATION,
                     dependency.getModuleConfiguration()
                 )
             }

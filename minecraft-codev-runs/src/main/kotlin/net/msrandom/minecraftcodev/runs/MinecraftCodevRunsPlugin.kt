@@ -4,7 +4,6 @@ import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
 import net.msrandom.minecraftcodev.core.utils.applyPlugin
 import net.msrandom.minecraftcodev.core.utils.createSourceSetElements
-import net.msrandom.minecraftcodev.core.utils.extendKotlinConfigurations
 import net.msrandom.minecraftcodev.runs.task.DownloadAssets
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
 import org.apache.commons.lang3.StringUtils
@@ -49,8 +48,6 @@ class MinecraftCodevRunsPlugin<T : PluginAware> @Inject constructor(cacheDir: Gl
                 }
             }
         }
-
-        extendKotlinConfigurations(NATIVES_CONFIGURATION)
 
         val runs = extensions
             .getByType(MinecraftCodevExtension::class.java)

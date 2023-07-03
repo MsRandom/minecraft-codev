@@ -221,7 +221,7 @@ open class RemappedComponentResolvers @Inject constructor(
 
             if (result.hasResult() && result.failure == null) {
                 val metadata = result.metadata
-                val mappingsConfiguration = project.getSourceSetConfigurationName(dependency, MinecraftCodevRemapperPlugin.MAPPINGS_CONFIGURATION)
+                val mappingsConfiguration = dependency.relatedConfiguration ?: MinecraftCodevRemapperPlugin.MAPPINGS_CONFIGURATION
 
                 if (result.id is ModuleComponentIdentifier) {
                     val id = RemappedComponentIdentifier(

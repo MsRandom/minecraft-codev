@@ -12,6 +12,7 @@ import net.msrandom.minecraftcodev.mixins.MinecraftCodevMixinsPlugin
 import net.msrandom.minecraftcodev.mixins.MixinsExtension
 import net.msrandom.minecraftcodev.mixins.dependency.MixinDependencyMetadata
 import net.msrandom.minecraftcodev.mixins.dependency.MixinDependencyMetadataWrapper
+import net.msrandom.minecraftcodev.mixins.mixin.GradleMixinService
 import org.gradle.api.Project
 import org.gradle.api.artifacts.component.ComponentIdentifier
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
@@ -31,6 +32,7 @@ import org.gradle.internal.component.external.model.MetadataSourcedComponentArti
 import org.gradle.internal.component.external.model.ModuleComponentArtifactMetadata
 import org.gradle.internal.component.model.*
 import org.gradle.internal.hash.ChecksumService
+import org.gradle.internal.hash.HashCode
 import org.gradle.internal.model.CalculatedValueContainerFactory
 import org.gradle.internal.operations.*
 import org.gradle.internal.resolve.ArtifactResolveException
@@ -43,12 +45,14 @@ import org.gradle.internal.resolve.result.BuildableArtifactSetResolveResult
 import org.gradle.internal.resolve.result.BuildableComponentIdResolveResult
 import org.gradle.internal.resolve.result.BuildableComponentResolveResult
 import org.gradle.util.internal.BuildCommencedTimeProvider
+import org.spongepowered.asm.mixin.Mixins
+import org.spongepowered.asm.service.MixinService
 import java.io.File
+import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import javax.inject.Inject
-import kotlin.io.path.Path
-import kotlin.io.path.copyTo
-import kotlin.io.path.createDirectories
+import kotlin.io.path.*
+import kotlin.math.min
 
 open class MixinComponentResolvers @Inject constructor(
     private val resolvers: ComponentResolversChainProvider,
@@ -143,7 +147,7 @@ open class MixinComponentResolvers @Inject constructor(
                 val metadata = result.metadata
 
                 if (result.id is ModuleComponentIdentifier) {
-                    val mixinsConfiguration = project.getSourceSetConfigurationName(dependency, MinecraftCodevMixinsPlugin.MIXINS_CONFIGURATION)
+                    val mixinsConfiguration = dependency.relatedConfiguration ?: MinecraftCodevMixinsPlugin.MIXINS_CONFIGURATION
                     val id = MixinComponentIdentifier(result.id as ModuleComponentIdentifier, mixinsConfiguration, dependency.getModuleConfiguration())
 
                     if (metadata == null) {
@@ -199,6 +203,7 @@ open class MixinComponentResolvers @Inject constructor(
 
                 val urlId = MixinArtifactIdentifier(
                     artifact.id.asSerializable,
+                    HashCode.fromBytes(files.map { checksumService.sha1(it).toByteArray() }.reduce { a, b -> ByteArray(min(a.size, b.size)) { (a[it] + b[it]).toByte() } }),
                     checksumService.sha1(result.result)
                 )
 
@@ -216,31 +221,55 @@ open class MixinComponentResolvers @Inject constructor(
 
                         @Suppress("WRONG_NULLABILITY_FOR_JAVA_OVERRIDE")
                         override fun call(context: BuildOperationContext) = context.callWithStatus {
-                            val handler = zipFileSystem(result.result.toPath()).use {
-                                val path = it.base.getPath("/")
+                            val file = result.result.toPath().createDeterministicCopy("mixin", ".tmp.jar")
 
-                                rules.get().firstNotNullOfOrNull { rule ->
-                                    rule.load(path)
+                            val fileIterable = Iterable {
+                                iterator<File> {
+                                    yield(result.result)
+                                    yieldAll(files)
                                 }
                             }
 
-                            if (handler == null) {
-                                result.failed(
-                                    ArtifactResolveException(
-                                        artifact.id,
-                                        UnsupportedOperationException(
-                                            "Couldn't find mixin configs for ${result.result}, unsupported format.\n" +
-                                                    "You can register new mixin loading rules with minecraft.mixins.rules"
-                                        )
-                                    )
-                                )
+                            (MixinService.getService() as GradleMixinService).use(fileIterable, artifact.componentId.module) {
+                                for (mixinFile in files) {
+                                    val handler = zipFileSystem(mixinFile.toPath()).use {
+                                        val path = it.base.getPath("/")
 
-                                null
-                            } else {
-                                val file = result.result.toPath().createDeterministicCopy("mixin", ".tmp.jar")
+                                        rules.get().firstNotNullOfOrNull { rule ->
+                                            rule.load(path)
+                                        }
+                                    }
+
+                                    if (handler == null) {
+                                        result.failed(
+                                            ArtifactResolveException(
+                                                artifact.id,
+                                                UnsupportedOperationException(
+                                                    "Couldn't find mixin configs for ${result.result}, unsupported format.\n" +
+                                                            "You can register new mixin loading rules with minecraft.mixins.rules"
+                                                )
+                                            )
+                                        )
+
+                                        return@use null
+                                    } else {
+                                        zipFileSystem(mixinFile.toPath()).use {
+                                            val root = it.base.getPath("/")
+                                            Mixins.addConfigurations(*handler.list(root).toTypedArray())
+                                        }
+                                    }
+                                }
 
                                 zipFileSystem(file).use {
-                                    handler.list(it.base.getPath("/"))
+                                    val root = it.base.getPath("/")
+
+                                    root.walk {
+                                        for (path in filter(Path::isRegularFile).filter { path -> path.toString().endsWith(".class") }) {
+                                            val pathName = root.relativize(path).toString()
+                                            val name = pathName.substring(0, pathName.length - ".class".length).replace(File.separatorChar, '.')
+                                            path.writeBytes(transformer.transformClassBytes(name, name, path.readBytes()))
+                                        }
+                                    }
                                 }
 
                                 val output = cacheManager.fileStoreDirectory
@@ -259,12 +288,14 @@ open class MixinComponentResolvers @Inject constructor(
                     })
                 }
             }
+        } else if (artifact is PassthroughMixinArtifactMetadata) {
+            resolvers.get().artifactResolver.resolveArtifact(artifact.original, moduleSources, result)
         }
     }
 }
 
 class MixinComponentIdentifier(val original: ModuleComponentIdentifier, val mixinsConfiguration: String, val moduleConfiguration: String?) : ModuleComponentIdentifier by original {
-    override fun getDisplayName() = "${original.displayName} (Mixins Stripped)"
+    override fun getDisplayName() = "${original.displayName} (Mixin)"
 
     override fun toString() = displayName
 }

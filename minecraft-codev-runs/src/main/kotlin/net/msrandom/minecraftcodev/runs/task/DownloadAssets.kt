@@ -82,13 +82,26 @@ abstract class DownloadAssets : DefaultTask() {
         buildOperationExecutor.runAll<RunnableBuildOperation> {
             for ((name, asset) in index.objects) {
                 val section = asset.hash.substring(0, 2)
-                it.add(object : RunnableBuildOperation {
-                    val file = if (index.mapToResources) {
-                        resourcesDirectory.file(name)
+
+                val file = if (index.mapToResources) {
+                    resourcesDirectory.file(name)
+                } else {
+                    objectsDirectory.dir(section).file(asset.hash)
+                }
+
+                if (file.asFile.exists()) {
+                    if (checksumService.sha1(file.asFile).toString() == asset.hash) {
+                        // Early guard to avoid flooding the build queue
+                        continue
                     } else {
-                        objectsDirectory.dir(section).file(asset.hash)
+                        // So the resource accessor doesn't check hash again
+                        file.asFile.delete()
                     }
 
+                    continue
+                }
+
+                it.add(object : RunnableBuildOperation {
                     override fun description() =
                         BuildOperationDescriptor.displayName("Download or Check cached $file")
 

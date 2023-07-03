@@ -52,7 +52,7 @@ fun Project.visitConfigurationFiles(resolvers: ComponentResolversChainProvider, 
 
             val metadata = idResult.metadata ?: run {
                 val componentResult = DefaultBuildableComponentResolveResult()
-                resolvers.get().componentResolver.resolve(idResult.id, DefaultComponentOverrideMetadata.EMPTY, componentResult)
+                resolvers.get().componentResolver.resolve(idResult.id, DefaultComponentOverrideMetadata.forDependency(dependency.isChanging, dependency.artifacts.getOrNull(0), DefaultComponentOverrideMetadata.extractClientModule(dependency)), componentResult)
 
                 componentResult.metadata
             }

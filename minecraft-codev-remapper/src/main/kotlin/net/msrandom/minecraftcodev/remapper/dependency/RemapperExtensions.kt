@@ -15,7 +15,7 @@ import org.jetbrains.kotlin.gradle.plugin.KotlinDependencyHandler
 import org.jetbrains.kotlin.gradle.plugin.mpp.DefaultKotlinDependencyHandler
 
 val SourceSet.mappingsConfigurationName get() = sourceSetName(name, MinecraftCodevRemapperPlugin.MAPPINGS_CONFIGURATION)
-val HasKotlinDependencies.mappingsConfigurationName get() = sourceSetName((this as Named).name, MinecraftCodevRemapperPlugin.MAPPINGS_CONFIGURATION)
+val HasKotlinDependencies.mappingsConfigurationName get() = sourceSetName(sourceSetName, MinecraftCodevRemapperPlugin.MAPPINGS_CONFIGURATION)
 
 val <T : ModuleDependency> T.remapped
     get() = remapped()

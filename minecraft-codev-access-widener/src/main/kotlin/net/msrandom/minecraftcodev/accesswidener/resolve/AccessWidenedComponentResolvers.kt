@@ -158,7 +158,7 @@ open class AccessWidenedComponentResolvers @Inject constructor(
 
             if (result.hasResult() && result.failure == null) {
                 val metadata = result.metadata
-                val accessWidenersConfiguration = project.getSourceSetConfigurationName(dependency, MinecraftCodevAccessWidenerPlugin.ACCESS_WIDENERS_CONFIGURATION)
+                val accessWidenersConfiguration = dependency.relatedConfiguration ?: MinecraftCodevAccessWidenerPlugin.ACCESS_WIDENERS_CONFIGURATION
 
                 if (result.id is ModuleComponentIdentifier) {
                     val id = AccessWidenedComponentIdentifier(

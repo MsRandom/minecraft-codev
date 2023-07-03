@@ -4,7 +4,6 @@ import groovy.lang.Closure
 import net.msrandom.minecraftcodev.core.utils.sourceSetName
 import net.msrandom.minecraftcodev.mixins.MinecraftCodevMixinsPlugin
 import org.gradle.api.Action
-import org.gradle.api.Named
 import org.gradle.api.artifacts.Dependency
 import org.gradle.api.artifacts.ExternalModuleDependency
 import org.gradle.api.artifacts.FileCollectionDependency
@@ -15,7 +14,7 @@ import org.jetbrains.kotlin.gradle.plugin.KotlinDependencyHandler
 import org.jetbrains.kotlin.gradle.plugin.mpp.DefaultKotlinDependencyHandler
 
 val SourceSet.mixinsConfigurationName get() = sourceSetName(name, MinecraftCodevMixinsPlugin.MIXINS_CONFIGURATION)
-val HasKotlinDependencies.mixinsConfigurationName get() = sourceSetName((this as Named).name, MinecraftCodevMixinsPlugin.MIXINS_CONFIGURATION)
+val HasKotlinDependencies.mixinsConfigurationName get() = sourceSetName(sourceSetName, MinecraftCodevMixinsPlugin.MIXINS_CONFIGURATION)
 
 val <T : ModuleDependency> T.mixin
     get() = mixin()

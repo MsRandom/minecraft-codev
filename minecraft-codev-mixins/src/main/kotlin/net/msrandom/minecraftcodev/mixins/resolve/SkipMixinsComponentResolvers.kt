@@ -46,7 +46,6 @@ import org.gradle.internal.resolve.result.BuildableComponentIdResolveResult
 import org.gradle.internal.resolve.result.BuildableComponentResolveResult
 import org.gradle.util.internal.BuildCommencedTimeProvider
 import java.io.File
-import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import javax.inject.Inject
 import kotlin.io.path.Path
@@ -235,7 +234,7 @@ open class SkipMixinsComponentResolvers @Inject constructor(
 
                                 zipFileSystem(file).use {
                                     val root = it.base.getPath("/")
-                                    handler.list(root).forEach(Path::deleteExisting)
+                                    handler.list(root).forEach { path -> root.resolve(path).deleteExisting() }
                                     handler.remove(root)
                                 }
 

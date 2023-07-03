@@ -11,7 +11,7 @@ import org.jetbrains.kotlin.gradle.plugin.KotlinDependencyHandler
 import org.jetbrains.kotlin.gradle.plugin.mpp.DefaultKotlinDependencyHandler
 
 val SourceSet.nativesConfigurationName get() = sourceSetName(name, MinecraftCodevRunsPlugin.NATIVES_CONFIGURATION)
-val HasKotlinDependencies.nativesConfigurationName get() = sourceSetName((this as Named).name, MinecraftCodevRunsPlugin.NATIVES_CONFIGURATION)
+val HasKotlinDependencies.nativesConfigurationName get() = sourceSetName(sourceSetName, MinecraftCodevRunsPlugin.NATIVES_CONFIGURATION)
 
 fun KotlinDependencyHandler.natives(dependencyNotation: Any) = (this as DefaultKotlinDependencyHandler).let {
     it.project.dependencies.add(it.parent.nativesConfigurationName, dependencyNotation)

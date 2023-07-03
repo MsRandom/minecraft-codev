@@ -88,7 +88,7 @@ open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory, p
         }
 
         mappingsResolution.add { path, extension, visitor, _, decorate, _, _ ->
-            if (extension == "txt") {
+            if (extension == "txt" || extension == "map") {
                 path.inputStream().decorate().reader().use {
                     ProGuardReader.read(it, MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE, MappingsNamespace.OBF, MappingSourceNsSwitch(visitor, MappingsNamespace.OBF))
                 }

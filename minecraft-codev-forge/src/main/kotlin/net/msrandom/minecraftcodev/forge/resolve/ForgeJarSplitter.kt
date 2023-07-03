@@ -90,9 +90,19 @@ object ForgeJarSplitter {
                 }
             }
 
-            val innerEnd = node.name.lastIndexOf('$')
-            if (innerEnd != -1) {
-                add(Type.getObjectType(node.name.substring(0, innerEnd)))
+            var name = node.name
+
+            while (true) {
+                val innerEnd = name.lastIndexOf('$')
+                if (innerEnd != -1) {
+                    name = node.name.substring(0, innerEnd)
+
+                    add(Type.getObjectType(name))
+
+                    continue
+                }
+
+                break
             }
         }
 
