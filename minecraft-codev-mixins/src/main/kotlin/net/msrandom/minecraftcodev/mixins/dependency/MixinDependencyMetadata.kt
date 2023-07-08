@@ -16,13 +16,7 @@ sealed interface SkipMixinDependencyMetadata {
     val delegate: DependencyMetadata
 }
 
-class MixinDependencyMetadataWrapper(
-    override val delegate: DependencyMetadata,
-    override val relatedConfiguration: String?,
-    private val moduleConfiguration: String?
-) : MixinDependencyMetadata, DependencyMetadata by delegate {
-    override fun getModuleConfiguration() = moduleConfiguration
-}
+class MixinDependencyMetadataWrapper(override val delegate: DependencyMetadata, override val relatedConfiguration: String?) : MixinDependencyMetadata, DependencyMetadata by delegate
 
 class SkipMixinsDependencyMetadataWrapper(override val delegate: DependencyMetadata) : SkipMixinDependencyMetadata, DependencyMetadata by delegate
 

@@ -216,7 +216,7 @@ open class PatchedSetupState @Inject constructor(
 
                     objects.newInstance(MinecraftArtifactResolver::class.java, repositories).resolveArtifact(
                         DefaultModuleComponentArtifactMetadata(
-                            MinecraftComponentIdentifier(MinecraftType.ClientMappings.module, manifest.id, false),
+                            MinecraftComponentIdentifier(MinecraftType.ClientMappings.module, manifest.id),
                             DefaultIvyArtifactName(
                                 MinecraftType.ClientMappings.module,
                                 "txt",

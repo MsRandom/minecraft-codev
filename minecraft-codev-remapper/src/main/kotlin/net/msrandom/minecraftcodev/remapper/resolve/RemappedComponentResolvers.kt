@@ -7,7 +7,6 @@ import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
-import net.msrandom.minecraftcodev.core.resolve.MayNeedSources
 import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.getOrResolve
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentIdentifier
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.addNamed
@@ -168,8 +167,7 @@ open class RemappedComponentResolvers @Inject constructor(
                                 selector,
                                 identifier.sourceNamespace ?: namespace,
                                 identifier.targetNamespace,
-                                identifier.mappingsConfiguration,
-                                identifier.moduleConfiguration
+                                identifier.mappingsConfiguration
                             )
                         } else {
                             dependency
@@ -228,9 +226,8 @@ open class RemappedComponentResolvers @Inject constructor(
                         result.id as ModuleComponentIdentifier,
                         dependency.sourceNamespace,
                         dependency.targetNamespace,
-                        mappingsConfiguration,
-                        dependency.getModuleConfiguration()
-                    ).mayHaveSources()
+                        mappingsConfiguration
+                    )
 
                     if (metadata == null) {
                         result.resolved(id, result.moduleVersionId)
@@ -389,22 +386,8 @@ class RemappedComponentIdentifier(
     val original: ModuleComponentIdentifier,
     val sourceNamespace: MappingsNamespace?,
     val targetNamespace: MappingsNamespace,
-    val mappingsConfiguration: String,
-    val moduleConfiguration: String?,
-    private val needsSourcesOverride: Boolean? = null
-) : ModuleComponentIdentifier by original, MayNeedSources {
-    override val needsSources
-        get() = needsSourcesOverride ?: (original is MayNeedSources && original.needsSources)
-
-    override fun mayHaveSources() = if (original is MayNeedSources) {
-        RemappedComponentIdentifier(original.withoutSources(), sourceNamespace, targetNamespace, mappingsConfiguration, moduleConfiguration, this.needsSources)
-    } else {
-        this
-    }
-
-    override fun withoutSources() =
-        RemappedComponentIdentifier(original, sourceNamespace, targetNamespace, mappingsConfiguration, moduleConfiguration, false)
-
+    val mappingsConfiguration: String
+) : ModuleComponentIdentifier by original {
     override fun getDisplayName() = "${original.displayName} (Remapped to $targetNamespace)"
 
     override fun toString() = displayName

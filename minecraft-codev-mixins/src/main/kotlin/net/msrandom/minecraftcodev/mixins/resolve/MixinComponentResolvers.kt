@@ -106,11 +106,7 @@ open class MixinComponentResolvers @Inject constructor(
                     attributes,
                     { dependency ->
                         if (dependency.selector.attributes.getAttribute(MappingsNamespace.attribute) != null) {
-                            MixinDependencyMetadataWrapper(
-                                dependency,
-                                identifier.mixinsConfiguration,
-                                identifier.moduleConfiguration
-                            )
+                            MixinDependencyMetadataWrapper(dependency, identifier.mixinsConfiguration)
                         } else {
                             dependency
                         }
@@ -148,7 +144,7 @@ open class MixinComponentResolvers @Inject constructor(
 
                 if (result.id is ModuleComponentIdentifier) {
                     val mixinsConfiguration = dependency.relatedConfiguration ?: MinecraftCodevMixinsPlugin.MIXINS_CONFIGURATION
-                    val id = MixinComponentIdentifier(result.id as ModuleComponentIdentifier, mixinsConfiguration, dependency.getModuleConfiguration())
+                    val id = MixinComponentIdentifier(result.id as ModuleComponentIdentifier, mixinsConfiguration)
 
                     if (metadata == null) {
                         result.resolved(id, result.moduleVersionId)
@@ -294,7 +290,7 @@ open class MixinComponentResolvers @Inject constructor(
     }
 }
 
-class MixinComponentIdentifier(val original: ModuleComponentIdentifier, val mixinsConfiguration: String, val moduleConfiguration: String?) : ModuleComponentIdentifier by original {
+class MixinComponentIdentifier(val original: ModuleComponentIdentifier, val mixinsConfiguration: String) : ModuleComponentIdentifier by original {
     override fun getDisplayName() = "${original.displayName} (Mixin)"
 
     override fun toString() = displayName

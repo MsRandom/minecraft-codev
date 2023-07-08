@@ -121,7 +121,7 @@ internal fun Project.setupForgeRemapperIntegration() {
 
                             objects.newInstance(MinecraftArtifactResolver::class.java, repositories).resolveArtifact(
                                 DefaultModuleComponentArtifactMetadata(
-                                    MinecraftComponentIdentifier(MinecraftType.ClientMappings.module, config.version, false),
+                                    MinecraftComponentIdentifier(MinecraftType.ClientMappings.module, config.version),
                                     DefaultIvyArtifactName(
                                         MinecraftType.ClientMappings.module,
                                         "txt",
@@ -148,7 +148,7 @@ internal fun Project.setupForgeRemapperIntegration() {
 
                         if (!config.official) {
                             val patched = PatchedMinecraftComponentResolvers.getPatchedOutput(
-                                PatchedComponentIdentifier(config.version, "", null),
+                                PatchedComponentIdentifier(config.version, ""),
                                 repositoriesSupplier.get().filterIsInstance<MinecraftRepositoryImpl>().map(MinecraftRepositoryImpl::createResolver),
                                 getCacheProvider(gradle),
                                 (configuration.resolutionStrategy as ResolutionStrategyInternal).cachePolicy.also(startParameterResolutionOverride::applyToCachePolicy),

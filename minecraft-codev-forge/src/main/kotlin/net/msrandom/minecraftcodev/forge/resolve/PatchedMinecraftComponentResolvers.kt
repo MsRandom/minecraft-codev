@@ -73,11 +73,7 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
     override fun resolve(dependency: DependencyMetadata, acceptor: VersionSelector?, rejector: VersionSelector?, result: BuildableComponentIdResolveResult) {
         if (dependency is PatchedMinecraftDependencyMetadata) {
             componentIdResolver.resolveVersion(dependency, acceptor, rejector, result) { _, version ->
-                PatchedComponentIdentifier(
-                    version,
-                    dependency.relatedConfiguration ?: MinecraftCodevForgePlugin.PATCHES_CONFIGURATION,
-                    dependency.getModuleConfiguration()
-                )
+                PatchedComponentIdentifier(version, dependency.relatedConfiguration ?: MinecraftCodevForgePlugin.PATCHES_CONFIGURATION)
             }
         }
     }

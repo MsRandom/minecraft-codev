@@ -10,11 +10,9 @@ import org.gradle.internal.component.model.LocalOriginDependencyMetadata
 
 sealed interface PatchedMinecraftDependencyMetadata : ConfiguredDependencyMetadata
 
-class PatchedMinecraftDependencyMetadataWrapper(private val delegate: DependencyMetadata, override val relatedConfiguration: String?, private val moduleConfiguration: String?) :
+class PatchedMinecraftDependencyMetadataWrapper(private val delegate: DependencyMetadata, override val relatedConfiguration: String?) :
     PatchedMinecraftDependencyMetadata,
-    DependencyMetadata by delegate {
-    override fun getModuleConfiguration() = moduleConfiguration
-}
+    DependencyMetadata by delegate
 
 class DslOriginPatchedMinecraftDependencyMetadata(private val delegate: LocalOriginDependencyMetadata, private val source: Dependency, override val relatedConfiguration: String?) :
     LocalOriginDependencyMetadata by delegate,

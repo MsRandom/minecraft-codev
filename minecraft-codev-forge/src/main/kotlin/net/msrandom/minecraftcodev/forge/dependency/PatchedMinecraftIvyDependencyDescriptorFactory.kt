@@ -59,9 +59,6 @@ open class PatchedMinecraftIvyDependencyDescriptorFactory @Inject constructor(ex
         dependency is PatchedMinecraftDependency
 }
 
-class PatchedComponentIdentifier(version: String, val patches: String, val moduleConfiguration: String?, needsSources: Boolean = false) :
-    MinecraftComponentIdentifier("forge", version, needsSources) {
+class PatchedComponentIdentifier(version: String, val patches: String) : MinecraftComponentIdentifier("forge", version) {
     override val isBase get() = true
-
-    override fun withoutSources() = PatchedComponentIdentifier(version, patches, moduleConfiguration, false)
 }

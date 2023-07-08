@@ -95,7 +95,7 @@ open class MinecraftComponentResolvers @Inject constructor(
                 }
 
                 isChanging = true
-                MinecraftComponentIdentifier(identifier.module, snapshot, identifier.needsSources)
+                MinecraftComponentIdentifier(identifier.module, snapshot)
             } else {
                 val match = UNIQUE_VERSION_ID.find(identifier.version)?.groups?.get(1)?.value
 
@@ -108,7 +108,7 @@ open class MinecraftComponentResolvers @Inject constructor(
                         return
                     }
 
-                    MinecraftComponentIdentifier(identifier.module, version, identifier.needsSources)
+                    MinecraftComponentIdentifier(identifier.module, version)
                 }
             }
 
@@ -209,14 +209,11 @@ open class MinecraftComponentResolvers @Inject constructor(
     }
 }
 
-open class MinecraftComponentIdentifier(module: String, private val version: String, override val needsSources: Boolean = true) : ModuleComponentIdentifier, MayNeedSources {
+open class MinecraftComponentIdentifier(module: String, private val version: String) : ModuleComponentIdentifier {
     private val moduleIdentifier = DefaultModuleIdentifier.newId(MinecraftComponentResolvers.GROUP, module)
 
     open val isBase
         get() = module == MinecraftComponentResolvers.COMMON_MODULE
-
-    override fun mayHaveSources() = this
-    override fun withoutSources() = MinecraftComponentIdentifier(module, version, false)
 
     override fun getDisplayName() = "Minecraft $module $version"
     override fun getGroup(): String = moduleIdentifier.group
@@ -225,13 +222,6 @@ open class MinecraftComponentIdentifier(module: String, private val version: Str
     override fun getModuleIdentifier(): ModuleIdentifier = moduleIdentifier
 
     override fun toString() = displayName
-}
-
-interface MayNeedSources {
-    val needsSources: Boolean
-
-    fun mayHaveSources(): ModuleComponentIdentifier
-    fun withoutSources(): ModuleComponentIdentifier
 }
 
 interface MainArtifact

@@ -20,11 +20,9 @@ class RemappedDependencyMetadataWrapper(
     private val selector: ComponentSelector,
     override val sourceNamespace: MappingsNamespace?,
     override val targetNamespace: MappingsNamespace,
-    override val relatedConfiguration: String?,
-    private val moduleConfiguration: String?
+    override val relatedConfiguration: String?
 ) : RemappedDependencyMetadata, DependencyMetadata by delegate {
     override fun getSelector() = selector
-    override fun getModuleConfiguration() = moduleConfiguration
 }
 
 class DslOriginRemappedDependencyMetadata(

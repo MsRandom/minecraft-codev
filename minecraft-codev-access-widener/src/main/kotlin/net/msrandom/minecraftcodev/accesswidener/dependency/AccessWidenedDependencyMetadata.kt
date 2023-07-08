@@ -15,10 +15,7 @@ sealed interface AccessWidenedDependencyMetadata : ConfiguredDependencyMetadata 
 class AccessWidenedDependencyMetadataWrapper(
     override val delegate: DependencyMetadata,
     override val relatedConfiguration: String?,
-    private val moduleConfiguration: String?
-) : AccessWidenedDependencyMetadata, DependencyMetadata by delegate {
-    override fun getModuleConfiguration() = moduleConfiguration
-}
+) : AccessWidenedDependencyMetadata, DependencyMetadata by delegate
 
 class DslOriginAccessWidenedDependencyMetadata(
     override val delegate: LocalOriginDependencyMetadata,

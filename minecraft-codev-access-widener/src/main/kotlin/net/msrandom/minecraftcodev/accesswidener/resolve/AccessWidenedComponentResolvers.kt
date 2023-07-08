@@ -10,11 +10,9 @@ import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
-import net.msrandom.minecraftcodev.core.resolve.MayNeedSources
 import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.getOrResolve
 import net.msrandom.minecraftcodev.core.resolve.SourcesArtifactComponentMetadata
 import net.msrandom.minecraftcodev.core.utils.*
-import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.copy
 import org.gradle.api.Project
 import org.gradle.api.artifacts.component.ComponentIdentifier
@@ -116,8 +114,7 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                             // Maybe pass the namespace to use instead of the metadata one?
                             AccessWidenedDependencyMetadataWrapper(
                                 dependency,
-                                identifier.accessWidenersConfiguration,
-                                identifier.moduleConfiguration
+                                identifier.accessWidenersConfiguration
                             )
                         } else {
                             dependency
@@ -161,11 +158,7 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                 val accessWidenersConfiguration = dependency.relatedConfiguration ?: MinecraftCodevAccessWidenerPlugin.ACCESS_WIDENERS_CONFIGURATION
 
                 if (result.id is ModuleComponentIdentifier) {
-                    val id = AccessWidenedComponentIdentifier(
-                        result.id as ModuleComponentIdentifier,
-                        accessWidenersConfiguration,
-                        dependency.getModuleConfiguration()
-                    ).mayHaveSources()
+                    val id = AccessWidenedComponentIdentifier(result.id as ModuleComponentIdentifier, accessWidenersConfiguration)
 
                     if (metadata == null) {
                         result.resolved(id, result.moduleVersionId)
@@ -205,52 +198,10 @@ open class AccessWidenedComponentResolvers @Inject constructor(
     }
 
     override fun resolveArtifactsWithType(component: ComponentResolveMetadata, artifactType: ArtifactType, result: BuildableArtifactSetResolveResult) {
-        val id = component.id
-        if (id is AccessWidenedComponentIdentifier) {
-            val defaultArtifact = CodevGradleLinkageLoader.getDefaultArtifact(component)
-            result.resolved(listOf(SourcesArtifactComponentMetadata(defaultArtifact, defaultArtifact.id)))
-        }
     }
 
     override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactResolveResult) {
-        if (artifact is SourcesArtifactComponentMetadata) {
-            resolveArtifact(artifact.libraryArtifact, moduleSources, result)
-
-            if (result.isSuccessful) {
-                val id = artifact.id.componentIdentifier as AccessWidenedComponentIdentifier
-                val accessWideners = project.configurations.getByName(id.accessWidenersConfiguration)
-                val messageDigest = MessageDigest.getInstance("SHA1")
-
-                project.visitConfigurationFiles(resolvers, accessWideners) { accessWidener ->
-                    DigestInputStream(accessWidener.inputStream().buffered(), messageDigest).readBytes()
-                }
-
-                val hash = HashCode.fromBytes(messageDigest.digest())
-
-                val urlId = AccessWidenedArtifactIdentifier(
-                    artifact.id.asSerializable,
-                    hash,
-                    checksumService.sha1(result.result)
-                )
-
-                getOrResolve(artifact, urlId, artifactCache, cachePolicy, timeProvider, result) {
-                    val sources = SourcesGenerator.decompile(result.result.toPath(), emptyList(), buildOperationExecutor)
-
-                    val output = cacheManager.fileStoreDirectory
-                        .resolve(hash.toString())
-                        .resolve(id.group)
-                        .resolve(id.module)
-                        .resolve(id.version)
-                        .resolve(checksumService.sha1(sources.toFile()).toString())
-                        .resolve("${result.result.nameWithoutExtension}-sources.${result.result.extension}")
-
-                    output.parent.createDirectories()
-                    sources.copyTo(output)
-
-                    output.toFile()
-                }
-            }
-        } else if (artifact is AccessWidenedComponentArtifactMetadata) {
+        if (artifact is AccessWidenedComponentArtifactMetadata) {
             val id = artifact.componentId
             resolvers.get().artifactResolver.resolveArtifact(artifact.delegate, moduleSources, result)
 
@@ -320,21 +271,8 @@ open class AccessWidenedComponentResolvers @Inject constructor(
 class AccessWidenedComponentIdentifier(
     val original: ModuleComponentIdentifier,
     val accessWidenersConfiguration: String,
-    val moduleConfiguration: String?,
     private val needsSourcesOverride: Boolean? = null
-) : ModuleComponentIdentifier by original, MayNeedSources {
-    override val needsSources
-        get() = needsSourcesOverride ?: (original is MayNeedSources && original.needsSources)
-
-    override fun mayHaveSources() = if (original is MayNeedSources) {
-        AccessWidenedComponentIdentifier(original.withoutSources(), accessWidenersConfiguration, moduleConfiguration, this.needsSources)
-    } else {
-        this
-    }
-
-    override fun withoutSources() =
-        AccessWidenedComponentIdentifier(original, accessWidenersConfiguration, moduleConfiguration, false)
-
+) : ModuleComponentIdentifier by original {
     override fun getDisplayName() = "${original.displayName} (Access Widened)"
 
     override fun toString() = displayName

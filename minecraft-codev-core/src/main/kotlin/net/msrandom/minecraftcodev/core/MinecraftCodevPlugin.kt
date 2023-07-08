@@ -3,9 +3,11 @@ package net.msrandom.minecraftcodev.core
 import kotlinx.serialization.json.Json
 import net.msrandom.minecraftcodev.core.attributes.OperatingSystemDisambiguationRule
 import net.msrandom.minecraftcodev.core.attributes.VersionPatternCompatibilityRule
+import net.msrandom.minecraftcodev.core.dependency.DecompiledIvyDependencyDescriptorFactory
 import net.msrandom.minecraftcodev.core.dependency.MinecraftIvyDependencyDescriptorFactory
 import net.msrandom.minecraftcodev.core.dependency.handleCustomQueryResolvers
 import net.msrandom.minecraftcodev.core.dependency.registerCustomDependency
+import net.msrandom.minecraftcodev.core.resolve.DecompiledComponentResolvers
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
 import net.msrandom.minecraftcodev.core.utils.applyPlugin
 import net.msrandom.minecraftcodev.core.utils.named
@@ -17,11 +19,19 @@ import org.gradle.internal.os.OperatingSystem
 import org.gradle.nativeplatform.OperatingSystemFamily
 
 open class MinecraftCodevPlugin<T : PluginAware> : Plugin<T> {
-    private fun applyGradle(gradle: Gradle) = gradle.registerCustomDependency(
-        "minecraft",
-        MinecraftIvyDependencyDescriptorFactory::class.java,
-        MinecraftComponentResolvers::class.java
-    )
+    private fun applyGradle(gradle: Gradle) {
+        gradle.registerCustomDependency(
+            "minecraft",
+            MinecraftIvyDependencyDescriptorFactory::class.java,
+            MinecraftComponentResolvers::class.java
+        )
+
+        gradle.registerCustomDependency(
+            "decompiled",
+            DecompiledIvyDependencyDescriptorFactory::class.java,
+            DecompiledComponentResolvers::class.java
+        )
+    }
 
     override fun apply(target: T) = applyPlugin(target, ::applyGradle) {
         handleCustomQueryResolvers()

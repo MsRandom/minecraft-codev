@@ -152,9 +152,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
             val artifact = artifact(ArtifactTypeDefinition.JAR_TYPE)
             val artifacts = listOf(artifact) + extraArtifacts
 
-            val variants = mutableListOf<ConfigurationMetadata>()
-
-            for ((system, platformLibraries) in libraries.client.asMap()) {
+            val variants = libraries.client.asMap().map { (system, platformLibraries) ->
                 val osAttributes: ImmutableAttributes
                 val name: String
                 val dependencies: List<DependencyMetadata>
@@ -182,35 +180,20 @@ open class MinecraftMetadataGenerator @Inject constructor(
                     dependencies = (libraries.common + extraLibraries + libraries.client[null] + platformLibraries).map(::mapLibrary)
                 }
 
-                variants.add(
-                    CodevGradleLinkageLoader.ConfigurationMetadata(
-                        name,
-                        moduleComponentIdentifier,
-                        dependencies,
-                        artifacts,
-                        attributesFactory.concat(
-                            defaultAttributes(manifest, defaultAttributes).libraryAttributes(),
-                            osAttributes
-                        ),
-                        ImmutableCapabilities.EMPTY,
-                        setOf(name),
-                        objectFactory
-                    )
-                )
-            }
-
-            variants.add(
                 CodevGradleLinkageLoader.ConfigurationMetadata(
-                    JavaPlugin.SOURCES_ELEMENTS_CONFIGURATION_NAME,
+                    name,
                     moduleComponentIdentifier,
-                    emptyList(),
-                    listOf(artifact(ArtifactTypeDefinition.JAR_TYPE, "sources")),
-                    defaultAttributes(manifest, defaultAttributes).runtimeAttributes().docsAttributes(DocsType.SOURCES),
+                    dependencies,
+                    artifacts,
+                    attributesFactory.concat(
+                        defaultAttributes(manifest, defaultAttributes).libraryAttributes(),
+                        osAttributes
+                    ),
                     ImmutableCapabilities.EMPTY,
-                    setOf(JavaPlugin.SOURCES_ELEMENTS_CONFIGURATION_NAME),
+                    setOf(name),
                     objectFactory
                 )
-            )
+            }
 
             result.resolved(
                 CodevGradleLinkageLoader.ComponentResolveMetadata(
