@@ -13,6 +13,8 @@ import org.gradle.api.plugins.PluginAware
 import org.gradle.api.tasks.JavaExec
 import org.gradle.api.tasks.SourceSet
 import org.gradle.initialization.layout.GlobalCacheDir
+import org.jetbrains.kotlin.gradle.plugin.KotlinCompilation
+import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinJvmCompilation
 import java.nio.file.Path
 import javax.inject.Inject
 
@@ -23,31 +25,38 @@ class MinecraftCodevRunsPlugin<T : PluginAware> @Inject constructor(cacheDir: Gl
     val logging: Path = cache.resolve("logging")
 
     override fun apply(target: T) = applyPlugin(target) {
-        val capitalizedNatives = StringUtils.capitalize(NATIVES_CONFIGURATION)
+        fun addNativesConfiguration(nativesConfigurationName: String) = configurations.maybeCreate(nativesConfigurationName).apply {
+            isCanBeConsumed = false
+        }
 
-        createSourceSetElements { name, isSourceSet ->
-            if (isSourceSet) {
-                tasks.register("download${StringUtils.capitalize(name)}Assets", DownloadAssets::class.java) { task ->
-                    val fileName = if (name.isEmpty()) "${SourceSet.MAIN_SOURCE_SET_NAME}.json" else "$name.json"
+        fun addSourceElements(nativesConfigurationName: String, extractNativesTaskName: String, downloadAssetsTaskName: String) {
+            val configuration = addNativesConfiguration(nativesConfigurationName)
 
-                    task.assetIndexFile.set(layout.buildDirectory.dir("assetIndices").map { it.file(fileName) })
-                }
+            tasks.register(extractNativesTaskName, ExtractNatives::class.java) {
+                it.natives.set(configuration)
+            }
+
+            tasks.register(downloadAssetsTaskName, DownloadAssets::class.java) { task ->
+                val fileName = if (name.isEmpty()) "${SourceSet.MAIN_SOURCE_SET_NAME}.json" else "$name.json"
+
+                task.assetIndexFile.set(layout.buildDirectory.dir("assetIndices").map { it.file(fileName) })
             }
         }
 
-        createSourceSetElements { name, isSourceSet ->
-            val configurationName = if (name.isEmpty()) NATIVES_CONFIGURATION else name + capitalizedNatives
-
-            val configuration = configurations.maybeCreate(configurationName).apply {
-                isCanBeConsumed = false
+        createSourceSetElements(
+            {
+                addSourceElements(it.nativesConfigurationName, it.extractNativesTaskName, it.downloadAssetsTaskName)
+            },
+            {
+                addSourceElements(it.compilations.getByName(KotlinCompilation.MAIN_COMPILATION_NAME).nativesConfigurationName, it.extractNativesTaskName, it.downloadAssetsTaskName)
+            },
+            {
+                addNativesConfiguration(it.nativesConfigurationName)
+            },
+            {
+                addNativesConfiguration(it.nativesConfigurationName)
             }
-
-            if (isSourceSet) {
-                tasks.register("extract${StringUtils.capitalize(name)}$capitalizedNatives", ExtractNatives::class.java) {
-                    it.natives.set(configuration)
-                }
-            }
-        }
+        )
 
         val runs = extensions
             .getByType(MinecraftCodevExtension::class.java)
@@ -71,7 +80,7 @@ class MinecraftCodevRunsPlugin<T : PluginAware> @Inject constructor(cacheDir: Gl
                 javaExec.jvmArgumentProviders.add(configuration.jvmArguments.map { arguments -> arguments.map(MinecraftRunConfiguration.Argument::compile) }::get)
                 javaExec.workingDir(configuration.workingDirectory)
                 javaExec.mainClass.set(configuration.mainClass)
-                javaExec.classpath = configuration.sourceSet.get().runtimeClasspath
+                javaExec.classpath = configuration.compilation.map(KotlinJvmCompilation::runtimeDependencyFiles).orElse(configuration.sourceSet.map(SourceSet::getRuntimeClasspath)).get()
                 javaExec.group = ApplicationPlugin.APPLICATION_GROUP
 
                 javaExec.dependsOn(configuration.beforeRun)
@@ -85,5 +94,7 @@ class MinecraftCodevRunsPlugin<T : PluginAware> @Inject constructor(cacheDir: Gl
 
     companion object {
         const val NATIVES_CONFIGURATION = "natives"
+        const val EXTRACT_NATIVES_TASK = "extractNatives"
+        const val DOWNLOAD_ASSETS_TASK = "downloadAssets"
     }
 }

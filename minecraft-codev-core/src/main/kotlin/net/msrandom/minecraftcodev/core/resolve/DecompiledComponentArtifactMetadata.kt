@@ -24,4 +24,4 @@ class DecompiledComponentArtifactMetadata(
     override fun getComponentId() = id
 }
 
-class PassthroughRemappedArtifactMetadata(val original: ComponentArtifactMetadata): ComponentArtifactMetadata by original
+class PassthroughDecompiledArtifactMetadata(val original: ComponentArtifactMetadata): ComponentArtifactMetadata by original

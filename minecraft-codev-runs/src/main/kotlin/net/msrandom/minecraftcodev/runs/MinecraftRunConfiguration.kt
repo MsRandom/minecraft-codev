@@ -4,29 +4,60 @@ import org.gradle.api.Project
 import org.gradle.api.Task
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.plugins.JavaLibraryPlugin
+import org.gradle.api.plugins.JavaPlugin
 import org.gradle.api.plugins.JvmEcosystemPlugin
 import org.gradle.api.provider.*
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
-import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
+import org.jetbrains.kotlin.gradle.plugin.KotlinCompilation
+import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinJvmCompilation
 import java.io.File
 import java.nio.file.Path
 import javax.inject.Inject
 
 abstract class MinecraftRunConfiguration @Inject constructor(val project: Project) {
     abstract val mainClass: Property<String>
+        @Input
+        get
+
     abstract val jvmVersion: Property<Int>
+        @Input
+        get
 
     abstract val sourceSet: Property<SourceSet>
-    abstract val kotlinSourceSet: Property<KotlinSourceSet>
+        @Input
+        get
 
-    val beforeRun: ListProperty<Task> = project.objects.listProperty(Task::class.java)
-    val dependsOn: ListProperty<MinecraftRunConfigurationBuilder> = project.objects.listProperty(MinecraftRunConfigurationBuilder::class.java)
-    val arguments: SetProperty<Argument> = project.objects.setProperty(Argument::class.java)
-    val jvmArguments: SetProperty<Argument> = project.objects.setProperty(Argument::class.java)
-    val environment: MapProperty<String, Argument> = project.objects.mapProperty(String::class.java, Argument::class.java)
+    abstract val compilation: Property<KotlinJvmCompilation>
+        @Input
+        get
+
+    abstract val beforeRun: ListProperty<Task>
+        @Input
+        get
+
+    abstract val dependsOn: ListProperty<MinecraftRunConfigurationBuilder>
+        @Input
+        get
+
+    abstract val arguments: SetProperty<Argument>
+        @Input
+        get
+
+    abstract val jvmArguments: SetProperty<Argument>
+        @Input
+        get
+
+    abstract val environment: MapProperty<String, Argument>
+        @Input
+        get
 
     abstract val workingDirectory: DirectoryProperty
+        @InputDirectory
+        get
 
     val modClasspaths = mutableMapOf<String, ConfigurableFileCollection>()
 
@@ -35,7 +66,7 @@ abstract class MinecraftRunConfiguration @Inject constructor(val project: Projec
             mainClass.finalizeValueOnRead()
             jvmVersion.finalizeValueOnRead()
 
-            project.plugins.withType(JvmEcosystemPlugin::class.java) {
+            project.plugins.withType(JavaPlugin::class.java) {
                 sourceSet.convention(project.extensions.getByType(SourceSetContainer::class.java).named(SourceSet.MAIN_SOURCE_SET_NAME))
             }
 

@@ -1,28 +1,28 @@
 package net.msrandom.minecraftcodev.runs
 
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.encodeToStream
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
 import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
 import net.msrandom.minecraftcodev.core.resolve.MinecraftMetadataGenerator
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
-import net.msrandom.minecraftcodev.core.utils.getCacheProvider
-import net.msrandom.minecraftcodev.core.utils.osVersion
-import net.msrandom.minecraftcodev.core.utils.zipFileSystem
+import net.msrandom.minecraftcodev.core.utils.*
 import net.msrandom.minecraftcodev.runs.task.DownloadAssets
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
-import org.apache.commons.lang3.StringUtils
 import org.apache.commons.lang3.SystemUtils
 import org.gradle.api.artifacts.Configuration
 import org.gradle.api.artifacts.ResolvedArtifact
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.file.Directory
+import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.internal.artifacts.RepositoriesSupplier
 import org.gradle.api.internal.artifacts.configurations.ResolutionStrategyInternal
-import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.StartParameterResolutionOverride
 import org.gradle.api.plugins.ExtensionAware
+import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputDirectory
+import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.SourceSet
 import org.gradle.configurationcache.extensions.serviceOf
 import org.gradle.internal.component.external.model.DefaultModuleComponentIdentifier
@@ -46,16 +46,17 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
         return true
     }
 
-    fun client(): RunConfigurationDefaultsContainer = apply {
+    fun client() {
         builder.action {
             val configuration = getConfiguration()
             val artifact = configuration.findMinecraft(MinecraftComponentResolvers.CLIENT_MODULE, ::client.name)
             val manifest = getManifest(configuration, artifact)
 
-            @Suppress("UnstableApiUsage")
-            val sourceSetName = sourceSet.get().takeUnless(SourceSet::isMain)?.name?.let(StringUtils::capitalize).orEmpty()
-            val extractNativesTask = project.tasks.withType(ExtractNatives::class.java).named("extract${sourceSetName}${StringUtils.capitalize(MinecraftCodevRunsPlugin.NATIVES_CONFIGURATION)}")
-            val downloadAssetsTask = project.tasks.withType(DownloadAssets::class.java).getByName("download${sourceSetName}Assets")
+            val extractNativesTask = project.tasks.withType(ExtractNatives::class.java)
+                .named(compilation.map { it.target.extractNativesTaskName }.orElse(sourceSet.map { it.extractNativesTaskName }).get())
+
+            val downloadAssetsTask = project.tasks.withType(DownloadAssets::class.java)
+                .getByName(compilation.map { it.target.downloadAssetsTaskName }.orElse(sourceSet.map { it.downloadAssetsTaskName }).get())
 
             beforeRun.add(extractNativesTask)
             beforeRun.add(downloadAssetsTask)
@@ -177,11 +178,13 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
         }
     }
 
-    fun server(): RunConfigurationDefaultsContainer = apply {
+    fun server() {
         builder.action {
             val configurationProvider = getConfiguration()
             val artifactProvider = configurationProvider.findMinecraft(MinecraftComponentResolvers.COMMON_MODULE, ::server.name)
             val manifestProvider = getManifest(configurationProvider, artifactProvider)
+
+            arguments.add(MinecraftRunConfiguration.Argument("nogui"))
 
             mainClass.set(
                 manifestProvider
@@ -217,7 +220,10 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
     companion object {
         private const val WRONG_SIDE_ERROR = "There is no Minecraft %s dependency for defaults.%s to work"
 
-        fun MinecraftRunConfiguration.getConfiguration() = sourceSet.flatMap { project.configurations.named(it.runtimeClasspathConfigurationName) }
+        fun MinecraftRunConfiguration.getConfiguration() = compilation
+            .map { it.runtimeDependencyConfigurationName }
+            .orElse(sourceSet.map { it.runtimeClasspathConfigurationName })
+            .flatMap(project.configurations::named)
 
         fun Provider<Configuration>.findMinecraft(type: String, caller: String) = map {
             it.resolvedConfiguration.resolvedArtifacts.firstOrNull { artifact ->
@@ -236,8 +242,6 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
                     val cachePolicy = (configuration.resolutionStrategy as ResolutionStrategyInternal).cachePolicy
                     val id = artifact.id.componentIdentifier as ModuleComponentIdentifier
 
-                    project.serviceOf<StartParameterResolutionOverride>().applyToCachePolicy(cachePolicy)
-
                     MinecraftMetadataGenerator.getVersionManifest(
                         DefaultModuleComponentIdentifier(id.moduleIdentifier, artifact.moduleVersion.id.version),
                         repository.url,
@@ -250,5 +254,24 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
                     )
                 } ?: throw UnsupportedOperationException("Game resolved with version ${artifact.moduleVersion.id.version} but no metadata found for said version, this should not be possible.")
             }
+    }
+}
+
+interface DatagenRunConfigurationData {
+    val modId: Property<String>
+        @Input
+        get
+
+    val outputDirectory: DirectoryProperty
+        @InputDirectory
+        @Optional
+        get
+
+    fun getOutputDirectory(runConfiguration: MinecraftRunConfiguration): Provider<Directory> {
+        val moduleName = runConfiguration.compilation.map {
+            lowerCamelCaseName(it.target.disambiguationClassifier, it.name.asNamePart)
+        }.orElse(runConfiguration.sourceSet.map(SourceSet::getName))
+
+        return outputDirectory.orElse(runConfiguration.project.layout.buildDirectory.dir("generatedResources").flatMap { moduleName.map(it::dir) })
     }
 }

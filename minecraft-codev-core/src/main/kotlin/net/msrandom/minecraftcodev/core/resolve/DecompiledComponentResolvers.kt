@@ -62,8 +62,6 @@ open class DecompiledComponentResolvers @Inject constructor(
     private val timeProvider: BuildCommencedTimeProvider,
     private val calculatedValueContainerFactory: CalculatedValueContainerFactory,
     private val buildOperationExecutor: BuildOperationExecutor,
-    private val attributesFactory: ImmutableAttributesFactory,
-    private val instantiator: NamedObjectInstantiator,
     private val versionSelectorSchema: VersionSelectorScheme,
 
     cacheProvider: CodevCacheProvider
@@ -158,7 +156,7 @@ open class DecompiledComponentResolvers @Inject constructor(
                                 selectedArtifacts
                             )
                         } else {
-                            PassthroughRemappedArtifactMetadata(artifact)
+                            PassthroughDecompiledArtifactMetadata(artifact)
                         }
                     },
                     emptyList(),
@@ -255,14 +253,11 @@ open class DecompiledComponentResolvers @Inject constructor(
                     val file = buildOperationExecutor.call(object : CallableBuildOperation<Path> {
                         override fun description() = BuildOperationDescriptor
                             .displayName("Decompiling ${result.result}")
+                            .progressDisplayName("Generating Sources")
                             .metadata(BuildOperationCategory.TASK)
 
                         override fun call(context: BuildOperationContext) = context.callWithStatus {
-                            SourcesGenerator.decompile(
-                                result.result.toPath(),
-                                classpath.map(File::toPath),
-                                buildOperationExecutor
-                            )
+                            SourcesGenerator.decompile(result.result.toPath(), classpath.map(File::toPath))
                         }
                     })
 
@@ -283,7 +278,7 @@ open class DecompiledComponentResolvers @Inject constructor(
             if (!result.hasResult()) {
                 result.notFound(artifact.id)
             }
-        } else if (artifact is PassthroughRemappedArtifactMetadata) {
+        } else if (artifact is PassthroughDecompiledArtifactMetadata) {
             resolvers.get().artifactResolver.resolveArtifact(artifact.original, moduleSources, result)
         }
     }

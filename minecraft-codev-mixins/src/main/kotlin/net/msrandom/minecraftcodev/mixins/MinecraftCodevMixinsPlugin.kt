@@ -3,7 +3,7 @@ package net.msrandom.minecraftcodev.mixins
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.dependency.registerCustomDependency
 import net.msrandom.minecraftcodev.core.utils.applyPlugin
-import net.msrandom.minecraftcodev.core.utils.createSourceSetConfigurations
+import net.msrandom.minecraftcodev.core.utils.createCompilationConfigurations
 import net.msrandom.minecraftcodev.mixins.dependency.MixinIvyDependencyDescriptorFactory
 import net.msrandom.minecraftcodev.mixins.dependency.SKipMixinsIvyDependencyDescriptorFactory
 import net.msrandom.minecraftcodev.mixins.mixin.GradleMixinService
@@ -32,7 +32,7 @@ class MinecraftCodevMixinsPlugin<T : PluginAware> : Plugin<T> {
     }
 
     override fun apply(target: T) = applyPlugin(target, ::applyGradle) {
-        createSourceSetConfigurations(MIXINS_CONFIGURATION, true)
+        createCompilationConfigurations(MIXINS_CONFIGURATION, true)
 
         extensions.getByType(MinecraftCodevExtension::class.java).extensions.create("mixins", MixinsExtension::class.java)
 

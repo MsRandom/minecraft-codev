@@ -24,6 +24,8 @@ fun Project.integrateIdeaRuns() {
                     .getByType(RunsContainer::class.java)
                     .all { builder ->
                         runConfigurations.register(builder.friendlyName, Application::class.java) { application ->
+                            otherProject.logger.lifecycle("Building IntelliJ Idea run configuration {}", builder.name)
+
                             val config = builder.build()
 
                             application.mainClass = config.mainClass.get()
@@ -34,8 +36,8 @@ fun Project.integrateIdeaRuns() {
 
                             if (config.sourceSet.isPresent) {
                                 application.moduleRef(otherProject, config.sourceSet.get())
-                            } else if (config.kotlinSourceSet.isPresent) {
-                                fun addSourceSetName(moduleName: String) = moduleName + '.' + config.kotlinSourceSet.get().name
+                            } else if (config.compilation.isPresent) {
+                                fun addSourceSetName(moduleName: String) = moduleName + '.' + config.compilation.get().defaultSourceSetName
 
                                 application.moduleName = if (otherProject == project) {
                                     addSourceSetName(project.name)

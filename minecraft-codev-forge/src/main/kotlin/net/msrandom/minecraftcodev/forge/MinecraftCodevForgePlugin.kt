@@ -5,7 +5,7 @@ import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
 import net.msrandom.minecraftcodev.core.dependency.registerCustomDependency
 import net.msrandom.minecraftcodev.core.utils.applyPlugin
-import net.msrandom.minecraftcodev.core.utils.createSourceSetConfigurations
+import net.msrandom.minecraftcodev.core.utils.createTargetConfigurations
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.forge.dependency.PatchedMinecraftIvyDependencyDescriptorFactory
 import net.msrandom.minecraftcodev.forge.mappings.setupForgeRemapperIntegration
@@ -26,7 +26,7 @@ open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
     )
 
     override fun apply(target: T) = applyPlugin(target, ::applyGradle) {
-        createSourceSetConfigurations(PATCHES_CONFIGURATION)
+        createTargetConfigurations(PATCHES_CONFIGURATION)
 
         extensions.getByType(MinecraftCodevExtension::class.java).extensions.create("patched", PatchedMinecraftCodevExtension::class.java)
         setupForgeRemapperIntegration()

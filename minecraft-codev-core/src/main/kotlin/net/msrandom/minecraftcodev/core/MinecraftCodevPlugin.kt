@@ -49,9 +49,7 @@ open class MinecraftCodevPlugin<T : PluginAware> : Plugin<T> {
         }
 
         project.configurations.all { configuration ->
-            configuration.attributes {
-                it.attribute(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE, project.objects.named(OperatingSystem.current().familyName))
-            }
+            configuration.incoming.attributes.attribute(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE, project.objects.named(OperatingSystem.current().familyName))
         }
     }
 

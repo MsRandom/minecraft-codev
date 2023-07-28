@@ -12,10 +12,14 @@ import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.utils.applyPlugin
 import net.msrandom.minecraftcodev.fabric.mixin.FabricMixinConfigHandler
+import net.msrandom.minecraftcodev.fabric.runs.FabricRunsDefaultsContainer
 import net.msrandom.minecraftcodev.mixins.MinecraftCodevMixinsPlugin
 import net.msrandom.minecraftcodev.mixins.MixinsExtension
 import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
 import net.msrandom.minecraftcodev.remapper.RemapperExtension
+import net.msrandom.minecraftcodev.runs.MinecraftCodevRunsPlugin
+import net.msrandom.minecraftcodev.runs.RunConfigurationDefaultsContainer
+import net.msrandom.minecraftcodev.runs.RunsContainer
 import org.gradle.api.Plugin
 import org.gradle.api.plugins.PluginAware
 import java.io.InputStream
@@ -69,6 +73,14 @@ class MinecraftCodevFabricPlugin<T : PluginAware> : Plugin<T> {
                     null
                 }
             }
+        }
+
+        plugins.withType(MinecraftCodevRunsPlugin::class.java) {
+            val defaults = extensions.getByType(MinecraftCodevExtension::class.java)
+                .extensions.getByType(RunsContainer::class.java)
+                .extensions.getByType(RunConfigurationDefaultsContainer::class.java)
+
+            defaults.extensions.create("fabric", FabricRunsDefaultsContainer::class.java, defaults)
         }
     }
 

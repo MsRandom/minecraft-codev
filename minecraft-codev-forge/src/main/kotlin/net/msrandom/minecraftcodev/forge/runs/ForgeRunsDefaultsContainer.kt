@@ -11,52 +11,56 @@ import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin
 import net.msrandom.minecraftcodev.forge.UserdevConfig
+import net.msrandom.minecraftcodev.forge.dependency.patchesConfigurationName
 import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
-import net.msrandom.minecraftcodev.runs.MinecraftCodevRunsPlugin
-import net.msrandom.minecraftcodev.runs.MinecraftRunConfiguration
-import net.msrandom.minecraftcodev.runs.RunConfigurationDefaultsContainer
+import net.msrandom.minecraftcodev.runs.*
 import net.msrandom.minecraftcodev.runs.RunConfigurationDefaultsContainer.Companion.findMinecraft
 import net.msrandom.minecraftcodev.runs.RunConfigurationDefaultsContainer.Companion.getConfiguration
 import net.msrandom.minecraftcodev.runs.RunConfigurationDefaultsContainer.Companion.getManifest
-import net.msrandom.minecraftcodev.runs.RunsContainer
 import net.msrandom.minecraftcodev.runs.task.DownloadAssets
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
-import org.apache.commons.lang3.StringUtils
+import org.gradle.api.Action
+import org.gradle.api.artifacts.Configuration
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
-import org.gradle.api.plugins.JvmEcosystemPlugin
+import org.gradle.api.plugins.JavaPlugin
+import org.gradle.api.provider.Property
+import org.gradle.api.provider.Provider
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
+import org.jetbrains.kotlin.gradle.plugin.KotlinCompilation
 import java.io.File
 import kotlin.io.path.createDirectories
 import kotlin.io.path.reader
 import kotlin.io.path.writeLines
 
 open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefaultsContainer) {
-    private fun MinecraftRunConfiguration.getUserdevData() = sourceSet.flatMap {
-        @Suppress("UnstableApiUsage")
-        val name = if (SourceSet.isMain(it)) {
-            MinecraftCodevForgePlugin.PATCHES_CONFIGURATION
-        } else {
-            it.name + StringUtils.capitalize(MinecraftCodevForgePlugin.PATCHES_CONFIGURATION)
-        }
+    private fun MinecraftRunConfiguration.getUserdevData(patchesConfiguration: Provider<Configuration>?): Provider<UserdevConfig> {
+        val provider = patchesConfiguration ?: compilation.flatMap {
+            project.configurations.named(it.target.patchesConfigurationName)
+        }.orElse(sourceSet.flatMap {
+            project.configurations.named(it.patchesConfigurationName)
+        })
 
-        project.configurations.named(name)
-    }.map { patches ->
-        var config: UserdevConfig? = null
-        for (file in patches) {
-            val isUserdev = MinecraftCodevForgePlugin.userdevConfig(file) {
-                config = it
+        return provider.map { patches ->
+            var config: UserdevConfig? = null
+            for (file in patches) {
+                val isUserdev = MinecraftCodevForgePlugin.userdevConfig(file) {
+                    config = it
+                }
+
+                if (isUserdev) break
             }
 
-            if (isUserdev) break
+            config ?: throw UnsupportedOperationException("Patches $patches did not contain Forge userdev.")
         }
-
-        config ?: throw UnsupportedOperationException("Patches configuration $patches did not contain Forge userdev.")
     }
 
     private fun MinecraftRunConfiguration.addArgs(
         manifest: MinecraftVersionMetadata,
         config: UserdevConfig,
+        runtimeConfiguration: Configuration,
         arguments: MutableSet<MinecraftRunConfiguration.Argument>,
         existing: List<String>,
         extractNativesName: String,
@@ -65,7 +69,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
         arguments.addAll(
             existing.map {
                 if (it.startsWith('{')) {
-                    MinecraftRunConfiguration.Argument(resolveTemplate(manifest, config, it.substring(1, it.length - 1), extractNativesName, downloadAssetsName))
+                    MinecraftRunConfiguration.Argument(resolveTemplate(manifest, config, runtimeConfiguration, it.substring(1, it.length - 1), extractNativesName, downloadAssetsName))
                 } else {
                     MinecraftRunConfiguration.Argument(it)
                 }
@@ -73,7 +77,14 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
         )
     }
 
-    private fun MinecraftRunConfiguration.resolveTemplate(manifest: MinecraftVersionMetadata, config: UserdevConfig, template: String, extractNativesName: String, downloadAssetsName: String): Any {
+    private fun MinecraftRunConfiguration.resolveTemplate(
+        manifest: MinecraftVersionMetadata,
+        config: UserdevConfig,
+        runtimeConfiguration: Configuration,
+        template: String,
+        extractNativesName: String,
+        downloadAssetsName: String
+    ): Any {
         return when (template) {
             "asset_index" -> manifest.assets
             "assets_root" -> {
@@ -95,19 +106,39 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
             "source_roots" -> {
                 val sourceRoots = modClasspaths
 
+                @Suppress("UnstableApiUsage")
                 val fixedRoots = if (sourceRoots.isEmpty()) {
-                    val main = project.extensions.getByType(SourceSetContainer::class.java).getByName(SourceSet.MAIN_SOURCE_SET_NAME)
-
                     fun sourceToFiles(sourceSet: SourceSet) = if (sourceSet.output.resourcesDir == null) {
                         sourceSet.output.classesDirs
                     } else {
                         project.files(sourceSet.output.resourcesDir, sourceSet.output.classesDirs)
                     }
 
-                    if (sourceSet.get() == main) {
-                        mapOf(null to sourceToFiles(main))
+                    fun compilationToFiles(compilation: KotlinCompilation<*>) = project.files(compilation.output.resourcesDir, compilation.output.classesDirs)
+
+                    if (compilation.isPresent) {
+                        val compilation = compilation.get()
+
+                        if (compilation.name == KotlinCompilation.MAIN_COMPILATION_NAME) {
+                            mapOf(null to compilationToFiles(compilation))
+                        } else {
+                            val main = compilation.target
+                                .compilations
+                                .getByName(KotlinCompilation.MAIN_COMPILATION_NAME)
+
+                            mapOf(null to compilationToFiles(compilation) + compilationToFiles(main))
+                        }
                     } else {
-                        mapOf(null to sourceToFiles(main) + sourceToFiles(sourceSet.get()))
+                        val sourceSet = sourceSet.get()
+                        if (SourceSet.isMain(sourceSet)) {
+                            mapOf(null to sourceToFiles(sourceSet))
+                        } else {
+                            val main = project.extensions
+                                .getByType(SourceSetContainer::class.java)
+                                .getByName(SourceSet.MAIN_SOURCE_SET_NAME)
+
+                            mapOf(null to sourceToFiles(main) + sourceToFiles(sourceSet))
+                        }
                     }
                 } else {
                     sourceRoots
@@ -133,8 +164,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
             "mcp_to_srg" -> {
                 val srgMappings = IMappingBuilder.create()
 
-                val mappingsArtifact = project.configurations.getByName(sourceSet.get().runtimeClasspathConfigurationName)
-                    .resolvedConfiguration
+                val mappingsArtifact = runtimeConfiguration.resolvedConfiguration
                     .resolvedArtifacts
                     .firstOrNull {
                         it.moduleVersion.id.group == MinecraftComponentResolvers.GROUP &&
@@ -182,7 +212,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
                 val path = project.layout.buildDirectory.dir("legacyClasspath").get().file("legacyClasspath.txt").asFile.toPath()
 
                 path.parent.createDirectories()
-                path.writeLines(project.configurations.getByName(sourceSet.get().runtimeClasspathConfigurationName).map(File::getAbsolutePath))
+                path.writeLines(runtimeConfiguration.map(File::getAbsolutePath))
 
                 path.toAbsolutePath().toString()
             }
@@ -202,35 +232,37 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
         }
     }
 
-    private fun MinecraftRunConfiguration.addData(caller: String, runType: (UserdevConfig.Runs) -> UserdevConfig.Run?) {
-        val configProvider = getUserdevData()
+    private fun MinecraftRunConfiguration.addData(
+        caller: String,
+        data: ForgeRunConfigurationData,
+        runType: (UserdevConfig.Runs) -> UserdevConfig.Run?
+    ) {
+        val configProvider = getUserdevData(data.patchesConfiguration.takeIf(Property<*>::isPresent))
 
-        @Suppress("UnstableApiUsage")
-        val sourceSetName = sourceSet.get().takeUnless(SourceSet::isMain)?.name?.let(StringUtils::capitalize).orEmpty()
-        val extractNativesTaskName = "extract${sourceSetName}${StringUtils.capitalize(MinecraftCodevRunsPlugin.NATIVES_CONFIGURATION)}"
-        val downloadAssetsTaskName = "download${sourceSetName}Assets"
+        val extractNativesTaskName = compilation.map { it.target.extractNativesTaskName }.orElse(sourceSet.map { it.extractNativesTaskName }).get()
+        val downloadAssetsTaskName = compilation.map { it.target.downloadAssetsTaskName }.orElse(sourceSet.map { it.downloadAssetsTaskName }).get()
 
-        val runProvider = configProvider.map {
-            runType(it.runs) ?: throw UnsupportedOperationException("Attempted to get use run configuration which doesn't exist.")
+        val getRun: UserdevConfig.() -> UserdevConfig.Run = {
+            runType(runs) ?: throw UnsupportedOperationException("Attempted to get use $caller run configuration which doesn't exist.")
         }
 
         val configuration = getConfiguration()
-        val artifact = configuration.findMinecraft("forge", caller)
+        val artifact = configuration.findMinecraft("forge", "forge.$caller")
         val manifestProvider = getManifest(configuration, artifact)
 
-        mainClass.set(runProvider.map(UserdevConfig.Run::main))
+        mainClass.set(configProvider.map { it.getRun().main })
 
-        val zipped = runProvider
-            .zip(manifestProvider) { run, manifest -> run to manifest }
-            .zip(configProvider) { (run, manifest), config -> Triple(run, manifest, config) }
+        val zipped = configuration
+            .zip(manifestProvider) { config, manifest -> config to manifest }
+            .zip(configProvider) { (config, manifest), userdevConfig -> Triple(config, manifest, userdevConfig) }
 
-        environment.putAll(zipped.map { (run, manifest, config) ->
+        environment.putAll(zipped.map { (config, manifest, userdevConfig) ->
             buildMap {
-                for ((key, value) in run.env) {
+                for ((key, value) in userdevConfig.getRun().env) {
                     val argument = if (value.startsWith('$')) {
-                        MinecraftRunConfiguration.Argument(resolveTemplate(manifest, config, value.substring(2, value.length - 1), extractNativesTaskName, downloadAssetsTaskName))
+                        MinecraftRunConfiguration.Argument(resolveTemplate(manifest, userdevConfig, config, value.substring(2, value.length - 1), extractNativesTaskName, downloadAssetsTaskName))
                     } else if (value.startsWith('{')) {
-                        MinecraftRunConfiguration.Argument(resolveTemplate(manifest, config, value.substring(1, value.length - 1), extractNativesTaskName, downloadAssetsTaskName))
+                        MinecraftRunConfiguration.Argument(resolveTemplate(manifest, userdevConfig, config, value.substring(1, value.length - 1), extractNativesTaskName, downloadAssetsTaskName))
                     } else {
                         MinecraftRunConfiguration.Argument(value)
                     }
@@ -240,23 +272,24 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
             }
         })
 
-        arguments.addAll(zipped.map { (run, manifest, config) ->
+        arguments.addAll(zipped.map { (config, manifest, userdevConfig) ->
             val arguments = mutableSetOf<MinecraftRunConfiguration.Argument>()
 
-            addArgs(manifest, config, arguments, run.args, extractNativesTaskName, downloadAssetsTaskName)
+            addArgs(manifest, userdevConfig, config, arguments, userdevConfig.getRun().args, extractNativesTaskName, downloadAssetsTaskName)
 
             arguments
         })
 
-        jvmArguments.addAll(zipped.map { (run, manifest, config) ->
+        jvmArguments.addAll(zipped.map { (config, manifest, userdevConfig) ->
+            val run = userdevConfig.getRun()
             val jvmArguments = mutableSetOf<MinecraftRunConfiguration.Argument>()
 
-            addArgs(manifest, config, jvmArguments, run.jvmArgs, extractNativesTaskName, downloadAssetsTaskName)
+            addArgs(manifest, userdevConfig, config, jvmArguments, run.jvmArgs, extractNativesTaskName, downloadAssetsTaskName)
 
             for ((key, value) in run.props) {
                 if (value.startsWith('{')) {
                     val template = value.substring(1, value.length - 1)
-                    jvmArguments.add(MinecraftRunConfiguration.Argument("-D$key=", resolveTemplate(manifest, config, template, extractNativesTaskName, downloadAssetsTaskName)))
+                    jvmArguments.add(MinecraftRunConfiguration.Argument("-D$key=", resolveTemplate(manifest, userdevConfig, config, template, extractNativesTaskName, downloadAssetsTaskName)))
                 } else {
                     jvmArguments.add(MinecraftRunConfiguration.Argument("-D$key=$value"))
                 }
@@ -266,40 +299,67 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
         })
     }
 
-    fun client(): ForgeRunsDefaultsContainer = apply {
+    fun client(action: Action<ForgeRunConfigurationData>? = null): Unit = defaults.builder.action {
+        val data = defaults.builder.project.objects.newInstance(ForgeRunConfigurationData::class.java)
+
+        action?.execute(data)
+
+        addData(::client.name, data, UserdevConfig.Runs::client)
+    }
+
+    fun server(action: Action<ForgeRunConfigurationData>? = null): Unit = defaults.builder.action {
+        val data = defaults.builder.project.objects.newInstance(ForgeRunConfigurationData::class.java)
+
+        action?.execute(data)
+
+        addData(::server.name, data, UserdevConfig.Runs::server)
+    }
+
+    fun data(action: Action<ForgeDatagenRunConfigurationData>) {
         defaults.builder.action {
-            addData(::client.name, UserdevConfig.Runs::client)
+            val data = defaults.builder.project.objects.newInstance(ForgeDatagenRunConfigurationData::class.java)
+
+            action.execute(data)
+
+            val outputDirectory = data.getOutputDirectory(this).map(MinecraftRunConfiguration::Argument)
+
+            addData(UserdevConfig.Runs::data.name, data, UserdevConfig.Runs::data)
+
+            arguments.add(MinecraftRunConfiguration.Argument("--mod"))
+            arguments.add(data.modId.map(MinecraftRunConfiguration::Argument))
+
+            arguments.addAll(MinecraftRunConfiguration.Argument("--all"))
+
+            arguments.add(MinecraftRunConfiguration.Argument("--output"))
+            arguments.add(outputDirectory)
+
+            arguments.add(MinecraftRunConfiguration.Argument("--existing"))
+            arguments.add(outputDirectory)
         }
     }
 
-    fun server(): ForgeRunsDefaultsContainer = apply {
-        defaults.builder.action {
-            addData(::server.name, UserdevConfig.Runs::server)
-        }
-    }
-
-    fun data(): ForgeRunsDefaultsContainer = apply {
-        defaults.builder.action {
-            addData(::data.name, UserdevConfig.Runs::data)
-        }
-    }
-
-    fun gameTestServer(): ForgeRunsDefaultsContainer = apply {
+    fun gameTestServer(action: Action<ForgeRunConfigurationData>? = null) {
         defaults.builder.setup {
-            project.plugins.withType(JvmEcosystemPlugin::class.java) {
+            project.plugins.withType(JavaPlugin::class.java) {
                 sourceSet.convention(project.extensions.getByType(SourceSetContainer::class.java).getByName(SourceSet.TEST_SOURCE_SET_NAME))
             }
         }
 
         defaults.builder.action {
-            addData(::data.name, UserdevConfig.Runs::gameTestServer)
+            val data = defaults.builder.project.objects.newInstance(ForgeRunConfigurationData::class.java)
+
+            action?.execute(data)
+
+            addData(::gameTestServer.name, data, UserdevConfig.Runs::gameTestServer)
         }
     }
-
-    companion object {
-        private const val WRONG_SIDE_ERROR = "There is no Minecraft %s dependency for defaults.forge.%s to work"
-
-        val RunConfigurationDefaultsContainer.forge
-            get() = ForgeRunsDefaultsContainer(this)
-    }
 }
+
+abstract class ForgeRunConfigurationData {
+    abstract val patchesConfiguration: Property<Configuration>
+        @Optional
+        @Input
+        get
+}
+
+abstract class ForgeDatagenRunConfigurationData : ForgeRunConfigurationData(), DatagenRunConfigurationData

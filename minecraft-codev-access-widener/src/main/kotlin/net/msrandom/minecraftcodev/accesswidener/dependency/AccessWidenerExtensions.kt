@@ -2,7 +2,7 @@ package net.msrandom.minecraftcodev.accesswidener.dependency
 
 import groovy.lang.Closure
 import net.msrandom.minecraftcodev.accesswidener.MinecraftCodevAccessWidenerPlugin
-import net.msrandom.minecraftcodev.core.utils.sourceSetName
+import net.msrandom.minecraftcodev.core.utils.disambiguateName
 import org.gradle.api.Action
 import org.gradle.api.artifacts.Dependency
 import org.gradle.api.artifacts.ExternalModuleDependency
@@ -13,8 +13,8 @@ import org.jetbrains.kotlin.gradle.plugin.HasKotlinDependencies
 import org.jetbrains.kotlin.gradle.plugin.KotlinDependencyHandler
 import org.jetbrains.kotlin.gradle.plugin.mpp.DefaultKotlinDependencyHandler
 
-val SourceSet.accessWidenersConfigurationName get() = sourceSetName(name, MinecraftCodevAccessWidenerPlugin.ACCESS_WIDENERS_CONFIGURATION)
-val HasKotlinDependencies.accessWidenersConfigurationName get() = sourceSetName(sourceSetName, MinecraftCodevAccessWidenerPlugin.ACCESS_WIDENERS_CONFIGURATION)
+val SourceSet.accessWidenersConfigurationName get() = disambiguateName(MinecraftCodevAccessWidenerPlugin.ACCESS_WIDENERS_CONFIGURATION)
+val HasKotlinDependencies.accessWidenersConfigurationName get() = disambiguateName(MinecraftCodevAccessWidenerPlugin.ACCESS_WIDENERS_CONFIGURATION)
 
 val <T : ModuleDependency> T.accessWidened
     get() = accessWidened()

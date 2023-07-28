@@ -31,7 +31,7 @@ dependencies {
 
   // `minecraft(MinecraftType.Client, minecraftVersion)` returns a client Jar, which transitively includes a common Jar.
   // `.remapped` returns a remapped version of the dependency.
-  implementation(minecraft(MinecraftType.Client, minecraftVersion).remapped);
+  implementation(minecraft(MinecraftType.Client, minecraftVersion).remapped)
 }
 ```
 
@@ -54,11 +54,11 @@ dependencies {
   val forgeVersion: String by project
 
   // `patches` is the default patches configuration that `patched` uses.
-  // The Forge userdev can be used in mappings as well to allow Forge's srg mappings to be applied.
+  //  The Forge userdev can be used in mappings as well to allow Forge's srg mappings to be applied.
   patches(mappings(group = "net.minecraftforge", name = "forge", version = "$minecraftVersion-$forgeVersion", classifier = "userdev"))
 
   mappings(minecraft(MinecraftType.ClientMappings, minecraftVersion))
-  implementation(minecraft(MinecraftType.Client, minecraftVersion).patched.remapped);
+  implementation(minecraft.patched(minecraftVersion).remapped)
 }
 ```
 
@@ -79,16 +79,14 @@ repositories {
 }
 
 dependencies {
-  // The remapper can automatically find the right mappings configuration based on the resolving module, like finding mod16Mappings from mod16Implementation.
-
   "mod16Mappings"(minecraft(MinecraftType.ClientMappings, "1.16+"))
-  "mod16Implementation"(minecraft(MinecraftType.Client, "1.18+").remapped)
+  "mod16Implementation"(minecraft(MinecraftType.Client, "1.18+").remapped(mappingsConfiguration = "mod16Mappings"))
 
   "mod18Mappings"(minecraft(MinecraftType.ClientMappings, "1.18+"))
-  "mod18Implementation"(minecraft(MinecraftType.Client, "1.18+").remapped)
+  "mod18Implementation"(minecraft(MinecraftType.Client, "1.18+").remapped(mappingsConfiguration = "mod18Mappings"))
 
   "mod19Mappings"(minecraft(MinecraftType.ClientMappings, "1.19+"))
-  "mod19Implementation"(minecraft(MinecraftType.Client, "1.19+").remapped)
+  "mod19Implementation"(minecraft(MinecraftType.Client, "1.19+").remapped(mappingsConfiguration = "mod19Mappings"))
 }
 ```
 
@@ -101,9 +99,9 @@ plugins {
 
 val client: SourceSet by sourceSets.creating {
   // Extend main configurations
-  configurations[compileClasspathConfigurationName].extendsFrom(configurations.compileClasspath.get())
-  configurations[runtimeClasspathConfigurationName].extendsFrom(configurations.compileClasspath.get())
-  configurations[mappingsConfigurationName].extendsFrom(configurations.mappings.get())
+  configurations[compileClasspathConfigurationName].extendsFrom(configurations.compileClasspath)
+  configurations[runtimeClasspathConfigurationName].extendsFrom(configurations.runtimeClasspath)
+  configurations[mappingsConfigurationName].extendsFrom(configurations.mappings)
 
   // Add main output to classpaths
   compileClasspath += sourceSets.main.get().output
@@ -122,6 +120,6 @@ dependencies {
   implementation(minecraft(MinecraftType.Common).remapped)
 
   "clientMappings"(minecraft(MinecraftType.ClientMappings, minecraftVersion))
-  "clientImplementation"(minecraft(MinecraftType.Client, minecraftVersion).remapped)
+  "clientImplementation"(minecraft(MinecraftType.Client, minecraftVersion).remapped(mappingsConfiguration = "clientMappings"))
 }
 ```

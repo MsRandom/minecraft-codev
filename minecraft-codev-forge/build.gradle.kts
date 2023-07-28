@@ -14,8 +14,6 @@ gradlePlugin {
 dependencies {
     implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version = "1.3.3")
 
-    implementation(group = "net.fabricmc", name = "access-widener", version = "2.1.0")
-
     implementation(group = "net.minecraftforge", name = "accesstransformers", version = "8.0.7") {
         exclude(group = "org.apache.logging.log4j", module = "log4j-core")
     }
@@ -29,6 +27,7 @@ dependencies {
 
     compileOnly(projects.minecraftCodevGradleLinkage)
 
+    implementation(projects.minecraftCodevAccessWidener)
     implementation(projects.minecraftCodevRemapper)
     implementation(projects.minecraftCodevRuns)
 }

@@ -4,7 +4,7 @@ import net.msrandom.minecraftcodev.accesswidener.dependency.AccessWidenedIvyDepe
 import net.msrandom.minecraftcodev.accesswidener.resolve.AccessWidenedComponentResolvers
 import net.msrandom.minecraftcodev.core.dependency.registerCustomDependency
 import net.msrandom.minecraftcodev.core.utils.applyPlugin
-import net.msrandom.minecraftcodev.core.utils.createSourceSetConfigurations
+import net.msrandom.minecraftcodev.core.utils.createCompilationConfigurations
 import org.gradle.api.Plugin
 import org.gradle.api.invocation.Gradle
 import org.gradle.api.plugins.PluginAware
@@ -19,7 +19,7 @@ class MinecraftCodevAccessWidenerPlugin<T : PluginAware> : Plugin<T> {
     }
 
     override fun apply(target: T) = applyPlugin(target, ::applyGradle) {
-        createSourceSetConfigurations(ACCESS_WIDENERS_CONFIGURATION)
+        createCompilationConfigurations(ACCESS_WIDENERS_CONFIGURATION)
     }
 
     companion object {

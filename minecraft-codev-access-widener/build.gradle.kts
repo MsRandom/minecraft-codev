@@ -11,7 +11,7 @@ gradlePlugin {
 }
 
 dependencies {
-    implementation(group = "net.fabricmc", name = "access-widener", version = "2.1.0")
+    implementation(api(group = "net.fabricmc", name = "access-widener", version = "2.1.0"))
 
     compileOnly(projects.minecraftCodevGradleLinkage)
 

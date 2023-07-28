@@ -12,6 +12,8 @@ import org.cadixdev.bombe.type.signature.MethodSignature
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFile
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.*
 
@@ -22,9 +24,15 @@ abstract class GenerateAccessTransformers : DefaultTask() {
         @PathSensitive(PathSensitivity.RELATIVE)
         get
 
-    val output: Provider<RegularFile> = project.layout.dir(project.provider { temporaryDir }).map { it.file("accesstransformer.cfg") }
+    abstract val output: RegularFileProperty
         @OutputFile
         get
+
+    init {
+        apply {
+            output.convention(project.layout.dir(project.provider { temporaryDir }).map { it.file("accesstransformer.cfg") })
+        }
+    }
 
     @TaskAction
     fun generate() {
@@ -32,7 +40,7 @@ abstract class GenerateAccessTransformers : DefaultTask() {
 
         for (accessWidener in input) {
             if (accessWidener.extension.lowercase() != "accesswidener") {
-                // Implies that this is supposed to have specific handling, for example mod Jars to enable transitive Access Wideners, in
+                // Implies that this is supposed to have specific handling, for example mod Jars to enable transitive Access Wideners in
                 continue
             }
 

@@ -8,10 +8,10 @@ import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
-import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSetContainer
+import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinJvmCompilation
 import javax.inject.Inject
 
-abstract class MinecraftRunConfigurationBuilder @Inject constructor(private val project: Project, private val name: String, private val runsContainer: RunsContainer) : Named {
+abstract class MinecraftRunConfigurationBuilder @Inject constructor(val project: Project, private val name: String, private val runsContainer: RunsContainer) : Named {
     private val setupActions = mutableListOf<Action<MinecraftRunConfiguration>>()
     private val configurationActions = mutableListOf<Action<MinecraftRunConfiguration>>()
 
@@ -61,16 +61,12 @@ abstract class MinecraftRunConfigurationBuilder @Inject constructor(private val 
         setup { this.sourceSet.set(sourceSet) }
     }
 
-    fun kotlinSourceSet(sourceSet: String) = apply {
-        setup { this.kotlinSourceSet.set(project.extensions.getByType(KotlinSourceSetContainer::class.java).sourceSets.named(sourceSet)) }
+    fun compilation(compilation: Provider<KotlinJvmCompilation>) = apply {
+        setup { this.compilation.set(compilation) }
     }
 
-    fun kotlinSourceSet(sourceSet: Provider<KotlinSourceSet>) = apply {
-        setup { this.kotlinSourceSet.set(sourceSet) }
-    }
-
-    fun kotlinSourceSet(sourceSet: KotlinSourceSet) = apply {
-        setup { this.kotlinSourceSet.set(sourceSet) }
+    fun compilation(compilation: KotlinJvmCompilation) = apply {
+        setup { this.compilation.set(compilation) }
     }
 
     fun beforeRun(task: Provider<Task>) = apply {

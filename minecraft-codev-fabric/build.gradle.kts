@@ -11,8 +11,10 @@ gradlePlugin {
 }
 
 dependencies {
+    implementation(projects.minecraftCodevAccessWidener)
     implementation(projects.minecraftCodevRemapper)
     implementation(projects.minecraftCodevMixins)
+    implementation(projects.minecraftCodevRuns)
 }
 
 tasks.test {

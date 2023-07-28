@@ -1,59 +1,95 @@
 package net.msrandom.minecraftcodev.core.utils
 
 import org.apache.commons.lang3.StringUtils
+import org.gradle.api.Named
 import org.gradle.api.Project
 import org.gradle.api.plugins.JavaPlugin
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
 import org.jetbrains.kotlin.gradle.plugin.*
 
-val HasKotlinDependencies.sourceSetName: String
-    get() = (this as? KotlinCompilation<*>)?.defaultSourceSetName ?: (this as KotlinSourceSet).name
+val String.asNamePart
+    get() = takeIf { it != SourceSet.MAIN_SOURCE_SET_NAME }.orEmpty()
 
-fun sourceSetName(sourceSet: String, configuration: String) = if (sourceSet == SourceSet.MAIN_SOURCE_SET_NAME) {
-    configuration
+fun SourceSet.disambiguateName(elementName: String) =
+    lowerCamelCaseName(name.asNamePart, elementName)
+
+fun HasKotlinDependencies.disambiguateName(elementName: String) = if (this is KotlinCompilation<*>) {
+    lowerCamelCaseName(target.disambiguationClassifier, name.asNamePart, elementName)
 } else {
-    "$sourceSet${StringUtils.capitalize(configuration)}"
+    lowerCamelCaseName((this as Named).name, elementName)
 }
 
-fun Project.createSourceSetElements(action: (name: String, isSourceSet: Boolean) -> Unit) {
-    plugins.withType(JavaPlugin::class.java) {
-        action("", true)
+fun KotlinTarget.disambiguateName(elementName: String) =
+    lowerCamelCaseName(targetName, elementName)
 
-        extensions.getByType(SourceSetContainer::class.java).all { sourceSet ->
-            @Suppress("UnstableApiUsage")
-            if (!SourceSet.isMain(sourceSet)) {
-                action(sourceSet.name, true)
-            }
-        }
+fun lowerCamelCaseName(vararg nameParts: String?): String {
+    val nonEmptyParts = nameParts.mapNotNull { it?.takeIf(String::isNotEmpty) }
+
+    return nonEmptyParts.drop(1).joinToString(
+        separator = "",
+        prefix = nonEmptyParts.firstOrNull().orEmpty(),
+        transform = StringUtils::capitalize
+    )
+}
+
+fun Project.createSourceSetElements(
+    sourceSetHandler: (sourceSet: SourceSet) -> Unit,
+    kotlinTargetHandler: (target: KotlinTarget) -> Unit,
+    kotlinCompilationHandler: (compilation: KotlinCompilation<*>) -> Unit,
+    kotlinSourceSetHandler: (sourceSet: KotlinSourceSet) -> Unit
+) {
+    plugins.withType(JavaPlugin::class.java) {
+        extensions.getByType(SourceSetContainer::class.java).all(sourceSetHandler)
     }
 
     plugins.withType(KotlinMultiplatformPluginWrapper::class.java) {
-        extensions.getByType(KotlinSourceSetContainer::class.java).sourceSets.all { sourceSet ->
-            if (sourceSet.name == SourceSet.MAIN_SOURCE_SET_NAME) {
-                action("", true)
-            } else {
-                action(sourceSet.name, true)
-            }
-        }
+        extensions.getByType(KotlinSourceSetContainer::class.java).sourceSets.all(kotlinSourceSetHandler)
 
         extensions.getByType(KotlinTargetsContainer::class.java).targets.all { target ->
-            target.compilations.all { compilation ->
-                val compilationConfigurationName = target.disambiguationClassifier +
-                        compilation.name.takeIf { it != KotlinCompilation.MAIN_COMPILATION_NAME }?.let(StringUtils::capitalize).orEmpty()
+            kotlinTargetHandler(target)
 
-                action(compilationConfigurationName, false)
-            }
+            target.compilations.all(kotlinCompilationHandler)
         }
     }
 }
 
-fun Project.createSourceSetConfigurations(name: String, transitive: Boolean = false) {
-    createSourceSetElements { setName, _ ->
-        val configurationName = if (setName.isEmpty()) name else setName + StringUtils.capitalize(name)
-        configurations.maybeCreate(configurationName).apply {
-            isCanBeConsumed = false
-            isTransitive = transitive
-        }
+fun Project.createCompilationConfigurations(name: String, transitive: Boolean = false) {
+    fun createConfiguration(name: String) = configurations.maybeCreate(name).apply {
+        isCanBeConsumed = false
+        isTransitive = transitive
     }
+
+    createSourceSetElements({
+        createConfiguration(it.disambiguateName(name))
+    }, {}, {
+        createConfiguration(it.disambiguateName(name))
+    }, {
+        createConfiguration(it.disambiguateName(name))
+    })
 }
+
+fun Project.createTargetConfigurations(name: String, transitive: Boolean = false) {
+    fun createConfiguration(name: String, bucket: Boolean = false) = configurations.maybeCreate(name).apply {
+        if (bucket) {
+            isCanBeResolved = false
+        }
+
+        isCanBeConsumed = false
+        isTransitive = transitive
+    }
+
+    createSourceSetElements({
+        createConfiguration(it.disambiguateName(name))
+    }, {}, {
+        val targetConfiguration = createConfiguration(it.target.disambiguateName(name))
+        val compilationConfigurationName = it.defaultSourceSet.disambiguateName(name)
+
+        if (targetConfiguration.name != compilationConfigurationName) {
+            targetConfiguration.extendsFrom(createConfiguration(compilationConfigurationName, true))
+        }
+    }, {
+        createConfiguration(it.disambiguateName(name))
+    })
+}
+

@@ -29,8 +29,8 @@ data class UserdevConfig(
     @Serializable
     data class Runs(
         val server: Run,
-        val data: Run? = null,
         val client: Run,
+        val data: Run? = null,
         val gameTestServer: Run? = null
     )
 
