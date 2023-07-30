@@ -1,6 +1,6 @@
 package net.msrandom.minecraftcodev.accesswidener.resolve
 
-import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.artifactIdSerializer
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftArtifactResolver.Companion.artifactIdSerializer
 import org.gradle.api.artifacts.component.ComponentArtifactIdentifier
 import org.gradle.internal.hash.HashCode
 import org.gradle.internal.serialize.Decoder

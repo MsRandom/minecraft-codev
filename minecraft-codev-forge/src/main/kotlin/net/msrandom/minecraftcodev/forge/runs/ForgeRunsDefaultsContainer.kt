@@ -6,8 +6,8 @@ import net.fabricmc.mappingio.tree.MemoryMappingTree
 import net.minecraftforge.srgutils.IMappingBuilder
 import net.minecraftforge.srgutils.IMappingFile
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
-import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
-import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentResolvers
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftVersionMetadata
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin
 import net.msrandom.minecraftcodev.forge.UserdevConfig

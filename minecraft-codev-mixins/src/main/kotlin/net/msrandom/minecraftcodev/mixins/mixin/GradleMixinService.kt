@@ -1,6 +1,6 @@
 package net.msrandom.minecraftcodev.mixins.mixin
 
-import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentResolvers
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.tree.ClassNode
 import org.spongepowered.asm.launch.platform.container.IContainerHandle

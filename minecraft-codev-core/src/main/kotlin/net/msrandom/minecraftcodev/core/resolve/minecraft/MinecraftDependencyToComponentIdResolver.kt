@@ -1,4 +1,4 @@
-package net.msrandom.minecraftcodev.core.resolve
+package net.msrandom.minecraftcodev.core.resolve.minecraft
 
 import net.minecraftforge.srgutils.MinecraftVersion
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider

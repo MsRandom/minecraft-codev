@@ -5,7 +5,7 @@ import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
-import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftArtifactResolver
 import net.msrandom.minecraftcodev.core.utils.*
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.copy
 import net.msrandom.minecraftcodev.mixins.MinecraftCodevMixinsPlugin
@@ -80,7 +80,17 @@ open class MixinComponentResolvers @Inject constructor(
     override fun getArtifactResolver() = this
 
     private fun wrapMetadata(metadata: ComponentResolveMetadata, identifier: MixinComponentIdentifier) = metadata.copy(
+        objects,
         identifier,
+        {
+            map { artifact ->
+                if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
+                    MixinComponentArtifactMetadata(artifact, identifier)
+                } else {
+                    artifact
+                }
+            }
+        },
         {
             val category = attributes.findEntry(Category.CATEGORY_ATTRIBUTE.name)
 
@@ -97,6 +107,7 @@ open class MixinComponentResolvers @Inject constructor(
 
             if (shouldWrap) {
                 copy(
+                    objects,
                     { oldName ->
                         object : DisplayName {
                             override fun getDisplayName() = "mixin ${oldName.displayName}"
@@ -104,35 +115,27 @@ open class MixinComponentResolvers @Inject constructor(
                         }
                     },
                     attributes,
-                    { dependency ->
-                        if (dependency.selector.attributes.getAttribute(MappingsNamespace.attribute) != null) {
-                            MixinDependencyMetadataWrapper(dependency, identifier.mixinsConfiguration)
-                        } else {
-                            dependency
+                    {
+                        map { dependency ->
+                            if (dependency.selector.attributes.getAttribute(MappingsNamespace.attribute) != null) {
+                                MixinDependencyMetadataWrapper(dependency, identifier.mixinsConfiguration)
+                            } else {
+                                dependency
+                            }
                         }
                     },
-                    { artifact, artifacts ->
-                        if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
-                            MixinComponentArtifactMetadata(artifact as ModuleComponentArtifactMetadata, identifier)
+                    {
+                        if (name.type == ArtifactTypeDefinition.JAR_TYPE) {
+                            MixinComponentArtifactMetadata(this as ModuleComponentArtifactMetadata, identifier)
                         } else {
-                            PassthroughMixinArtifactMetadata(artifact)
+                            PassthroughMixinArtifactMetadata(this)
                         }
-                    },
-                    emptyList(),
-                    objects
+                    }
                 )
             } else {
                 this
             }
-        },
-        { artifact ->
-            if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
-                MixinComponentArtifactMetadata(artifact, identifier)
-            } else {
-                artifact
-            }
-        },
-        objects
+        }
     )
 
     override fun resolve(dependency: DependencyMetadata, acceptor: VersionSelector?, rejector: VersionSelector?, result: BuildableComponentIdResolveResult) {

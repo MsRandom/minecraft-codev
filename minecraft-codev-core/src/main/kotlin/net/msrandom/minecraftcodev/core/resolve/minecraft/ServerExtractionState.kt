@@ -1,9 +1,9 @@
-package net.msrandom.minecraftcodev.core.resolve
+package net.msrandom.minecraftcodev.core.resolve.minecraft
 
 import net.msrandom.minecraftcodev.core.ModuleLibraryIdentifier
 import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
-import net.msrandom.minecraftcodev.core.resolve.bundled.ServerExtractor
-import net.msrandom.minecraftcodev.core.resolve.legacy.ServerFixer
+import net.msrandom.minecraftcodev.core.resolve.minecraft.bundled.ServerExtractor
+import net.msrandom.minecraftcodev.core.resolve.minecraft.legacy.ServerFixer
 import net.msrandom.minecraftcodev.core.utils.callWithStatus
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.gradle.internal.operations.*

@@ -1,6 +1,6 @@
 package net.msrandom.minecraftcodev.forge.dependency
 
-import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentIdentifier
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentIdentifier
 import org.gradle.api.artifacts.ModuleDependency
 import org.gradle.api.artifacts.component.ComponentIdentifier
 import org.gradle.api.attributes.AttributeContainer

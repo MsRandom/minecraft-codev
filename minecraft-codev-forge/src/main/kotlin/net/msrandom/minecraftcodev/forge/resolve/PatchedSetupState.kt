@@ -14,7 +14,11 @@ import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
 import net.msrandom.minecraftcodev.core.resolve.*
-import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.artifactIdSerializer
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftArtifactResolver
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftArtifactResolver.Companion.artifactIdSerializer
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentIdentifier
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftVersionMetadata
+import net.msrandom.minecraftcodev.core.resolve.minecraft.getExtractionState
 import net.msrandom.minecraftcodev.core.utils.*
 import net.msrandom.minecraftcodev.forge.McpConfig
 import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin

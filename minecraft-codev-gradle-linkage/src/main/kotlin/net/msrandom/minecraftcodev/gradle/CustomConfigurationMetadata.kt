@@ -11,6 +11,7 @@ import org.gradle.internal.impldep.com.google.common.collect.ImmutableList
 import org.gradle.internal.impldep.com.google.common.collect.ImmutableSet
 import javax.inject.Inject
 
+@Suppress("unused")
 internal open class CustomConfigurationMetadata @Inject constructor(
     private val name: String,
     private val componentId: ModuleComponentIdentifier,

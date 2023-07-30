@@ -10,8 +10,8 @@ import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
-import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.getOrResolve
-import net.msrandom.minecraftcodev.core.resolve.SourcesArtifactComponentMetadata
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftArtifactResolver.Companion.getOrResolve
+import net.msrandom.minecraftcodev.core.resolve.minecraft.SourcesArtifactComponentMetadata
 import net.msrandom.minecraftcodev.core.utils.*
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.copy
 import org.gradle.api.Project
@@ -77,7 +77,17 @@ open class AccessWidenedComponentResolvers @Inject constructor(
     override fun getArtifactResolver() = this
 
     private fun wrapMetadata(metadata: ComponentResolveMetadata, identifier: AccessWidenedComponentIdentifier) = metadata.copy(
+        objects,
         identifier,
+        {
+            map { artifact ->
+                if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
+                    AccessWidenedComponentArtifactMetadata(artifact, identifier, null)
+                } else {
+                    artifact
+                }
+            }
+        },
         {
             val namespace = attributes.findEntry(MappingsNamespace.attribute.name).takeIf(AttributeValue<*>::isPresent)?.get() as? String
             val category = attributes.findEntry(Category.CATEGORY_ATTRIBUTE.name)
@@ -102,6 +112,7 @@ open class AccessWidenedComponentResolvers @Inject constructor(
 
             if (shouldWrap) {
                 copy(
+                    objects,
                     { oldName ->
                         object : DisplayName {
                             override fun getDisplayName() = "access widened ${oldName.displayName}"
@@ -109,44 +120,36 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                         }
                     },
                     attributes,
-                    { dependency ->
-                        if (dependency.selector.attributes.getAttribute(MappingsNamespace.attribute) != null) {
-                            // Maybe pass the namespace to use instead of the metadata one?
-                            AccessWidenedDependencyMetadataWrapper(
-                                dependency,
-                                identifier.accessWidenersConfiguration
-                            )
-                        } else {
-                            dependency
+                    {
+                        map { dependency ->
+                            if (dependency.selector.attributes.getAttribute(MappingsNamespace.attribute) != null) {
+                                // Maybe pass the namespace to use instead of the metadata one?
+                                AccessWidenedDependencyMetadataWrapper(
+                                    dependency,
+                                    identifier.accessWidenersConfiguration
+                                )
+                            } else {
+                                dependency
+                            }
                         }
                     },
-                    { artifact, artifacts ->
-                        if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
+                    {
+                        if (name.type == ArtifactTypeDefinition.JAR_TYPE) {
                             if (sources) {
                                 val library = artifacts.first { it.name.type == ArtifactTypeDefinition.JAR_TYPE }
-                                SourcesArtifactComponentMetadata(library as ModuleComponentArtifactMetadata, artifact.id as ModuleComponentArtifactIdentifier)
+                                SourcesArtifactComponentMetadata(library as ModuleComponentArtifactMetadata, id as ModuleComponentArtifactIdentifier)
                             } else {
-                                AccessWidenedComponentArtifactMetadata(artifact as ModuleComponentArtifactMetadata, identifier, namespace)
+                                AccessWidenedComponentArtifactMetadata(this as ModuleComponentArtifactMetadata, identifier, namespace)
                             }
                         } else {
-                            PassthroughAccessWidenedArtifactMetadata(artifact)
+                            PassthroughAccessWidenedArtifactMetadata(this)
                         }
-                    },
-                    emptyList(),
-                    objects
+                    }
                 )
             } else {
                 this
             }
-        },
-        { artifact ->
-            if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
-                AccessWidenedComponentArtifactMetadata(artifact, identifier, null)
-            } else {
-                artifact
-            }
-        },
-        objects
+        }
     )
 
     override fun resolve(dependency: DependencyMetadata, acceptor: VersionSelector?, rejector: VersionSelector?, result: BuildableComponentIdResolveResult) {

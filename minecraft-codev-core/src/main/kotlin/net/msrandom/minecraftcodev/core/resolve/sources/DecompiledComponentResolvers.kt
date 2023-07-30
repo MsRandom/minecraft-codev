@@ -1,13 +1,18 @@
-package net.msrandom.minecraftcodev.core.resolve
+package net.msrandom.minecraftcodev.core.resolve.sources
 
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.dependency.DecompiledDependencyMetadata
-import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.getOrResolve
+import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftArtifactResolver.Companion.getOrResolve
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentResolvers.Companion.addNamed
+import net.msrandom.minecraftcodev.core.utils.getAttribute
 import net.msrandom.minecraftcodev.core.utils.SourcesGenerator
 import net.msrandom.minecraftcodev.core.utils.asSerializable
 import net.msrandom.minecraftcodev.core.utils.callWithStatus
+import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.allArtifacts
+import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.asList
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.copy
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
@@ -15,8 +20,11 @@ import org.gradle.api.artifacts.component.ComponentIdentifier
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.artifacts.component.ModuleComponentSelector
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
+import org.gradle.api.attributes.Attribute
 import org.gradle.api.attributes.Category
 import org.gradle.api.attributes.DocsType
+import org.gradle.api.attributes.LibraryElements
+import org.gradle.api.capabilities.Capability
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
 import org.gradle.api.internal.artifacts.dependencies.DefaultImmutableVersionConstraint
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ComponentResolvers
@@ -32,7 +40,9 @@ import org.gradle.api.internal.attributes.ImmutableAttributesFactory
 import org.gradle.api.internal.component.ArtifactType
 import org.gradle.api.internal.model.NamedObjectInstantiator
 import org.gradle.api.model.ObjectFactory
+import org.gradle.api.plugins.JavaPlugin
 import org.gradle.internal.DisplayName
+import org.gradle.internal.component.external.model.ImmutableCapabilities
 import org.gradle.internal.component.external.model.MetadataSourcedComponentArtifacts
 import org.gradle.internal.component.external.model.ModuleComponentArtifactMetadata
 import org.gradle.internal.component.model.*
@@ -63,6 +73,8 @@ open class DecompiledComponentResolvers @Inject constructor(
     private val calculatedValueContainerFactory: CalculatedValueContainerFactory,
     private val buildOperationExecutor: BuildOperationExecutor,
     private val versionSelectorSchema: VersionSelectorScheme,
+    private val attributesFactory: ImmutableAttributesFactory,
+    private val instantiator: NamedObjectInstantiator,
 
     cacheProvider: CodevCacheProvider
 ) : ComponentResolvers, DependencyToComponentIdResolver, ComponentMetaDataResolver, OriginArtifactSelector, ArtifactResolver {
@@ -127,54 +139,163 @@ open class DecompiledComponentResolvers @Inject constructor(
         }
     }
 
-    private fun wrapMetadata(metadata: ComponentResolveMetadata, identifier: DecompiledComponentIdentifier) = metadata.copy(
-        identifier,
-        {
-            val transitiveDependencies = dependencies
+    private fun wrapMetadata(metadata: ComponentResolveMetadata, identifier: DecompiledComponentIdentifier): ComponentResolveMetadata {
+        val wrapArtifact = { artifact: ComponentArtifactMetadata, dependencies: Collection<DependencyMetadata> ->
+            val selectedArtifacts = mutableListOf<Pair<ModuleSources, List<ComponentArtifactMetadata>>>()
 
-            val category = attributes.findEntry(Category.CATEGORY_ATTRIBUTE.name)
-            val docsType = attributes.findEntry(DocsType.DOCS_TYPE_ATTRIBUTE.name)
-            if (category.isPresent && docsType.isPresent && category.get() == Category.DOCUMENTATION && docsType.get() == DocsType.SOURCES) {
-                copy(
+            buildClasspath(selectedArtifacts, dependencies)
+
+            DecompiledComponentArtifactMetadata(
+                artifact as ModuleComponentArtifactMetadata,
+                identifier,
+                selectedArtifacts
+            )
+        }
+
+        val wrapConfiguration = { it: ConfigurationMetadata ->
+            it.copy(
+                objects,
+                { oldName ->
+                    object : DisplayName {
+                        override fun getDisplayName() = "${oldName.displayName} + generated sources"
+                        override fun getCapitalizedDisplayName() = "${oldName.capitalizedDisplayName} + Generated Sources"
+                    }
+                },
+                it.attributes,
+                { emptyList() },
+                {
+                    if (name.type == ArtifactTypeDefinition.JAR_TYPE) {
+                        wrapArtifact(this, it.dependencies)
+                    } else {
+                        PassthroughDecompiledArtifactMetadata(this)
+                    }
+                }
+            )
+        }
+
+        val replaceSourcesConfiguration = { it: ConfigurationMetadata ->
+            val transitiveDependencies = it.dependencies
+
+            val category = it.attributes.getAttribute(Category.CATEGORY_ATTRIBUTE.name)
+            val docsType = it.attributes.getAttribute(DocsType.DOCS_TYPE_ATTRIBUTE.name)
+
+            if (category == Category.DOCUMENTATION && docsType == DocsType.SOURCES) {
+                it.copy(
+                    objects,
                     { oldName ->
                         object : DisplayName {
-                            override fun getDisplayName() = "decompiled ${oldName.displayName}"
-                            override fun getCapitalizedDisplayName() = "Decompiled ${oldName.capitalizedDisplayName}"
+                            override fun getDisplayName() = "${oldName.displayName} + generated sources"
+                            override fun getCapitalizedDisplayName() = "${oldName.capitalizedDisplayName} + Generated Sources"
                         }
                     },
-                    attributes,
-                    { dependency -> dependency },
-                    { artifact, _ ->
-                        if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
-                            val selectedArtifacts = mutableListOf<Pair<ModuleSources, List<ComponentArtifactMetadata>>>()
-
-                            buildClasspath(selectedArtifacts, transitiveDependencies)
-
-                            DecompiledComponentArtifactMetadata(
-                                artifact as ModuleComponentArtifactMetadata,
-                                identifier,
-                                selectedArtifacts
-                            )
+                    it.attributes,
+                    { emptyList() },
+                    {
+                        if (name.type == ArtifactTypeDefinition.JAR_TYPE) {
+                            // TODO This is incorrect, as the wrapped artifact is a sources Jar, not a library Jar.
+                            wrapArtifact(this, transitiveDependencies)
                         } else {
-                            PassthroughDecompiledArtifactMetadata(artifact)
+                            PassthroughDecompiledArtifactMetadata(this)
                         }
-                    },
-                    emptyList(),
-                    objects
+                    }
                 )
             } else {
-                this
+                it
             }
-        },
-        { artifact ->
-            if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
-                DecompiledComponentArtifactMetadata(artifact, identifier, emptyList())
-            } else {
-                artifact
+        }
+
+        return metadata.copy(
+            objects,
+            identifier,
+            {
+                map {
+                    if (it.name.type == ArtifactTypeDefinition.JAR_TYPE) {
+                        DecompiledComponentArtifactMetadata(it, identifier, emptyList())
+                    } else {
+                        it
+                    }
+                }
+            },
+            replaceSourcesConfiguration,
+            {
+                val wrapped = map(replaceSourcesConfiguration)
+
+                if (wrapped.indices.all { get(it) == wrapped[it] }) {
+                    val configurationsByArtifact = flatMap { configuration -> configuration.artifacts.map { it to configuration } }
+                        .filter { (artifact) -> artifact.componentId is ModuleComponentIdentifier }
+                        .groupBy { (artifact) -> artifact.name }
+                        .filterKeys { it.type == ArtifactTypeDefinition.JAR_TYPE }
+                        .filterValues { configurations ->
+                            configurations.any { (_, configuration) ->
+                                configuration.attributes.getAttribute(Category.CATEGORY_ATTRIBUTE.name) == Category.LIBRARY
+                                        && configuration.attributes.getAttribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE.name) == LibraryElements.JAR
+                            }
+                        }
+
+                    fun fromConfigurations(name: String, configurations: List<Pair<ComponentArtifactMetadata, ConfigurationMetadata>>): ConfigurationMetadata {
+                        val (artifact, configuration) = configurations.first()
+
+                        return if (configurations.size == 1) {
+                            CodevGradleLinkageLoader.ConfigurationMetadata(
+                                objects,
+                                name,
+                                artifact.componentId as ModuleComponentIdentifier,
+                                emptyList(),
+                                listOf(wrapArtifact(artifact, configuration.dependencies)),
+                                configuration.attributes
+                                    .addNamed(attributesFactory, instantiator, Category.CATEGORY_ATTRIBUTE, Category.DOCUMENTATION)
+                                    .addNamed(attributesFactory, instantiator, DocsType.DOCS_TYPE_ATTRIBUTE, DocsType.SOURCES),
+                                ImmutableCapabilities.of(configuration.capabilities),
+                                setOf(name)
+                            )
+                        } else {
+                            var dependencies: Collection<DependencyMetadata> = configuration.dependencies
+                            var attributes: Collection<Pair<Attribute<Any>, Any?>> = configuration.attributes.asList
+                            var capabilities: Collection<Capability> = configuration.capabilities.capabilities
+
+                            for ((_, otherConfiguration) in configurations.drop(1)) {
+                                dependencies = dependencies intersect otherConfiguration.dependencies.toSet()
+                                attributes = attributes intersect otherConfiguration.attributes.asList.toSet()
+                                capabilities = capabilities intersect otherConfiguration.capabilities.capabilities.toSet()
+                            }
+
+                            var immutableAttributes = ImmutableAttributes.EMPTY
+
+                            for ((attribute, value) in attributes) {
+                                @Suppress("NULLABILITY_MISMATCH_BASED_ON_JAVA_ANNOTATIONS")
+                                immutableAttributes = attributesFactory.concat(immutableAttributes, attributesFactory.of(attribute, value))
+                            }
+
+                            CodevGradleLinkageLoader.ConfigurationMetadata(
+                                objects,
+                                name,
+                                artifact.componentId as ModuleComponentIdentifier,
+                                emptyList(),
+                                listOf(wrapArtifact(artifact, dependencies)),
+                                immutableAttributes
+                                    .addNamed(attributesFactory, instantiator, Category.CATEGORY_ATTRIBUTE, Category.DOCUMENTATION)
+                                    .addNamed(attributesFactory, instantiator, DocsType.DOCS_TYPE_ATTRIBUTE, DocsType.SOURCES),
+                                ImmutableCapabilities.copyAsImmutable(capabilities),
+                                setOf(name)
+                            )
+                        }
+                    }
+
+                    val sourceConfigurations = if (configurationsByArtifact.size == 1) {
+                        listOf(fromConfigurations(JavaPlugin.SOURCES_ELEMENTS_CONFIGURATION_NAME, configurationsByArtifact.iterator().next().value))
+                    } else {
+                        configurationsByArtifact.map {
+                            fromConfigurations("${it.key}-sources", it.value)
+                        }
+                    }
+
+                    wrapped + sourceConfigurations
+                } else {
+                    wrapped
+                }
             }
-        },
-        objects
-    )
+        )
+    }
 
     override fun resolve(dependency: DependencyMetadata, acceptor: VersionSelector?, rejector: VersionSelector?, result: BuildableComponentIdResolveResult) {
         if (dependency is DecompiledDependencyMetadata) {

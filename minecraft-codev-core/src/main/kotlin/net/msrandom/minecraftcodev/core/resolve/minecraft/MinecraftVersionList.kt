@@ -1,4 +1,4 @@
-package net.msrandom.minecraftcodev.core.resolve
+package net.msrandom.minecraftcodev.core.resolve.minecraft
 
 import java.io.IOException
 import java.net.HttpURLConnection

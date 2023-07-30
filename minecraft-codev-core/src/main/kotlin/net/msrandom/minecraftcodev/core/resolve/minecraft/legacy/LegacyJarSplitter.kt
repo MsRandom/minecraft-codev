@@ -1,7 +1,7 @@
-package net.msrandom.minecraftcodev.core.resolve.legacy
+package net.msrandom.minecraftcodev.core.resolve.minecraft.legacy
 
-import net.msrandom.minecraftcodev.core.resolve.JarSplittingResult
-import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
+import net.msrandom.minecraftcodev.core.resolve.minecraft.JarSplittingResult
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentResolvers
 import net.msrandom.minecraftcodev.core.utils.LockingFileSystem
 import net.msrandom.minecraftcodev.core.utils.walk
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem

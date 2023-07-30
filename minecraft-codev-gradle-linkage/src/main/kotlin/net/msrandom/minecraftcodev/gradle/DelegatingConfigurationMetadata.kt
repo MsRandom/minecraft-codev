@@ -6,22 +6,23 @@ import org.gradle.internal.component.model.*
 import org.gradle.internal.impldep.com.google.common.collect.ImmutableList
 import javax.inject.Inject
 
+@Suppress("unused")
 internal open class DelegatingConfigurationMetadata @Inject constructor(
     private val delegate: ConfigurationMetadata,
     private val describable: (DisplayName) -> DisplayName,
     private val attributes: ImmutableAttributes,
-    private val dependency: (DependencyMetadata) -> DependencyMetadata,
-    private val artifact: (ComponentArtifactMetadata, List<ComponentArtifactMetadata>) -> ComponentArtifactMetadata,
-    private val extraArtifacts: List<ComponentArtifactMetadata>
+    private val dependencies: (List<DependencyMetadata>) -> List<DependencyMetadata>,
+    private val artifacts: (List<ComponentArtifactMetadata>) -> List<ComponentArtifactMetadata>,
+    private val artifact: (ComponentArtifactMetadata) -> ComponentArtifactMetadata
 ) : ConfigurationMetadata by delegate {
     override fun asDescribable() = describable(delegate.asDescribable())
     override fun getAttributes() = attributes
-    override fun getDependencies() = delegate.dependencies.map(dependency)
-    override fun getArtifacts(): ImmutableList<ComponentArtifactMetadata> = ImmutableList.copyOf(delegate.artifacts.map { artifact(it, delegate.artifacts) } + extraArtifacts)
+    override fun getDependencies() = dependencies(delegate.dependencies)
+    override fun getArtifacts(): ImmutableList<ComponentArtifactMetadata> = ImmutableList.copyOf(artifacts(delegate.artifacts))
 
     override fun getVariants() = delegate.variants.mapTo(mutableSetOf()) {
-        DefaultVariantMetadata(it.name, it.identifier, asDescribable(), attributes, artifacts, it.capabilities)
+        DefaultVariantMetadata(it.name, it.identifier, asDescribable(), attributes, getArtifacts(), it.capabilities)
     }
 
-    override fun artifact(artifact: IvyArtifactName) = artifact(delegate.artifact(artifact), delegate.artifacts)
+    override fun artifact(artifact: IvyArtifactName) = artifact(delegate.artifact(artifact))
 }

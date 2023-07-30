@@ -1,4 +1,4 @@
-package net.msrandom.minecraftcodev.core.resolve.bundled
+package net.msrandom.minecraftcodev.core.resolve.minecraft.bundled
 
 import net.msrandom.minecraftcodev.core.ModuleLibraryIdentifier
 import java.nio.file.FileSystem

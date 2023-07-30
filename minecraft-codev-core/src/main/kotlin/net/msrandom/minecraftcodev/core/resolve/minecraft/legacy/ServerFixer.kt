@@ -1,7 +1,7 @@
-package net.msrandom.minecraftcodev.core.resolve.legacy
+package net.msrandom.minecraftcodev.core.resolve.minecraft.legacy
 
 import net.msrandom.minecraftcodev.core.ModuleLibraryIdentifier
-import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftVersionMetadata
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import java.nio.file.FileSystem
 import java.nio.file.Files

@@ -7,9 +7,9 @@ import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
-import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.getOrResolve
-import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentIdentifier
-import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.addNamed
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftArtifactResolver.Companion.getOrResolve
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentIdentifier
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentResolvers.Companion.addNamed
 import net.msrandom.minecraftcodev.core.utils.*
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.allArtifacts
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.copy
@@ -135,82 +135,95 @@ open class RemappedComponentResolvers @Inject constructor(
     }
 
     private fun wrapMetadata(metadata: ComponentResolveMetadata, identifier: RemappedComponentIdentifier) = metadata.copy(
+        objects,
         identifier,
+        {
+            map { artifact ->
+                if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
+                    RemappedComponentArtifactMetadata(artifact, identifier, null, emptyList())
+                } else {
+                    artifact
+                }
+            }
+        },
         {
             val transitiveDependencies = dependencies
             val sourceNamespace = attributes.findEntry(MappingsNamespace.attribute.name).takeIf(AttributeValue<*>::isPresent)?.get() as? String
+
+            val wrapArtifact = { artifact: ComponentArtifactMetadata ->
+                    if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
+                        val selectedArtifacts = mutableListOf<Pair<ModuleSources, List<ComponentArtifactMetadata>>>()
+
+                        buildClasspath(selectedArtifacts, transitiveDependencies)
+
+                        RemappedComponentArtifactMetadata(
+                            artifact as ModuleComponentArtifactMetadata,
+                            identifier,
+                            sourceNamespace,
+                            selectedArtifacts
+                        )
+                    } else {
+                        PassthroughRemappedArtifactMetadata(artifact)
+                    }
+                }
 
             val category = attributes.findEntry(Category.CATEGORY_ATTRIBUTE.name)
             val libraryElements = attributes.findEntry(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE.name)
             if (category.isPresent && libraryElements.isPresent && category.get() == Category.LIBRARY && libraryElements.get() == LibraryElements.JAR) {
                 copy(
+                    objects,
+
                     { oldName ->
                         object : DisplayName {
                             override fun getDisplayName() = "remapped ${oldName.displayName}"
                             override fun getCapitalizedDisplayName() = "Remapped ${oldName.capitalizedDisplayName}"
                         }
                     },
+
                     attributes.addNamed(attributesFactory, instantiator, MappingsNamespace.attribute, identifier.targetNamespace.name),
-                    { dependency ->
-                        val namespace = dependency.selector.attributes.getAttribute(MappingsNamespace.attribute)
-                        if (namespace != null) {
-                            val selector = DefaultModuleComponentSelector.withAttributes(
-                                dependency.selector as ModuleComponentSelector, // Unsafe assumption, should be changed if we want things to be more generic.
-                                attributesFactory.concat(
-                                    (dependency.selector.attributes as AttributeContainerInternal).asImmutable(),
-                                    attributesFactory.of(MappingsNamespace.attribute, identifier.targetNamespace)
+
+                    {
+                        map { dependency ->
+                            val namespace = dependency.selector.attributes.getAttribute(MappingsNamespace.attribute)
+                            if (namespace != null) {
+                                val selector = DefaultModuleComponentSelector.withAttributes(
+                                    dependency.selector as ModuleComponentSelector, // Unsafe assumption, should be changed if we want things to be more generic.
+                                    attributesFactory.concat(
+                                        (dependency.selector.attributes as AttributeContainerInternal).asImmutable(),
+                                        attributesFactory.of(MappingsNamespace.attribute, identifier.targetNamespace)
+                                    )
                                 )
-                            )
 
-                            RemappedDependencyMetadataWrapper(
-                                dependency,
-                                selector,
-                                identifier.sourceNamespace ?: namespace,
-                                identifier.targetNamespace,
-                                identifier.mappingsConfiguration
-                            )
-                        } else {
-                            dependency
-                        }
-                    },
-                    { artifact, artifacts ->
-                        if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
-                            val selectedArtifacts = mutableListOf<Pair<ModuleSources, List<ComponentArtifactMetadata>>>()
-
-                            buildClasspath(selectedArtifacts, transitiveDependencies)
-
-                            RemappedComponentArtifactMetadata(
-                                artifact as ModuleComponentArtifactMetadata,
-                                identifier,
-                                sourceNamespace,
-                                selectedArtifacts
-                            )
-                        } else {
-                            PassthroughRemappedArtifactMetadata(artifact)
+                                RemappedDependencyMetadataWrapper(
+                                    dependency,
+                                    selector,
+                                    identifier.sourceNamespace ?: namespace,
+                                    identifier.targetNamespace,
+                                    identifier.mappingsConfiguration
+                                )
+                            } else {
+                                dependency
+                            }
                         }
                     },
 
-                    if (identifier.original is MinecraftComponentIdentifier && identifier.original.isBase) {
-                        // Add the mappings file if we're remapping Minecraft.
-                        listOf(MappingsArtifact(identifier, identifier.mappingsConfiguration, project))
-                    } else {
-                        emptyList()
-                    },
+                    wrapArtifact,
 
-                    objects
+                    {
+                        val artifacts = map(wrapArtifact)
+
+                        if (identifier.original is MinecraftComponentIdentifier && identifier.original.isBase) {
+                            // Add the mappings file if we're remapping Minecraft.
+                            artifacts + MappingsArtifact(identifier, identifier.mappingsConfiguration, project)
+                        } else {
+                            emptyList()
+                        }
+                    }
                 )
             } else {
                 this
             }
-        },
-        { artifact ->
-            if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
-                RemappedComponentArtifactMetadata(artifact, identifier, null, emptyList())
-            } else {
-                artifact
-            }
-        },
-        objects
+        }
     )
 
     override fun resolve(dependency: DependencyMetadata, acceptor: VersionSelector?, rejector: VersionSelector?, result: BuildableComponentIdResolveResult) {

@@ -1,9 +1,9 @@
-package net.msrandom.minecraftcodev.core.resolve.bundled
+package net.msrandom.minecraftcodev.core.resolve.minecraft.bundled
 
-import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
-import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter
-import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter.useFileSystems
-import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter.withAssets
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentResolvers
+import net.msrandom.minecraftcodev.core.resolve.minecraft.legacy.LegacyJarSplitter
+import net.msrandom.minecraftcodev.core.resolve.minecraft.legacy.LegacyJarSplitter.useFileSystems
+import net.msrandom.minecraftcodev.core.resolve.minecraft.legacy.LegacyJarSplitter.withAssets
 import net.msrandom.minecraftcodev.core.utils.walk
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.gradle.internal.component.external.model.ModuleComponentArtifactIdentifier

@@ -1,8 +1,8 @@
-package net.msrandom.minecraftcodev.core.resolve
+package net.msrandom.minecraftcodev.core.resolve.minecraft
 
 import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
-import net.msrandom.minecraftcodev.core.resolve.bundled.BundledClientJarSplitter
-import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter
+import net.msrandom.minecraftcodev.core.resolve.minecraft.bundled.BundledClientJarSplitter
+import net.msrandom.minecraftcodev.core.resolve.minecraft.legacy.LegacyJarSplitter
 import net.msrandom.minecraftcodev.core.utils.callWithStatus
 import net.msrandom.minecraftcodev.core.utils.createDeterministicCopy
 import org.gradle.internal.component.external.model.ModuleComponentArtifactIdentifier

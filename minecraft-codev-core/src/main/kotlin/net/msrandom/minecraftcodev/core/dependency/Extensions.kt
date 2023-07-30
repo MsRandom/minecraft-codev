@@ -2,7 +2,7 @@ package net.msrandom.minecraftcodev.core.dependency
 
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepository
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
-import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentResolvers
 import org.gradle.api.Action
 import org.gradle.api.artifacts.dsl.DependencyConstraintHandler
 import org.gradle.api.artifacts.dsl.RepositoryHandler

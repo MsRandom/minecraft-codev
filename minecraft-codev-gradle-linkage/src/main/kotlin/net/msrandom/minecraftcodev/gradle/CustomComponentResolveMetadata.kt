@@ -13,6 +13,7 @@ import org.gradle.internal.impldep.com.google.common.base.Optional
 import org.gradle.internal.impldep.com.google.common.collect.ImmutableList
 import javax.inject.Inject
 
+@Suppress("unused")
 internal open class CustomComponentResolveMetadata @Inject constructor(
     private val attributes: ImmutableAttributes,
     private val id: ModuleComponentIdentifier,
@@ -22,10 +23,9 @@ internal open class CustomComponentResolveMetadata @Inject constructor(
     private val status: String,
     private val statusScheme: List<String>,
     private val sources: ModuleSources,
-    override val defaultArtifact: ModuleComponentArtifactMetadata,
 
     private val attributesSchema: AttributesSchemaInternal
-) : ComponentResolveMetadata, DefaultArtifactProvider {
+) : ComponentResolveMetadata {
     override fun getAttributes() = attributes
     override fun getId() = id
     override fun getModuleVersionId() = moduleVersionId
@@ -40,7 +40,6 @@ internal open class CustomComponentResolveMetadata @Inject constructor(
         status,
         statusScheme,
         sources,
-        defaultArtifact,
         attributesSchema
     )
 

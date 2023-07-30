@@ -2,7 +2,7 @@ package net.msrandom.minecraftcodev.core
 
 import com.google.common.collect.Multimap
 import kotlinx.serialization.Serializable
-import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftVersionMetadata
 
 class LibraryData(
     /**

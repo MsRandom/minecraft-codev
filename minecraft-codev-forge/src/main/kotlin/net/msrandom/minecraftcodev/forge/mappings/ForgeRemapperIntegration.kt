@@ -16,8 +16,8 @@ import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
 import net.msrandom.minecraftcodev.core.MinecraftType
 import net.msrandom.minecraftcodev.core.dependency.resolverFactories
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
-import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver
-import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentIdentifier
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftArtifactResolver
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentIdentifier
 import net.msrandom.minecraftcodev.core.utils.getCacheProvider
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.forge.McpConfig

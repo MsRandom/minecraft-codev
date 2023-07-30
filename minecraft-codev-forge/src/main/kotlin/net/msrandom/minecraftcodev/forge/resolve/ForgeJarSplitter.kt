@@ -1,9 +1,9 @@
 package net.msrandom.minecraftcodev.forge.resolve
 
 import net.minecraftforge.srgutils.IMappingFile
-import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter.collectTypeReferences
-import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter.copyAssets
-import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter.withAssets
+import net.msrandom.minecraftcodev.core.resolve.minecraft.legacy.LegacyJarSplitter.collectTypeReferences
+import net.msrandom.minecraftcodev.core.resolve.minecraft.legacy.LegacyJarSplitter.copyAssets
+import net.msrandom.minecraftcodev.core.resolve.minecraft.legacy.LegacyJarSplitter.withAssets
 import net.msrandom.minecraftcodev.core.utils.walk
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.Type

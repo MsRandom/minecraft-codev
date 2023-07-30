@@ -5,7 +5,7 @@ import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
-import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.getOrResolve
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftArtifactResolver.Companion.getOrResolve
 import net.msrandom.minecraftcodev.core.utils.asSerializable
 import net.msrandom.minecraftcodev.core.utils.callWithStatus
 import net.msrandom.minecraftcodev.core.utils.createDeterministicCopy
@@ -79,7 +79,17 @@ open class SkipMixinsComponentResolvers @Inject constructor(
     override fun getArtifactResolver() = this
 
     private fun wrapMetadata(metadata: ComponentResolveMetadata, identifier: SkipMixinsComponentIdentifier) = metadata.copy(
+        objects,
         identifier,
+        {
+            map { artifact ->
+                if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
+                    SkipMixinsComponentArtifactMetadata(artifact, identifier)
+                } else {
+                    artifact
+                }
+            }
+        },
         {
             val category = attributes.findEntry(Category.CATEGORY_ATTRIBUTE.name)
 
@@ -96,6 +106,7 @@ open class SkipMixinsComponentResolvers @Inject constructor(
 
             if (shouldWrap) {
                 copy(
+                    objects,
                     { oldName ->
                         object : DisplayName {
                             override fun getDisplayName() = "mixins skipped ${oldName.displayName}"
@@ -103,35 +114,27 @@ open class SkipMixinsComponentResolvers @Inject constructor(
                         }
                     },
                     attributes,
-                    { dependency ->
-                        if (dependency.selector.attributes.getAttribute(MappingsNamespace.attribute) != null) {
-                            SkipMixinsDependencyMetadataWrapper(dependency)
-                        } else {
-                            dependency
+                    {
+                        map { dependency ->
+                            if (dependency.selector.attributes.getAttribute(MappingsNamespace.attribute) != null) {
+                                SkipMixinsDependencyMetadataWrapper(dependency)
+                            } else {
+                                dependency
+                            }
                         }
                     },
-                    { artifact, artifacts ->
-                        if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
-                            SkipMixinsComponentArtifactMetadata(artifact as ModuleComponentArtifactMetadata, identifier)
+                    {
+                        if (name.type == ArtifactTypeDefinition.JAR_TYPE) {
+                            SkipMixinsComponentArtifactMetadata(this as ModuleComponentArtifactMetadata, identifier)
                         } else {
-                            PassthroughSkipMixinsArtifactMetadata(artifact)
+                            PassthroughSkipMixinsArtifactMetadata(this)
                         }
-                    },
-                    emptyList(),
-                    objects
+                    }
                 )
             } else {
                 this
             }
-        },
-        { artifact ->
-            if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
-                SkipMixinsComponentArtifactMetadata(artifact, identifier)
-            } else {
-                artifact
-            }
-        },
-        objects
+        }
     )
 
     override fun resolve(dependency: DependencyMetadata, acceptor: VersionSelector?, rejector: VersionSelector?, result: BuildableComponentIdResolveResult) {

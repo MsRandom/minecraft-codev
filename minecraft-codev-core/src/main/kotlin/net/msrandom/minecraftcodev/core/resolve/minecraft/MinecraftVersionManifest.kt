@@ -1,4 +1,4 @@
-package net.msrandom.minecraftcodev.core.resolve
+package net.msrandom.minecraftcodev.core.resolve.minecraft
 
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable

@@ -4,10 +4,10 @@ import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
 import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
-import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.resolveMojangFile
-import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
-import net.msrandom.minecraftcodev.core.resolve.MinecraftDependencyToComponentIdResolver
-import net.msrandom.minecraftcodev.core.resolve.MinecraftMetadataGenerator
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftArtifactResolver.Companion.resolveMojangFile
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentResolvers
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftDependencyToComponentIdResolver
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftMetadataGenerator
 import net.msrandom.minecraftcodev.core.utils.visitConfigurationFiles
 import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin
 import net.msrandom.minecraftcodev.forge.UserdevConfig

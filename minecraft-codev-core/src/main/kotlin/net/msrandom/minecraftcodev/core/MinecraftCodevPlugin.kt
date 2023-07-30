@@ -7,8 +7,8 @@ import net.msrandom.minecraftcodev.core.dependency.DecompiledIvyDependencyDescri
 import net.msrandom.minecraftcodev.core.dependency.MinecraftIvyDependencyDescriptorFactory
 import net.msrandom.minecraftcodev.core.dependency.handleCustomQueryResolvers
 import net.msrandom.minecraftcodev.core.dependency.registerCustomDependency
-import net.msrandom.minecraftcodev.core.resolve.DecompiledComponentResolvers
-import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
+import net.msrandom.minecraftcodev.core.resolve.sources.DecompiledComponentResolvers
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentResolvers
 import net.msrandom.minecraftcodev.core.utils.applyPlugin
 import net.msrandom.minecraftcodev.core.utils.named
 import org.gradle.api.Plugin

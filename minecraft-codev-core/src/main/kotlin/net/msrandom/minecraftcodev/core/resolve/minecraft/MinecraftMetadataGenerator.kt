@@ -1,4 +1,4 @@
-package net.msrandom.minecraftcodev.core.resolve
+package net.msrandom.minecraftcodev.core.resolve.minecraft
 
 import com.google.common.collect.HashMultimap
 import kotlinx.serialization.json.Json
@@ -13,10 +13,10 @@ import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
 import net.msrandom.minecraftcodev.core.dependency.MinecraftDependencyMetadataWrapper
 import net.msrandom.minecraftcodev.core.repository.DefaultCacheAwareExternalResourceAccessor
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
-import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.getAdditionalCandidates
-import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.resolveMojangFile
-import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.addNamed
-import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.asMinecraftDownload
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftArtifactResolver.Companion.getAdditionalCandidates
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftArtifactResolver.Companion.resolveMojangFile
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentResolvers.Companion.addNamed
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentResolvers.Companion.asMinecraftDownload
 import net.msrandom.minecraftcodev.core.utils.named
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader
 import org.gradle.api.artifacts.Dependency
@@ -181,6 +181,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                 }
 
                 CodevGradleLinkageLoader.ConfigurationMetadata(
+                    objectFactory,
                     name,
                     moduleComponentIdentifier,
                     dependencies,
@@ -190,13 +191,13 @@ open class MinecraftMetadataGenerator @Inject constructor(
                         osAttributes
                     ),
                     ImmutableCapabilities.EMPTY,
-                    setOf(name),
-                    objectFactory
+                    setOf(name)
                 )
             }
 
             result.resolved(
                 CodevGradleLinkageLoader.ComponentResolveMetadata(
+                    objectFactory,
                     attributesFactory.of(ProjectInternal.STATUS_ATTRIBUTE, manifest.type),
                     moduleComponentIdentifier,
                     DefaultModuleVersionIdentifier.newId(moduleComponentIdentifier.moduleIdentifier, moduleComponentIdentifier.version),
@@ -204,8 +205,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                     requestMetaData.isChanging,
                     manifest.type,
                     versionList.latest.keys.reversed(),
-                    artifact,
-                    objectFactory
+                    artifact
                 )
             )
 
@@ -275,38 +275,27 @@ open class MinecraftMetadataGenerator @Inject constructor(
                     val extractionState = extractionState(repository, manifest).value ?: return
 
                     val library = CodevGradleLinkageLoader.ConfigurationMetadata(
+                        objectFactory,
                         Dependency.DEFAULT_CONFIGURATION,
                         moduleComponentIdentifier,
                         collectLibraries(manifest, extractionState.libraries).common.map(::mapLibrary),
                         listOf(artifact),
                         defaultAttributes(manifest, defaultAttributes).libraryAttributes(),
                         ImmutableCapabilities.EMPTY,
-                        setOf(Dependency.DEFAULT_CONFIGURATION),
-                        objectFactory
-                    )
-
-                    val sourcesElements = CodevGradleLinkageLoader.ConfigurationMetadata(
-                        JavaPlugin.SOURCES_ELEMENTS_CONFIGURATION_NAME,
-                        moduleComponentIdentifier,
-                        emptyList(),
-                        listOf(artifact(ArtifactTypeDefinition.JAR_TYPE, "sources")),
-                        defaultAttributes(manifest, defaultAttributes).runtimeAttributes().docsAttributes(DocsType.SOURCES),
-                        ImmutableCapabilities.EMPTY,
-                        setOf(JavaPlugin.SOURCES_ELEMENTS_CONFIGURATION_NAME),
-                        objectFactory
+                        setOf(Dependency.DEFAULT_CONFIGURATION)
                     )
 
                     result.resolved(
                         CodevGradleLinkageLoader.ComponentResolveMetadata(
+                            objectFactory,
                             attributesFactory.of(ProjectInternal.STATUS_ATTRIBUTE, manifest.type),
                             moduleComponentIdentifier,
                             DefaultModuleVersionIdentifier.newId(moduleComponentIdentifier.moduleIdentifier, moduleComponentIdentifier.version),
-                            listOf(library, sourcesElements),
+                            listOf(library),
                             isChanging || requestMetaData.isChanging,
                             manifest.type,
                             versionList.latest.keys.reversed(),
-                            artifact,
-                            objectFactory
+                            artifact
                         )
                     )
                     return
@@ -341,7 +330,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
 
                     val variants = mutableListOf<ConfigurationMetadata>()
 
-                    for ((system, platformLibraries) in libraries.client.asMap()) {
+                    libraries.client.asMap().map { (system, platformLibraries) ->
                         val osAttributes: ImmutableAttributes
                         val name: String
                         val dependencies: List<DependencyMetadata>
@@ -369,38 +358,24 @@ open class MinecraftMetadataGenerator @Inject constructor(
                             dependencies = listOfNotNull(commonDependency) + (libraries.client[null] + platformLibraries).map(::mapLibrary)
                         }
 
-                        variants.add(
-                            CodevGradleLinkageLoader.ConfigurationMetadata(
-                                name,
-                                moduleComponentIdentifier,
-                                dependencies,
-                                artifacts,
-                                attributesFactory.concat(
-                                    defaultAttributes(manifest, defaultAttributes).libraryAttributes(),
-                                    osAttributes
-                                ),
-                                ImmutableCapabilities.EMPTY,
-                                setOf(name),
-                                objectFactory
-                            )
+                        CodevGradleLinkageLoader.ConfigurationMetadata(
+                            objectFactory,
+                            name,
+                            moduleComponentIdentifier,
+                            dependencies,
+                            artifacts,
+                            attributesFactory.concat(
+                                defaultAttributes(manifest, defaultAttributes).libraryAttributes(),
+                                osAttributes
+                            ),
+                            ImmutableCapabilities.EMPTY,
+                            setOf(name)
                         )
                     }
 
-                    variants.add(
-                        CodevGradleLinkageLoader.ConfigurationMetadata(
-                            JavaPlugin.SOURCES_ELEMENTS_CONFIGURATION_NAME,
-                            moduleComponentIdentifier,
-                            emptyList(),
-                            listOf(artifact(ArtifactTypeDefinition.JAR_TYPE, "sources")),
-                            defaultAttributes(manifest, defaultAttributes).runtimeAttributes().docsAttributes(DocsType.SOURCES),
-                            ImmutableCapabilities.EMPTY,
-                            setOf(JavaPlugin.SOURCES_ELEMENTS_CONFIGURATION_NAME),
-                            objectFactory
-                        )
-                    )
-
                     result.resolved(
                         CodevGradleLinkageLoader.ComponentResolveMetadata(
+                            objectFactory,
                             attributesFactory.of(ProjectInternal.STATUS_ATTRIBUTE, manifest.type),
                             moduleComponentIdentifier,
                             DefaultModuleVersionIdentifier.newId(moduleComponentIdentifier.moduleIdentifier, moduleComponentIdentifier.version),
@@ -408,8 +383,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                             isChanging || requestMetaData.isChanging,
                             manifest.type,
                             versionList.latest.keys.reversed(),
-                            artifact,
-                            objectFactory
+                            artifact
                         )
                     )
 
@@ -456,20 +430,21 @@ open class MinecraftMetadataGenerator @Inject constructor(
 
                         variants.add(
                             CodevGradleLinkageLoader.ConfigurationMetadata(
+                                objectFactory,
                                 system.name.toString(),
                                 moduleComponentIdentifier,
                                 dependencies,
                                 artifacts,
                                 defaultAttributes(manifest, defaultAttributes).addNamed(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE, system.name.toString()),
                                 ImmutableCapabilities.EMPTY,
-                                setOf(system.name.toString()),
-                                objectFactory
+                                setOf(system.name.toString())
                             )
                         )
                     }
 
                     result.resolved(
                         CodevGradleLinkageLoader.ComponentResolveMetadata(
+                            objectFactory,
                             attributesFactory.of(ProjectInternal.STATUS_ATTRIBUTE, manifest.type),
                             moduleComponentIdentifier,
                             DefaultModuleVersionIdentifier.newId(moduleComponentIdentifier.moduleIdentifier, moduleComponentIdentifier.version),
@@ -477,8 +452,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                             isChanging || requestMetaData.isChanging,
                             manifest.type,
                             versionList.latest.keys.reversed(),
-                            artifact,
-                            objectFactory
+                            artifact
                         )
                     )
                 }
@@ -494,26 +468,26 @@ open class MinecraftMetadataGenerator @Inject constructor(
 
                             result.resolved(
                                 CodevGradleLinkageLoader.ComponentResolveMetadata(
+                                    objectFactory,
                                     attributesFactory.of(ProjectInternal.STATUS_ATTRIBUTE, manifest.type),
                                     moduleComponentIdentifier,
                                     DefaultModuleVersionIdentifier.newId(moduleComponentIdentifier.moduleIdentifier, moduleComponentIdentifier.version),
                                     listOf(
                                         CodevGradleLinkageLoader.ConfigurationMetadata(
+                                            objectFactory,
                                             Dependency.DEFAULT_CONFIGURATION,
                                             moduleComponentIdentifier,
                                             emptyList(),
                                             listOf(artifact(extension)),
                                             ImmutableAttributes.EMPTY,
                                             ImmutableCapabilities.EMPTY,
-                                            setOf(Dependency.DEFAULT_CONFIGURATION),
-                                            objectFactory
+                                            setOf(Dependency.DEFAULT_CONFIGURATION)
                                         )
                                     ),
                                     isChanging || requestMetaData.isChanging,
                                     manifest.type,
                                     versionList.latest.keys.reversed(),
-                                    artifact,
-                                    objectFactory
+                                    artifact
                                 )
                             )
 
@@ -699,10 +673,10 @@ open class MinecraftMetadataGenerator @Inject constructor(
 
                 val cached = versionManifest.takeIf(Path::exists)?.let { checkCached(id, resolvedModuleVersion, it, timeProvider, cachePolicy) }
 
-                this.versionManifest = cached ?: fetchVersionList(url, resolvedModuleVersion, result, resourceAccessor, checksumService, versionManifest)
-                this.isManifestInitialized = true
+                Companion.versionManifest = cached ?: fetchVersionList(url, resolvedModuleVersion, result, resourceAccessor, checksumService, versionManifest)
+                isManifestInitialized = true
 
-                this.versionManifest
+                Companion.versionManifest
             }
         }
 

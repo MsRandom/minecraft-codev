@@ -6,7 +6,7 @@ import kotlinx.serialization.json.encodeToStream
 import net.msrandom.minecraftcodev.core.AssetsIndex
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
-import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftVersionMetadata
 import net.msrandom.minecraftcodev.runs.RunsContainer
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.RegularFile
@@ -72,7 +72,13 @@ abstract class DownloadAssets : DefaultTask() {
             ExternalResourceName(url),
             sha1,
             output.asFile.toPath(),
-            LazyLocallyAvailableResourceCandidates({ listOf(output.asFile) }, checksumService)
+            LazyLocallyAvailableResourceCandidates({
+                if (output.asFile.exists()) {
+                    listOf(output.asFile)
+                } else {
+                    emptyList()
+                }
+            }, checksumService)
         )!!.file
 
         val assetIndexJson = downloadFile(assetIndex.url, assetIndex.sha1, indexesDirectory.file("${assetIndex.id}.json"))

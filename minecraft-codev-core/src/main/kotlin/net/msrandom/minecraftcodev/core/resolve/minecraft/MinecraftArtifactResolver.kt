@@ -1,11 +1,11 @@
-package net.msrandom.minecraftcodev.core.resolve
+package net.msrandom.minecraftcodev.core.resolve.minecraft
 
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
-import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.asMinecraftDownload
-import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.hash
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentResolvers.Companion.asMinecraftDownload
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentResolvers.Companion.hash
 import net.msrandom.minecraftcodev.core.utils.asSerializable
 import org.gradle.api.artifacts.component.ComponentArtifactIdentifier
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
@@ -52,7 +52,7 @@ open class MinecraftArtifactResolver @Inject constructor(
 
     private val artifactCache by lazy {
         // TODO make this more space efficient by removing the group
-        cacheManager.getMetadataCache(Path("module-artifact"), ::artifactIdSerializer) {
+        cacheManager.getMetadataCache(Path("module-artifact"), Companion::artifactIdSerializer) {
             CachedArtifactSerializer(cacheManager.fileStoreDirectory)
         }.asFile
     }

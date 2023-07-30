@@ -2,10 +2,10 @@ package net.msrandom.minecraftcodev.runs
 
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
-import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver
-import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
-import net.msrandom.minecraftcodev.core.resolve.MinecraftMetadataGenerator
-import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftArtifactResolver
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentResolvers
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftMetadataGenerator
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftVersionMetadata
 import net.msrandom.minecraftcodev.core.utils.*
 import net.msrandom.minecraftcodev.runs.task.DownloadAssets
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives

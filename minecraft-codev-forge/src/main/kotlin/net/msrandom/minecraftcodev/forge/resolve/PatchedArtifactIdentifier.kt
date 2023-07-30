@@ -1,6 +1,6 @@
 package net.msrandom.minecraftcodev.forge.resolve
 
-import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver
+import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftArtifactResolver
 import org.gradle.api.artifacts.component.ComponentArtifactIdentifier
 import org.gradle.internal.hash.HashCode
 import org.gradle.internal.serialize.Decoder
