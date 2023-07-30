@@ -50,9 +50,8 @@ object CodevGradleLinkageLoader {
         variants: List<ConfigurationMetadata>,
         isChanging: Boolean,
         status: String,
-        statusScheme: List<String>,
-        defaultArtifact: ModuleComponentArtifactMetadata,
-    ): ComponentResolveMetadata = objects.newInstance(customComponentResolveMetadata, attributes, id, moduleVersionId, variants, isChanging, status, statusScheme, ImmutableModuleSources.of(), defaultArtifact)
+        statusScheme: List<String>
+    ): ComponentResolveMetadata = objects.newInstance(customComponentResolveMetadata, attributes, id, moduleVersionId, variants, isChanging, status, statusScheme, ImmutableModuleSources.of())
 
     fun ComponentResolveMetadata.copy(
         objects: ObjectFactory,

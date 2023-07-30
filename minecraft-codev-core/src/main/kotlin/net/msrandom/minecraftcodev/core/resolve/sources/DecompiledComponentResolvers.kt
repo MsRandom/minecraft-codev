@@ -152,27 +152,6 @@ open class DecompiledComponentResolvers @Inject constructor(
             )
         }
 
-        val wrapConfiguration = { it: ConfigurationMetadata ->
-            it.copy(
-                objects,
-                { oldName ->
-                    object : DisplayName {
-                        override fun getDisplayName() = "${oldName.displayName} + generated sources"
-                        override fun getCapitalizedDisplayName() = "${oldName.capitalizedDisplayName} + Generated Sources"
-                    }
-                },
-                it.attributes,
-                { emptyList() },
-                {
-                    if (name.type == ArtifactTypeDefinition.JAR_TYPE) {
-                        wrapArtifact(this, it.dependencies)
-                    } else {
-                        PassthroughDecompiledArtifactMetadata(this)
-                    }
-                }
-            )
-        }
-
         val replaceSourcesConfiguration = { it: ConfigurationMetadata ->
             val transitiveDependencies = it.dependencies
 
@@ -200,7 +179,13 @@ open class DecompiledComponentResolvers @Inject constructor(
                     }
                 )
             } else {
-                it
+                it.copy(
+                    objects,
+                    { it },
+                    it.attributes,
+                    { this },
+                    { PassthroughDecompiledArtifactMetadata(this) }
+                )
             }
         }
 
@@ -221,7 +206,7 @@ open class DecompiledComponentResolvers @Inject constructor(
                 val wrapped = map(replaceSourcesConfiguration)
 
                 if (wrapped.indices.all { get(it) == wrapped[it] }) {
-                    val configurationsByArtifact = flatMap { configuration -> configuration.artifacts.map { it to configuration } }
+                    val configurationsByArtifact = flatMap { configuration -> configuration.allArtifacts.map { it to configuration } }
                         .filter { (artifact) -> artifact.componentId is ModuleComponentIdentifier }
                         .groupBy { (artifact) -> artifact.name }
                         .filterKeys { it.type == ArtifactTypeDefinition.JAR_TYPE }
@@ -345,6 +330,21 @@ open class DecompiledComponentResolvers @Inject constructor(
     }
 
     override fun resolveArtifactsWithType(component: ComponentResolveMetadata, artifactType: ArtifactType, result: BuildableArtifactSetResolveResult) {
+        if (artifactType == ArtifactType.SOURCES) {
+            return
+        }
+
+        val sourcesConfiguration = AttributeConfigurationSelector.selectConfigurationUsingAttributeMatching(
+            ImmutableAttributes.EMPTY
+                .addNamed(attributesFactory, instantiator, Category.CATEGORY_ATTRIBUTE, Category.DOCUMENTATION)
+                .addNamed(attributesFactory, instantiator, DocsType.DOCS_TYPE_ATTRIBUTE, DocsType.SOURCES),
+            emptyList(),
+            component,
+            project.dependencies.attributesSchema as AttributesSchemaInternal,
+            emptyList()
+        )
+
+        result.resolved(sourcesConfiguration.allArtifacts)
     }
 
     override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactResolveResult) {

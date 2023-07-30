@@ -4,6 +4,8 @@ import net.msrandom.minecraftcodev.core.repository.MinecraftRepository
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
 import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentResolvers
 import org.gradle.api.Action
+import org.gradle.api.artifacts.ModuleDependency
+import org.gradle.api.artifacts.SelfResolvingDependency
 import org.gradle.api.artifacts.dsl.DependencyConstraintHandler
 import org.gradle.api.artifacts.dsl.RepositoryHandler
 import org.gradle.api.internal.artifacts.DefaultArtifactRepositoryContainer
@@ -19,6 +21,12 @@ private val baseRepository = DefaultRepositoryHandler::class.java.getDeclaredFie
 private val objectFactory = DefaultBaseRepositoryFactory::class.java.getDeclaredField("objectFactory").apply {
     isAccessible = true
 }
+
+val <T : ModuleDependency> T.withSources
+    get() = withSources()
+
+val SelfResolvingDependency.withSources
+    get() = withSources()
 
 private fun RepositoryHandler.getObjectFactory() = objectFactory[baseRepository[this]] as ObjectFactory
 
@@ -37,3 +45,13 @@ fun DependencyConstraintHandler.minecraft(name: Any) =
 
 fun DependencyConstraintHandler.minecraft(notation: Map<String, Any>) =
     minecraft(notation.getValue("name"), notation["version"]?.toString())
+
+@JvmOverloads
+fun <T : ModuleDependency> T.withSources(configure: Action<T>? = null) = getWithSources(configure)
+
+fun SelfResolvingDependency.withSources(): SelfResolvingDependency = TODO("Not yet implemented")
+
+@Suppress("UNCHECKED_CAST")
+fun <T : ModuleDependency> T.getWithSources(configure: Action<T>?): DecompiledDependency<T> = DecompiledDependency(copy() as T).apply {
+    configure?.execute(sourceDependency)
+}

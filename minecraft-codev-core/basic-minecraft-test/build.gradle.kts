@@ -1,5 +1,6 @@
 import java.net.URL
 import net.msrandom.minecraftcodev.core.dependency.minecraft
+import net.msrandom.minecraftcodev.core.dependency.withSources
 import net.msrandom.minecraftcodev.core.MinecraftType
 
 plugins {
@@ -52,6 +53,7 @@ java {
 dependencies {
     val latestVersionFile = `java.nio.file`.Files.createTempFile("latest-version", ".tmp.txt")
     ant.invokeMethod("get", mapOf("src" to "https://maven.msrandom.net/repository/root/minecraft-latest-version.txt", "dest" to latestVersionFile.toAbsolutePath().toString()))
+
     val latestVersion = `java.nio.file`.Files.newBufferedReader(latestVersionFile).use {
         it.readText().trim()
     }
@@ -60,10 +62,10 @@ dependencies {
     commonLatestRelease.implementationConfigurationName(minecraft(MinecraftType.Common, "latest.release"))
     commonLatestSnapshot.implementationConfigurationName(minecraft(MinecraftType.Common, "latest.snapshot"))
     commonChangingSnapshot.implementationConfigurationName(minecraft(MinecraftType.Common, "${latestVersion}-SNAPSHOT"))
-    commonSubversion.implementationConfigurationName(minecraft(MinecraftType.Common, "1.18+"))
+    commonSubversion.implementationConfigurationName(minecraft(MinecraftType.Common, "1.18+").withSources)
     commonClosedMavenRange.implementationConfigurationName(minecraft(MinecraftType.Common, "[1.0,1.19.3]"))
     commonOpenMavenRange.implementationConfigurationName(minecraft(MinecraftType.Common, "[1.19,)"))
 
     clientUniqueSnapshot.implementationConfigurationName(minecraft(MinecraftType.Client, "1.12-20170918.113946-1"))
-    clientSubversion.implementationConfigurationName(minecraft(MinecraftType.Client, "1.18+"))
+    clientSubversion.implementationConfigurationName(minecraft(MinecraftType.Client, "1.18+").withSources)
 }

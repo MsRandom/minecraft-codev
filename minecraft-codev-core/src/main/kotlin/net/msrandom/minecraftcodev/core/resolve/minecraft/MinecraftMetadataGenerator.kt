@@ -204,8 +204,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                     variants,
                     requestMetaData.isChanging,
                     manifest.type,
-                    versionList.latest.keys.reversed(),
-                    artifact
+                    versionList.latest.keys.reversed()
                 )
             )
 
@@ -294,8 +293,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                             listOf(library),
                             isChanging || requestMetaData.isChanging,
                             manifest.type,
-                            versionList.latest.keys.reversed(),
-                            artifact
+                            versionList.latest.keys.reversed()
                         )
                     )
                     return
@@ -328,9 +326,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
 
                     val artifacts = listOf(artifact)
 
-                    val variants = mutableListOf<ConfigurationMetadata>()
-
-                    libraries.client.asMap().map { (system, platformLibraries) ->
+                    val variants = libraries.client.asMap().map { (system, platformLibraries) ->
                         val osAttributes: ImmutableAttributes
                         val name: String
                         val dependencies: List<DependencyMetadata>
@@ -382,8 +378,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                             variants,
                             isChanging || requestMetaData.isChanging,
                             manifest.type,
-                            versionList.latest.keys.reversed(),
-                            artifact
+                            versionList.latest.keys.reversed()
                         )
                     )
 
@@ -393,9 +388,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                 MinecraftComponentResolvers.CLIENT_NATIVES_MODULE -> {
                     val extractionResult = extractionState(repository, manifest).value
                     val libraries = collectLibraries(manifest, extractionResult?.libraries ?: emptyList())
-                    val variants = mutableListOf<ConfigurationMetadata>()
-
-                    for ((system, platformLibraries) in libraries.natives.asMap()) {
+                    val variants = libraries.natives.asMap().map { (system, platformLibraries) ->
                         val dependencies = mutableListOf<DependencyMetadata>()
                         val artifacts = mutableListOf<ComponentArtifactMetadata>()
 
@@ -428,17 +421,15 @@ open class MinecraftMetadataGenerator @Inject constructor(
                             )
                         }
 
-                        variants.add(
-                            CodevGradleLinkageLoader.ConfigurationMetadata(
-                                objectFactory,
-                                system.name.toString(),
-                                moduleComponentIdentifier,
-                                dependencies,
-                                artifacts,
-                                defaultAttributes(manifest, defaultAttributes).addNamed(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE, system.name.toString()),
-                                ImmutableCapabilities.EMPTY,
-                                setOf(system.name.toString())
-                            )
+                        CodevGradleLinkageLoader.ConfigurationMetadata(
+                            objectFactory,
+                            system.name.toString(),
+                            moduleComponentIdentifier,
+                            dependencies,
+                            artifacts,
+                            defaultAttributes(manifest, defaultAttributes).addNamed(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE, system.name.toString()),
+                            ImmutableCapabilities.EMPTY,
+                            setOf(system.name.toString())
                         )
                     }
 
@@ -451,8 +442,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                             variants,
                             isChanging || requestMetaData.isChanging,
                             manifest.type,
-                            versionList.latest.keys.reversed(),
-                            artifact
+                            versionList.latest.keys.reversed()
                         )
                     )
                 }
@@ -486,8 +476,7 @@ open class MinecraftMetadataGenerator @Inject constructor(
                                     ),
                                     isChanging || requestMetaData.isChanging,
                                     manifest.type,
-                                    versionList.latest.keys.reversed(),
-                                    artifact
+                                    versionList.latest.keys.reversed()
                                 )
                             )
 
