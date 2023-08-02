@@ -1,11 +1,13 @@
 package net.msrandom.minecraftcodev.remapper
 
+import kotlinx.serialization.json.decodeFromStream
 import net.fabricmc.mappingio.MappingVisitor
 import net.fabricmc.mappingio.adapter.MappingSourceNsSwitch
 import net.fabricmc.mappingio.format.ProGuardReader
 import net.fabricmc.mappingio.tree.MappingTreeView
 import net.fabricmc.mappingio.tree.MemoryMappingTree
 import net.msrandom.minecraftcodev.core.MappingsNamespace
+import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
 import net.msrandom.minecraftcodev.core.dependency.resolverFactories
 import net.msrandom.minecraftcodev.core.utils.visitConfigurationFiles
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
@@ -31,6 +33,7 @@ import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import kotlin.io.path.inputStream
+import kotlin.io.path.notExists
 
 fun interface MappingResolutionRule {
     fun loadMappings(
@@ -97,6 +100,34 @@ open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory, p
             } else {
                 false
             }
+        }
+
+        zipMappingsResolution.add { _, fileSystem, visitor, _, decorate, _, _, _ ->
+            val parchmentJson = fileSystem.getPath("parchment.json")
+
+            if (parchmentJson.notExists()) {
+                return@add false
+            }
+
+            val parchment = decorate(parchmentJson.inputStream()).use { json.decodeFromStream<Parchment>(it) }
+
+            if (visitor.visitHeader()) {
+                visitor.visitNamespaces(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE, emptyList())
+            }
+
+            parchment.classes?.forEach CLASS_LOOP@{ classElement ->
+                visitor.visitClass(classElement.name)
+
+                classElement.methods?.forEach METHOD_LOOP@{ methodElement ->
+                    visitor.visitMethod(methodElement.name, methodElement.descriptor)
+
+                    methodElement.parameters?.forEach PARAMETER_LOOP@ { parameterElement ->
+                        visitor.visitMethodArg(parameterElement.index, parameterElement.index, parameterElement.name)
+                    }
+                }
+            }
+
+            true
         }
     }
 

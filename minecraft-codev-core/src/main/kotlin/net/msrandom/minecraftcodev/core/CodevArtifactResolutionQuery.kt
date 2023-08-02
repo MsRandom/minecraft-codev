@@ -55,9 +55,7 @@ open class CodevArtifactResolutionQuery @Inject constructor(
         this.componentIds.addAll(componentIds)
     }
 
-    override fun forComponents(vararg componentIds: ComponentIdentifier): ArtifactResolutionQuery = apply {
-        this.componentIds.addAll(componentIds)
-    }
+    override fun forComponents(vararg componentIds: ComponentIdentifier) = forComponents(listOf(*componentIds))
 
     override fun forModule(group: String, name: String, version: String): ArtifactResolutionQuery = apply {
         componentIds.add(DefaultModuleComponentIdentifier.newId(DefaultModuleIdentifier.newId(group, name), version))
@@ -78,6 +76,7 @@ open class CodevArtifactResolutionQuery @Inject constructor(
         val detachedConfiguration = configurationContainer.detachedConfiguration()
         val resolutionStrategy = detachedConfiguration.resolutionStrategy
         val resolvers = mutableListOf<ComponentResolvers>()
+
         for (resolverFactory in gradle.resolverFactories) {
             resolverFactory.create(detachedConfiguration, resolvers)
         }
@@ -97,6 +96,7 @@ open class CodevArtifactResolutionQuery @Inject constructor(
 
         val componentMetaDataResolver = componentResolvers.componentResolver
         val artifactResolver = ErrorHandlingArtifactResolver(componentResolvers.artifactResolver)
+
         return createResult(componentMetaDataResolver, artifactResolver)
     }
 

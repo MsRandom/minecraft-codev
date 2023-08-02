@@ -78,7 +78,7 @@ open class DecompiledComponentResolvers @Inject constructor(
 
     cacheProvider: CodevCacheProvider
 ) : ComponentResolvers, DependencyToComponentIdResolver, ComponentMetaDataResolver, OriginArtifactSelector, ArtifactResolver {
-    private val cacheManager = cacheProvider.manager("remapped")
+    private val cacheManager = cacheProvider.manager("generated-sources")
 
     private val artifactCache by lazy {
         cacheManager.getMetadataCache(Path("module-artifact"), { DecompiledArtifactIdentifier.ArtifactSerializer }) {
