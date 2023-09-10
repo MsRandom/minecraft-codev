@@ -1,6 +1,5 @@
 package net.msrandom.minecraftcodev.remapper.resolve
 
-import org.gradle.api.Project
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.internal.artifacts.DefaultArtifactIdentifier
@@ -19,7 +18,7 @@ sealed interface RemapperArtifact {
     val mappingsConfiguration: String
 }
 
-class MappingsArtifact(private val componentIdentifier: ModuleComponentIdentifier, override val mappingsConfiguration: String, private val project: Project) :
+class MappingsArtifact(private val componentIdentifier: ModuleComponentIdentifier, override val mappingsConfiguration: String) :
     RemapperArtifact,
     ModuleComponentArtifactMetadata {
     override fun getId() = DefaultModuleComponentArtifactIdentifier(componentIdentifier, name)
@@ -57,6 +56,8 @@ class RemappedComponentArtifactMetadata(
     }
 
     override fun getComponentId() = id
+
+    override fun isOptionalArtifact() = delegate.isOptionalArtifact
 }
 
 class PassthroughRemappedArtifactMetadata(val original: ComponentArtifactMetadata): ComponentArtifactMetadata by original

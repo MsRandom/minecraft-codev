@@ -19,6 +19,7 @@ subprojects {
 childProjects.values.forEach { project ->
     with(project) {
         apply(plugin = "org.jetbrains.kotlin.jvm")
+        apply(plugin = "org.jetbrains.kotlin.plugin.serialization")
         apply(plugin = "maven-publish")
 
         dependencies {
@@ -38,23 +39,12 @@ childProjects.values.forEach { project ->
 
         tasks.compileKotlin {
             kotlinOptions {
-                val args = mutableListOf(
+                freeCompilerArgs = listOf(
                     "-opt-in=kotlin.ExperimentalStdlibApi",
                     "-opt-in=kotlinx.serialization.ExperimentalSerializationApi",
                     "-Xunrestricted-builder-inference"
                 )
 
-                if (LifecycleBasePlugin.BUILD_TASK_NAME in gradle.startParameter.taskNames) {
-                    args.addAll(
-                        listOf(
-                            "-Xno-param-assertions=true",
-                            "-Xno-receiver-assertions=true",
-                            "-Xno-param-assertions=true"
-                        )
-                    )
-                }
-
-                freeCompilerArgs = args
                 apiVersion = "1.6"
                 languageVersion = "1.6"
             }

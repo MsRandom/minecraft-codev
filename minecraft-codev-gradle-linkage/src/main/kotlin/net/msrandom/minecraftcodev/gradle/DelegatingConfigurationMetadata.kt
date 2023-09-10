@@ -21,7 +21,7 @@ internal open class DelegatingConfigurationMetadata @Inject constructor(
     override fun getArtifacts(): ImmutableList<ComponentArtifactMetadata> = ImmutableList.copyOf(artifacts(delegate.artifacts))
 
     override fun getVariants() = delegate.variants.mapTo(mutableSetOf()) {
-        DefaultVariantMetadata(it.name, it.identifier, asDescribable(), attributes, getArtifacts(), it.capabilities)
+        DefaultVariantMetadata(it.name, it.identifier, it.asDescribable(), it.attributes, ImmutableList.copyOf(artifacts(it.artifacts)), it.capabilities)
     }
 
     override fun artifact(artifact: IvyArtifactName) = artifact(delegate.artifact(artifact))

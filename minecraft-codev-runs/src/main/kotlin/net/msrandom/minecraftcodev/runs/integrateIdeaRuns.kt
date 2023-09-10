@@ -24,8 +24,6 @@ fun Project.integrateIdeaRuns() {
                     .getByType(RunsContainer::class.java)
                     .all { builder ->
                         runConfigurations.register(builder.friendlyName, Application::class.java) { application ->
-                            otherProject.logger.lifecycle("Building IntelliJ Idea run configuration {}", builder.name)
-
                             val config = builder.build()
 
                             application.mainClass = config.mainClass.get()

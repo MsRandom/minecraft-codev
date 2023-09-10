@@ -80,7 +80,12 @@ class MinecraftCodevRunsPlugin<T : PluginAware> @Inject constructor(cacheDir: Gl
                 javaExec.jvmArgumentProviders.add(configuration.jvmArguments.map { arguments -> arguments.map(MinecraftRunConfiguration.Argument::compile) }::get)
                 javaExec.workingDir(configuration.workingDirectory)
                 javaExec.mainClass.set(configuration.mainClass)
-                javaExec.classpath = configuration.compilation.map(KotlinJvmCompilation::runtimeDependencyFiles).orElse(configuration.sourceSet.map(SourceSet::getRuntimeClasspath)).get()
+
+                javaExec.classpath = configuration.compilation
+                    .map { it.runtimeDependencyFiles + it.output.allOutputs }
+                    .orElse(configuration.sourceSet.map(SourceSet::getRuntimeClasspath))
+                    .get()
+
                 javaExec.group = ApplicationPlugin.APPLICATION_GROUP
 
                 javaExec.dependsOn(configuration.beforeRun)

@@ -1,5 +1,6 @@
 package net.msrandom.minecraftcodev.core.utils
 
+import kotlinx.coroutines.sync.Mutex
 import java.net.URI
 import java.nio.file.*
 import java.util.concurrent.ConcurrentHashMap
@@ -22,10 +23,6 @@ fun zipFileSystem(file: Path, create: Boolean = false): LockingFileSystem {
 
     val lock = fileSystemLocks.computeIfAbsent(uri) {
         ReentrantLock()
-    }
-
-    while (lock.isLocked) {
-        // Wait until lock unlocks
     }
 
     lock.lock()

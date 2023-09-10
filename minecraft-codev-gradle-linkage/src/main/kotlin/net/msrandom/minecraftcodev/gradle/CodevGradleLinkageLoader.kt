@@ -56,10 +56,9 @@ object CodevGradleLinkageLoader {
     fun ComponentResolveMetadata.copy(
         objects: ObjectFactory,
         id: ComponentIdentifier,
-        artifacts: List<ModuleComponentArtifactMetadata>.() -> List<ModuleComponentArtifactMetadata>,
         configuration: ConfigurationMetadata.() -> ConfigurationMetadata,
         configurations: List<ConfigurationMetadata>.() -> List<ConfigurationMetadata> = { map(configuration) }
-    ): ComponentResolveMetadata = objects.newInstance(delegatingComponentResolveMetadata, this, id, configurations, artifacts, configuration)
+    ): ComponentResolveMetadata = objects.newInstance(delegatingComponentResolveMetadata, this, id, configurations, configuration)
 
     fun ConfigurationMetadata(
         objects: ObjectFactory,

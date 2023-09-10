@@ -1,6 +1,6 @@
 package net.msrandom.minecraftcodev.core
 
-import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentResolvers
+import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
 
 enum class MinecraftType(val module: String) {
     /**

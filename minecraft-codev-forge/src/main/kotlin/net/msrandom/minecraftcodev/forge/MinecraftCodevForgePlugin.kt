@@ -3,6 +3,8 @@ package net.msrandom.minecraftcodev.forge
 import kotlinx.serialization.json.decodeFromStream
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
+import net.msrandom.minecraftcodev.core.ModMappingNamespaceInfo
+import net.msrandom.minecraftcodev.core.ModPlatformInfo
 import net.msrandom.minecraftcodev.core.dependency.registerCustomDependency
 import net.msrandom.minecraftcodev.core.utils.applyPlugin
 import net.msrandom.minecraftcodev.core.utils.createTargetConfigurations
@@ -28,9 +30,29 @@ open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
     override fun apply(target: T) = applyPlugin(target, ::applyGradle) {
         createTargetConfigurations(PATCHES_CONFIGURATION)
 
-        extensions.getByType(MinecraftCodevExtension::class.java).extensions.create("patched", PatchedMinecraftCodevExtension::class.java)
+        val codev = extensions.getByType(MinecraftCodevExtension::class.java)
+        codev.extensions.create("patched", PatchedMinecraftCodevExtension::class.java)
+
         setupForgeRemapperIntegration()
         setupForgeRunsIntegration()
+
+        fun isForge(fs: FileSystem) = fs.getPath("META-INF", "mods.toml").exists() || fs.getPath("mcmod.info").exists()
+
+        codev.modInfoDetectionRules.add {
+            if (isForge(it)) {
+                ModPlatformInfo("forge", 3)
+            } else {
+                null
+            }
+        }
+
+        codev.modInfoDetectionRules.add {
+            if (isForge(it)) {
+                ModMappingNamespaceInfo(SRG_MAPPINGS_NAMESPACE, 2)
+            } else {
+                null
+            }
+        }
     }
 
     companion object {

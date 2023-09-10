@@ -1,8 +1,9 @@
 package net.msrandom.minecraftcodev.forge.dependency
 
-import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentIdentifier
+import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentIdentifier
 import org.gradle.api.artifacts.ModuleDependency
 import org.gradle.api.artifacts.component.ComponentIdentifier
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.attributes.AttributeContainer
 import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
 import org.gradle.api.internal.artifacts.VersionConstraintInternal
@@ -61,4 +62,13 @@ open class PatchedMinecraftIvyDependencyDescriptorFactory @Inject constructor(ex
 
 class PatchedComponentIdentifier(version: String, val patches: String) : MinecraftComponentIdentifier("forge", version) {
     override val isBase get() = true
+}
+
+class FmlLoaderWrappedComponentIdentifier(val delegate: ModuleComponentIdentifier) : ModuleComponentIdentifier by delegate {
+    companion object {
+        const val MINECRAFT_FORGE_GROUP = "net.minecraftforge"
+        const val NEO_FORGED_GROUP = "net.neoforged.fancymodloader"
+        const val FML_LOADER_MODULE = "fmlloader"
+        const val NEO_FORGED_LOADER_MODULE = "loader"
+    }
 }

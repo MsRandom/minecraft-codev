@@ -1,5 +1,4 @@
 plugins {
-    kotlin("plugin.serialization")
     `java-gradle-plugin`
 }
 
@@ -16,8 +15,6 @@ dependencies {
     implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version = "1.6.4")
 
     implementation(api(group = "net.minecraftforge", name = "srgutils", version = "latest.release"))
-
-    implementation(group = "org.quiltmc", name = "quiltflower", version = "1.8.1")
 
     implementation(api(group = "org.ow2.asm", name = "asm", version = "9.3"))
     implementation(api(group = "org.ow2.asm", name = "asm-tree", version = "9.3"))

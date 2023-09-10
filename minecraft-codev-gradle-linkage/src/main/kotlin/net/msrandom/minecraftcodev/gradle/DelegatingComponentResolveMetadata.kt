@@ -15,11 +15,10 @@ internal open class DelegatingComponentResolveMetadata @Inject constructor(
     val delegate: ComponentResolveMetadata,
     private val id: ModuleComponentIdentifier,
     private val configurations: (List<ConfigurationMetadata>) -> List<ConfigurationMetadata>,
-    private val artifacts: (List<ModuleComponentArtifactMetadata>) -> List<ModuleComponentArtifactMetadata>,
     private val configuration: (ConfigurationMetadata) -> ConfigurationMetadata,
 ) : ComponentResolveMetadata by delegate {
     override fun getId() = id
-    override fun withSources(sources: ModuleSources) = DelegatingComponentResolveMetadata(delegate.withSources(sources), id, configurations, artifacts, configuration)
+    override fun withSources(sources: ModuleSources) = DelegatingComponentResolveMetadata(delegate.withSources(sources), id, configurations, configuration)
     override fun getConfiguration(name: String) = delegate.getConfiguration(name)?.let(configuration)
 
     override fun getVariantsForGraphTraversal(): Optional<ImmutableList<out ConfigurationMetadata>> = delegate.variantsForGraphTraversal.let {

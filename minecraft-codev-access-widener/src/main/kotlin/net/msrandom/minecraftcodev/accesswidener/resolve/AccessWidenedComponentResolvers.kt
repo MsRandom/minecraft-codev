@@ -7,11 +7,11 @@ import net.msrandom.minecraftcodev.accesswidener.MinecraftCodevAccessWidenerPlug
 import net.msrandom.minecraftcodev.accesswidener.dependency.AccessWidenedDependencyMetadata
 import net.msrandom.minecraftcodev.accesswidener.dependency.AccessWidenedDependencyMetadataWrapper
 import net.msrandom.minecraftcodev.core.MappingsNamespace
+import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
-import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftArtifactResolver.Companion.getOrResolve
-import net.msrandom.minecraftcodev.core.resolve.minecraft.SourcesArtifactComponentMetadata
+import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.getOrResolve
 import net.msrandom.minecraftcodev.core.utils.*
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.copy
 import org.gradle.api.Project
@@ -19,7 +19,6 @@ import org.gradle.api.artifacts.component.ComponentIdentifier
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.attributes.Category
-import org.gradle.api.attributes.DocsType
 import org.gradle.api.attributes.LibraryElements
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ComponentResolvers
@@ -80,37 +79,9 @@ open class AccessWidenedComponentResolvers @Inject constructor(
         objects,
         identifier,
         {
-            map { artifact ->
-                if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
-                    AccessWidenedComponentArtifactMetadata(artifact, identifier, null)
-                } else {
-                    artifact
-                }
-            }
-        },
-        {
             val namespace = attributes.findEntry(MappingsNamespace.attribute.name).takeIf(AttributeValue<*>::isPresent)?.get() as? String
-            val category = attributes.findEntry(Category.CATEGORY_ATTRIBUTE.name)
 
-            var sources = false
-
-            val shouldWrap = if (category.isPresent) {
-                if (category.get() == Category.LIBRARY) {
-                    val libraryElements = attributes.findEntry(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE.name)
-                    libraryElements.isPresent && libraryElements.get() == LibraryElements.JAR
-                } else if (category.get() == Category.DOCUMENTATION) {
-                    val docsType = attributes.findEntry(DocsType.DOCS_TYPE_ATTRIBUTE.name)
-                    sources = docsType.isPresent && docsType.get() == DocsType.SOURCES
-
-                    sources
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-
-            if (shouldWrap) {
+            if (attributes.getAttribute(Category.CATEGORY_ATTRIBUTE.name) == Category.LIBRARY && attributes.getAttribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE.name) == LibraryElements.JAR) {
                 copy(
                     objects,
                     { oldName ->
@@ -122,25 +93,16 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                     attributes,
                     {
                         map { dependency ->
-                            if (dependency.selector.attributes.getAttribute(MappingsNamespace.attribute) != null) {
-                                // Maybe pass the namespace to use instead of the metadata one?
-                                AccessWidenedDependencyMetadataWrapper(
-                                    dependency,
-                                    identifier.accessWidenersConfiguration
-                                )
-                            } else {
-                                dependency
-                            }
+                            // Maybe pass the namespace to use instead of the metadata one?
+                            AccessWidenedDependencyMetadataWrapper(
+                                dependency,
+                                identifier.accessWidenersConfiguration
+                            )
                         }
                     },
                     {
                         if (name.type == ArtifactTypeDefinition.JAR_TYPE) {
-                            if (sources) {
-                                val library = artifacts.first { it.name.type == ArtifactTypeDefinition.JAR_TYPE }
-                                SourcesArtifactComponentMetadata(library as ModuleComponentArtifactMetadata, id as ModuleComponentArtifactIdentifier)
-                            } else {
-                                AccessWidenedComponentArtifactMetadata(this as ModuleComponentArtifactMetadata, identifier, namespace)
-                            }
+                            AccessWidenedComponentArtifactMetadata(this as ModuleComponentArtifactMetadata, identifier, namespace)
                         } else {
                             PassthroughAccessWidenedArtifactMetadata(this)
                         }
@@ -209,6 +171,14 @@ open class AccessWidenedComponentResolvers @Inject constructor(
             resolvers.get().artifactResolver.resolveArtifact(artifact.delegate, moduleSources, result)
 
             if (result.isSuccessful) {
+                val (platforms, namespaces) = project.extensions.getByType(MinecraftCodevExtension::class.java).detectModInfo(result.result.toPath())
+
+                if (platforms.isEmpty() && namespaces.isEmpty()) {
+                    return
+                }
+
+                val namespace = namespaces.firstOrNull() ?: artifact.namespace
+
                 val accessWideners = project.configurations.getByName(id.accessWidenersConfiguration)
 
                 val messageDigest = MessageDigest.getInstance("SHA1")
@@ -218,10 +188,10 @@ open class AccessWidenedComponentResolvers @Inject constructor(
 
                     project.visitConfigurationFiles(resolvers, accessWideners) { file ->
                         DigestInputStream(file.inputStream(), messageDigest).bufferedReader().use {
-                            if (artifact.namespace == null) {
+                            if (namespace == null) {
                                 reader.read(it)
                             } else {
-                                reader.read(it, artifact.namespace)
+                                reader.read(it, namespace)
                             }
                         }
                     }
@@ -273,8 +243,7 @@ open class AccessWidenedComponentResolvers @Inject constructor(
 
 class AccessWidenedComponentIdentifier(
     val original: ModuleComponentIdentifier,
-    val accessWidenersConfiguration: String,
-    private val needsSourcesOverride: Boolean? = null
+    val accessWidenersConfiguration: String
 ) : ModuleComponentIdentifier by original {
     override fun getDisplayName() = "${original.displayName} (Access Widened)"
 

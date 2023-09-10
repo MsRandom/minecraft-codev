@@ -14,14 +14,17 @@ dependencyResolutionManagement {
         maven(url = "https://maven.quiltmc.org/repository/release/")
         maven(url = "https://repo.spongepowered.org/repository/maven-public/")
         maven(url = "https://maven.minecraftforge.net/")
+        maven(url = "https://maven.neoforged.net/")
     }
 }
 
 include("minecraft-codev-gradle-linkage")
 include("minecraft-codev-core", "minecraft-codev-core:side-annotations")
+include("minecraft-codev-decompiler")
 include("minecraft-codev-remapper")
 include("minecraft-codev-forge", "minecraft-codev-forge:forge-runtime")
 include("minecraft-codev-fabric")
+include("minecraft-codev-includes")
 include("minecraft-codev-runs")
 include("minecraft-codev-access-widener")
 include("minecraft-codev-mixins")

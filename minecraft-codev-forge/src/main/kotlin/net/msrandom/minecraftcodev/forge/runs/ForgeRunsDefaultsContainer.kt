@@ -6,8 +6,8 @@ import net.fabricmc.mappingio.tree.MemoryMappingTree
 import net.minecraftforge.srgutils.IMappingBuilder
 import net.minecraftforge.srgutils.IMappingFile
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
-import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentResolvers
-import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftVersionMetadata
+import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
+import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin
 import net.msrandom.minecraftcodev.forge.UserdevConfig
@@ -243,7 +243,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
         val downloadAssetsTaskName = compilation.map { it.target.downloadAssetsTaskName }.orElse(sourceSet.map { it.downloadAssetsTaskName }).get()
 
         val getRun: UserdevConfig.() -> UserdevConfig.Run = {
-            runType(runs) ?: throw UnsupportedOperationException("Attempted to get use $caller run configuration which doesn't exist.")
+            runType(runs) ?: throw UnsupportedOperationException("Attempted to use $caller run configuration which doesn't exist.")
         }
 
         val configuration = getConfiguration()

@@ -16,8 +16,8 @@ import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
 import net.msrandom.minecraftcodev.core.MinecraftType
 import net.msrandom.minecraftcodev.core.dependency.resolverFactories
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
-import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftArtifactResolver
-import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentIdentifier
+import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver
+import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentIdentifier
 import net.msrandom.minecraftcodev.core.utils.getCacheProvider
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.forge.McpConfig
@@ -135,7 +135,7 @@ internal fun Project.setupForgeRemapperIntegration() {
                             val clientMappings = MemoryMappingTree()
 
                             result.result.reader().use { ProGuardReader.read(it, clientMappings) }
-                            ClassNameReplacer(namespaceCompleter, clientMappings, MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE, MappingUtil.NS_TARGET_FALLBACK)
+                            ClassNameReplacer(namespaceCompleter, clientMappings, MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE, MappingUtil.NS_SOURCE_FALLBACK, MappingUtil.NS_TARGET_FALLBACK)
                         } else {
                             namespaceCompleter
                         }
@@ -260,10 +260,11 @@ internal fun Project.setupForgeRemapperIntegration() {
                 val fieldsMap = readMcp(fields, "searge", decorate)
                 val paramsMap = readMcp(params, "param", decorate)
 
-                val sourceNamespace = existingMappings.getNamespaceId(MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE)
-                val targetNamespace = existingMappings.getNamespaceId(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
-
                 do {
+                    if (visitor.visitHeader()) {
+                        visitor.visitNamespaces(MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE, listOf(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE))
+                    }
+
                     if (visitor.visitContent()) {
                         for (classMapping in existingMappings.classes.toList()) {
                             visitor.visitClass(classMapping.srcName)
@@ -271,13 +272,13 @@ internal fun Project.setupForgeRemapperIntegration() {
                             if (visitor.visitElementContent(MappedElementKind.CLASS)) {
                                 if (fieldsMap.isNotEmpty()) {
                                     for (field in classMapping.fields.toList()) {
-                                        val name = field.getName(sourceNamespace)
+                                        val name = field.getName(MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE)
                                         val mapping = fieldsMap[name]
 
                                         visitor.visitField(field.srcName, field.srcDesc)
 
                                         if (mapping != null) {
-                                            visitor.visitDstName(MappedElementKind.FIELD, targetNamespace, mapping.name)
+                                            visitor.visitDstName(MappedElementKind.FIELD, 0, mapping.name)
 
                                             if (mapping.comment != null) {
                                                 visitor.visitComment(MappedElementKind.FIELD, mapping.comment)
@@ -289,13 +290,13 @@ internal fun Project.setupForgeRemapperIntegration() {
                                 if (methodsMap.isNotEmpty() || paramsMap.isNotEmpty()) {
                                     for (method in classMapping.methods.toList()) {
                                         if (methodsMap.isNotEmpty()) {
-                                            val name = method.getName(sourceNamespace)
+                                            val name = method.getName(MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE)
                                             val mapping = methodsMap[name]
 
                                             visitor.visitMethod(method.srcName, method.srcDesc)
 
                                             if (mapping != null) {
-                                                visitor.visitDstName(MappedElementKind.METHOD, targetNamespace, mapping.name)
+                                                visitor.visitDstName(MappedElementKind.METHOD, 0, mapping.name)
 
                                                 if (mapping.comment != null) {
                                                     visitor.visitComment(MappedElementKind.METHOD, mapping.comment)
@@ -305,13 +306,13 @@ internal fun Project.setupForgeRemapperIntegration() {
 
                                         if (paramsMap.isNotEmpty()) {
                                             for (argument in method.args.toList()) {
-                                                val name = argument.getName(sourceNamespace)
+                                                val name = argument.getName(MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE)
                                                 val mapping = paramsMap[name]
 
                                                 visitor.visitMethodArg(argument.argPosition, argument.lvIndex, argument.srcName)
 
                                                 if (mapping != null) {
-                                                    visitor.visitDstName(MappedElementKind.METHOD_ARG, targetNamespace, mapping.name)
+                                                    visitor.visitDstName(MappedElementKind.METHOD_ARG, 0, mapping.name)
 
                                                     if (mapping.comment != null) {
                                                         visitor.visitComment(MappedElementKind.METHOD_ARG, mapping.comment)
@@ -332,7 +333,7 @@ internal fun Project.setupForgeRemapperIntegration() {
             }
         }
 
-        remapper.extraFileRemappers.add { mappings, directory, sourceNamespaceId, targetNamespaceId ->
+        remapper.extraFileRemappers.add { mappings, directory, sourceNamespaceId, targetNamespaceId, _ ->
             val meta = directory.resolve("META-INF/MANIFEST.MF")
             if (meta.notExists()) return@add
 

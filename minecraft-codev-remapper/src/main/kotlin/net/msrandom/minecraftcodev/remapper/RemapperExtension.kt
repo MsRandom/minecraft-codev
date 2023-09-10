@@ -1,6 +1,7 @@
 package net.msrandom.minecraftcodev.remapper
 
 import kotlinx.serialization.json.decodeFromStream
+import net.fabricmc.mappingio.MappedElementKind
 import net.fabricmc.mappingio.MappingVisitor
 import net.fabricmc.mappingio.adapter.MappingSourceNsSwitch
 import net.fabricmc.mappingio.format.ProGuardReader
@@ -9,6 +10,7 @@ import net.fabricmc.mappingio.tree.MemoryMappingTree
 import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
 import net.msrandom.minecraftcodev.core.dependency.resolverFactories
+import net.msrandom.minecraftcodev.core.utils.addNamespaceManifest
 import net.msrandom.minecraftcodev.core.utils.visitConfigurationFiles
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.gradle.api.Project
@@ -61,7 +63,7 @@ fun interface ZipMappingResolutionRule {
 }
 
 fun interface ExtraFileRemapper {
-    operator fun invoke(mappings: MappingTreeView, directory: Path, sourceNamespaceId: Int, targetNamespaceId: Int)
+    operator fun invoke(mappings: MappingTreeView, directory: Path, sourceNamespaceId: Int, targetNamespaceId: Int, targetNamespace: String)
 }
 
 open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory, private val project: Project) {
@@ -102,33 +104,92 @@ open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory, p
             }
         }
 
-        zipMappingsResolution.add { _, fileSystem, visitor, _, decorate, _, _, _ ->
+        mappingsResolution.add { path, extension, visitor, _, decorate, _, _ ->
+            if (extension == "json") {
+                return@add false
+            }
+
+            handleParchment(path, visitor, decorate)
+
+            true
+        }
+
+        zipMappingsResolution.add { _, fileSystem, visitor, _, decorate, existingMappings, _, _ ->
             val parchmentJson = fileSystem.getPath("parchment.json")
 
             if (parchmentJson.notExists()) {
                 return@add false
             }
 
-            val parchment = decorate(parchmentJson.inputStream()).use { json.decodeFromStream<Parchment>(it) }
+            if (existingMappings.srcNamespace != MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE) {
+                // Need to switch source to match
+                val newTree = MemoryMappingTree()
 
-            if (visitor.visitHeader()) {
-                visitor.visitNamespaces(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE, emptyList())
-            }
+                existingMappings.accept(MappingSourceNsSwitch(newTree, MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE))
 
-            parchment.classes?.forEach CLASS_LOOP@{ classElement ->
-                visitor.visitClass(classElement.name)
+                handleParchment(parchmentJson, newTree, decorate)
 
-                classElement.methods?.forEach METHOD_LOOP@{ methodElement ->
-                    visitor.visitMethod(methodElement.name, methodElement.descriptor)
-
-                    methodElement.parameters?.forEach PARAMETER_LOOP@ { parameterElement ->
-                        visitor.visitMethodArg(parameterElement.index, parameterElement.index, parameterElement.name)
-                    }
-                }
+                newTree.accept(MappingSourceNsSwitch(visitor, existingMappings.srcNamespace))
+            } else {
+                handleParchment(parchmentJson, visitor, decorate)
             }
 
             true
         }
+
+        extraFileRemappers.add { _, directory, _, _, targetNamespace ->
+            addNamespaceManifest(directory.resolve("META-INF").resolve("MANIFEST.MF"), targetNamespace)
+        }
+    }
+
+    private fun handleParchment(path: Path, visitor: MappingVisitor, decorate: (InputStream) -> InputStream) {
+        val parchment = decorate(path.inputStream()).use { json.decodeFromStream<Parchment>(it) }
+
+        do {
+            if (visitor.visitHeader()) {
+                visitor.visitNamespaces(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE, emptyList())
+            }
+
+            if (visitor.visitContent()) {
+                parchment.classes?.forEach CLASS_LOOP@{ classElement ->
+                    if (!visitor.visitClass(classElement.name) || !visitor.visitElementContent(MappedElementKind.CLASS)) {
+                        return@CLASS_LOOP
+                    }
+
+                    fun visitComment(element: Parchment.Element, type: MappedElementKind) {
+                        element.javadoc?.let {
+                            if (it.lines.isNotEmpty()) {
+                                visitor.visitComment(type, it.lines.joinToString("\n"))
+                            }
+                        }
+                    }
+
+                    visitComment(classElement, MappedElementKind.CLASS)
+
+                    classElement.fields?.forEach FIELD_LOOP@{ fieldElement ->
+                        if (!visitor.visitField(fieldElement.name, fieldElement.descriptor) || !visitor.visitElementContent(MappedElementKind.METHOD)) {
+                            return@FIELD_LOOP
+                        }
+
+                        visitComment(fieldElement, MappedElementKind.FIELD)
+                    }
+
+                    classElement.methods?.forEach METHOD_LOOP@{ methodElement ->
+                        if (!visitor.visitMethod(methodElement.name, methodElement.descriptor) || !visitor.visitElementContent(MappedElementKind.METHOD)) {
+                            return@METHOD_LOOP
+                        }
+
+                        visitComment(methodElement, MappedElementKind.METHOD)
+
+                        methodElement.parameters?.forEach { parameterElement ->
+                            visitor.visitMethodArg(parameterElement.index, parameterElement.index, parameterElement.name)
+
+                            visitComment(parameterElement, MappedElementKind.METHOD_ARG)
+                        }
+                    }
+                }
+            }
+        } while (!visitor.visitEnd())
     }
 
     fun loadMappings(files: Configuration, objects: ObjectFactory, resolve: Boolean) = mappingsCache.computeIfAbsent(files) { configuration ->
@@ -187,9 +248,9 @@ open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory, p
         )
     }
 
-    fun remapFiles(mappings: MappingTreeView, directory: Path, sourceNamespaceId: Int, targetNamespaceId: Int) {
+    fun remapFiles(mappings: MappingTreeView, directory: Path, sourceNamespaceId: Int, targetNamespaceId: Int, targetNamespace: String) {
         for (extraMapper in extraFileRemappers.get()) {
-            extraMapper(mappings, directory, sourceNamespaceId, targetNamespaceId)
+            extraMapper(mappings, directory, sourceNamespaceId, targetNamespaceId, targetNamespace)
         }
     }
 

@@ -6,11 +6,19 @@ import net.msrandom.minecraftcodev.runs.RunConfigurationDefaultsContainer
 import org.gradle.api.Action
 
 open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDefaultsContainer) {
+    private fun defaults() {
+        defaults.builder.jvmArguments("-Dfabric.development=true")
+    }
+
     fun client() {
+        defaults()
+
         defaults.builder.mainClass(KNOT_CLIENT)
     }
 
     fun server() {
+        defaults()
+
         defaults.builder.apply {
             arguments("nogui")
             mainClass(KNOT_SERVER)

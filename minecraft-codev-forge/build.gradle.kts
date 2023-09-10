@@ -1,5 +1,4 @@
 plugins {
-    kotlin("plugin.serialization")
     `java-gradle-plugin`
 }
 
@@ -27,9 +26,13 @@ dependencies {
 
     compileOnly(projects.minecraftCodevGradleLinkage)
 
-    implementation(projects.minecraftCodevAccessWidener)
-    implementation(projects.minecraftCodevRemapper)
-    implementation(projects.minecraftCodevRuns)
+    implementation(projects.minecraftCodevCore)
+
+    compileOnly(projects.minecraftCodevAccessWidener)
+    compileOnly(projects.minecraftCodevRemapper)
+    compileOnly(projects.minecraftCodevRuns)
+    compileOnly(projects.minecraftCodevMixins)
+    compileOnly(projects.minecraftCodevIncludes)
 }
 
 tasks.test {

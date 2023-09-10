@@ -5,7 +5,7 @@ import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
-import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftArtifactResolver
+import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver
 import net.msrandom.minecraftcodev.core.utils.*
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.copy
 import net.msrandom.minecraftcodev.mixins.MinecraftCodevMixinsPlugin
@@ -82,15 +82,6 @@ open class MixinComponentResolvers @Inject constructor(
     private fun wrapMetadata(metadata: ComponentResolveMetadata, identifier: MixinComponentIdentifier) = metadata.copy(
         objects,
         identifier,
-        {
-            map { artifact ->
-                if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
-                    MixinComponentArtifactMetadata(artifact, identifier)
-                } else {
-                    artifact
-                }
-            }
-        },
         {
             val category = attributes.findEntry(Category.CATEGORY_ATTRIBUTE.name)
 

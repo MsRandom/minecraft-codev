@@ -1,0 +1,3 @@
+moduleName = core
+moduleVersion = 1.0
+extensionClasses = net.msrandom.minecraftcodev.includes.dependency.IncludesExtensionsKt

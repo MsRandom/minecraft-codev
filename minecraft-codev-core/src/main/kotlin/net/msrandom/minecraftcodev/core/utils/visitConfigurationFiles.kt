@@ -70,7 +70,7 @@ fun Project.visitConfigurationFiles(resolvers: ComponentResolversChainProvider, 
                     visit(artifactResult.result)
                 }
 
-                val artifacts = (dependency as LocalOriginDependencyMetadata).artifacts
+                val artifacts = dependency.artifacts
                 if (artifacts.isEmpty()) {
                     selectedConfiguration.allArtifacts.forEach(::resolve)
                 } else {

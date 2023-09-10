@@ -14,17 +14,18 @@ import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
 import net.msrandom.minecraftcodev.core.resolve.*
-import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftArtifactResolver
-import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftArtifactResolver.Companion.artifactIdSerializer
-import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentIdentifier
-import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftVersionMetadata
-import net.msrandom.minecraftcodev.core.resolve.minecraft.getExtractionState
+import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver
+import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.artifactIdSerializer
+import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentIdentifier
+import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
+import net.msrandom.minecraftcodev.core.resolve.getExtractionState
 import net.msrandom.minecraftcodev.core.utils.*
 import net.msrandom.minecraftcodev.forge.McpConfig
 import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin
 import net.msrandom.minecraftcodev.forge.PatchLibrary
 import net.msrandom.minecraftcodev.forge.UserdevConfig
 import net.msrandom.minecraftcodev.forge.dependency.PatchedComponentIdentifier
+import net.msrandom.minecraftcodev.forge.mappings.injectForgeMappingService
 import org.gradle.api.Project
 import org.gradle.api.artifacts.component.ComponentArtifactIdentifier
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
@@ -175,21 +176,27 @@ open class PatchedSetupState @Inject constructor(
 
                 // Add userdev injects
                 userdevConfig.inject?.let { inject ->
-                    zipFileSystem(userdevConfigFile.toPath()).use { userdevZip ->
+                    zipFileSystem(userdevConfigFile.toPath()).use userdev@{ userdevZip ->
                         val injectPath = userdevZip.base.getPath("/${inject}")
-                        if (injectPath.exists()) {
-                            injectPath.walk {
-                                for (path in filter(Path::isRegularFile)) {
-                                    val output = patchedZip.base.getPath(injectPath.relativize(path).toString())
 
-                                    output.parent?.createDirectories()
-                                    path.copyTo(output, StandardCopyOption.COPY_ATTRIBUTES)
-                                }
+                        if (injectPath.notExists()) {
+                            return@userdev
+                        }
+
+                        injectPath.walk {
+                            for (path in filter(Path::isRegularFile)) {
+                                val output = patchedZip.base.getPath(injectPath.relativize(path).toString())
+
+                                output.parent?.createDirectories()
+                                path.copyTo(output, StandardCopyOption.COPY_ATTRIBUTES)
                             }
                         }
                     }
                 }
+
             }
+
+            injectForgeMappingService(patched)
 
             patched
         }
@@ -537,6 +544,10 @@ open class PatchedSetupState @Inject constructor(
                 val patchedStateValue = patchedState.value
                 val userdevConfig = patchedStateValue.userdevConfig
                 val output = patchedStateValue.accessTransformed()
+
+                zipFileSystem(output).use {
+                    addNamespaceManifest(it.base, MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE)
+                }
 
                 val checksumService = project.serviceOf<ChecksumService>()
                 val path = patchedCacheManager.fileStoreDirectory.resolve(patchesHash.toString())

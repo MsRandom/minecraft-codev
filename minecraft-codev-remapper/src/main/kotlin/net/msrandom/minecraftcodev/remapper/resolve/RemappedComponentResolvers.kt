@@ -2,14 +2,15 @@ package net.msrandom.minecraftcodev.remapper.resolve
 
 import net.fabricmc.mappingio.adapter.MappingNsRenamer
 import net.fabricmc.mappingio.format.Tiny2Writer
+import net.fabricmc.mappingio.tree.MappingTreeView
 import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
-import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftArtifactResolver.Companion.getOrResolve
-import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentIdentifier
-import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentResolvers.Companion.addNamed
+import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.getOrResolve
+import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentIdentifier
+import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.addNamed
 import net.msrandom.minecraftcodev.core.utils.*
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.allArtifacts
 import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.copy
@@ -22,6 +23,7 @@ import net.msrandom.minecraftcodev.remapper.dependency.RemappedDependencyMetadat
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
 import org.gradle.api.artifacts.component.ComponentIdentifier
+import org.gradle.api.artifacts.component.ComponentSelector
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.artifacts.component.ModuleComponentSelector
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
@@ -86,9 +88,16 @@ open class RemappedComponentResolvers @Inject constructor(
     override fun getArtifactSelector() = this
     override fun getArtifactResolver() = this
 
-    private fun buildClasspath(selectedVariants: MutableList<Pair<ModuleSources, List<ComponentArtifactMetadata>>>, dependencies: Iterable<DependencyMetadata>) {
+    private fun buildClasspath(selectedVariants: MutableList<Pair<ModuleSources, List<ComponentArtifactMetadata>>>, dependencies: Iterable<DependencyMetadata>, visited: MutableSet<ComponentSelector> = hashSetOf()) {
         for (dependency in dependencies) {
             val selector = dependency.selector
+
+            if (selector in visited) {
+                continue
+            }
+
+            visited += selector
+
             val constraint = if (selector is ModuleComponentSelector) selector.versionConstraint else DefaultImmutableVersionConstraint.of()
             val strictly = if (constraint.strictVersion.isEmpty()) null else versionSelectorSchema.parseSelector(constraint.strictVersion)
             val require = if (constraint.requiredVersion.isEmpty()) null else versionSelectorSchema.parseSelector(constraint.requiredVersion)
@@ -113,7 +122,7 @@ open class RemappedComponentResolvers @Inject constructor(
             )
 
             for (configuration in configurations) {
-                buildClasspath(selectedVariants, configuration.dependencies)
+                buildClasspath(selectedVariants, configuration.dependencies, visited)
             }
 
             val artifacts = buildList {
@@ -138,34 +147,25 @@ open class RemappedComponentResolvers @Inject constructor(
         objects,
         identifier,
         {
-            map { artifact ->
-                if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
-                    RemappedComponentArtifactMetadata(artifact, identifier, null, emptyList())
-                } else {
-                    artifact
-                }
-            }
-        },
-        {
             val transitiveDependencies = dependencies
             val sourceNamespace = attributes.findEntry(MappingsNamespace.attribute.name).takeIf(AttributeValue<*>::isPresent)?.get() as? String
 
             val wrapArtifact = { artifact: ComponentArtifactMetadata ->
-                    if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
-                        val selectedArtifacts = mutableListOf<Pair<ModuleSources, List<ComponentArtifactMetadata>>>()
+                if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
+                    val selectedArtifacts = mutableListOf<Pair<ModuleSources, List<ComponentArtifactMetadata>>>()
 
-                        buildClasspath(selectedArtifacts, transitiveDependencies)
+                    buildClasspath(selectedArtifacts, transitiveDependencies)
 
-                        RemappedComponentArtifactMetadata(
-                            artifact as ModuleComponentArtifactMetadata,
-                            identifier,
-                            sourceNamespace,
-                            selectedArtifacts
-                        )
-                    } else {
-                        PassthroughRemappedArtifactMetadata(artifact)
-                    }
+                    RemappedComponentArtifactMetadata(
+                        artifact as ModuleComponentArtifactMetadata,
+                        identifier,
+                        sourceNamespace,
+                        selectedArtifacts
+                    )
+                } else {
+                    PassthroughRemappedArtifactMetadata(artifact)
                 }
+            }
 
             val category = attributes.findEntry(Category.CATEGORY_ATTRIBUTE.name)
             val libraryElements = attributes.findEntry(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE.name)
@@ -185,25 +185,21 @@ open class RemappedComponentResolvers @Inject constructor(
                     {
                         map { dependency ->
                             val namespace = dependency.selector.attributes.getAttribute(MappingsNamespace.attribute)
-                            if (namespace != null) {
-                                val selector = DefaultModuleComponentSelector.withAttributes(
-                                    dependency.selector as ModuleComponentSelector, // Unsafe assumption, should be changed if we want things to be more generic.
-                                    attributesFactory.concat(
-                                        (dependency.selector.attributes as AttributeContainerInternal).asImmutable(),
-                                        attributesFactory.of(MappingsNamespace.attribute, identifier.targetNamespace)
-                                    )
+                            val selector = DefaultModuleComponentSelector.withAttributes(
+                                dependency.selector as ModuleComponentSelector, // Unsafe assumption, should be changed if we want things to be more generic.
+                                attributesFactory.concat(
+                                    (dependency.selector.attributes as AttributeContainerInternal).asImmutable(),
+                                    attributesFactory.of(MappingsNamespace.attribute, identifier.targetNamespace)
                                 )
+                            )
 
-                                RemappedDependencyMetadataWrapper(
-                                    dependency,
-                                    selector,
-                                    identifier.sourceNamespace ?: namespace,
-                                    identifier.targetNamespace,
-                                    identifier.mappingsConfiguration
-                                )
-                            } else {
-                                dependency
-                            }
+                            RemappedDependencyMetadataWrapper(
+                                dependency,
+                                selector,
+                                identifier.sourceNamespace ?: namespace,
+                                identifier.targetNamespace,
+                                identifier.mappingsConfiguration
+                            )
                         }
                     },
 
@@ -214,9 +210,9 @@ open class RemappedComponentResolvers @Inject constructor(
 
                         if (identifier.original is MinecraftComponentIdentifier && identifier.original.isBase) {
                             // Add the mappings file if we're remapping Minecraft.
-                            artifacts + MappingsArtifact(identifier, identifier.mappingsConfiguration, project)
+                            artifacts + MappingsArtifact(identifier, identifier.mappingsConfiguration)
                         } else {
-                            emptyList()
+                            artifacts
                         }
                     }
                 )
@@ -299,9 +295,18 @@ open class RemappedComponentResolvers @Inject constructor(
 
                     resolvers.get().artifactResolver.resolveArtifact(artifact.delegate, moduleSources, result)
 
-                    val sourceNamespace = id.sourceNamespace?.name ?: artifact.namespace ?: MappingsNamespace.OBF
-
                     if (result.isSuccessful) {
+                        val (platforms, namespaces) = project.extensions.getByType(MinecraftCodevExtension::class.java).detectModInfo(result.result.toPath())
+
+                        if (platforms.isEmpty() && namespaces.isEmpty()) {
+                            return
+                        }
+
+                        val sourceNamespace = namespaces.firstOrNull { mappings.tree.getNamespaceId(it) != MappingTreeView.NULL_NAMESPACE_ID }
+                            ?: id.sourceNamespace?.name
+                            ?: artifact.namespace
+                            ?: MappingsNamespace.OBF
+
                         val urlId = RemappedArtifactIdentifier(
                             artifact.id.asSerializable,
                             id.targetNamespace.name,
@@ -317,7 +322,13 @@ open class RemappedComponentResolvers @Inject constructor(
                                     val artifactResult = DefaultBuildableArtifactResolveResult()
                                     resolvers.get().artifactResolver.resolveArtifact(dependencyArtifact, sources, artifactResult)
 
-                                    classpath.add(artifactResult.result)
+                                    if (artifactResult.isSuccessful) {
+                                        classpath.add(artifactResult.result)
+                                    } else if (!dependencyArtifact.isOptionalArtifact) {
+                                        result.failed(result.failure)
+
+                                        return@getOrResolve null
+                                    }
                                 }
                             }
 

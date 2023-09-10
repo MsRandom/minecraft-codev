@@ -1,6 +1,6 @@
 package net.msrandom.minecraftcodev.core.dependency
 
-import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentResolvers
+import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
 import org.gradle.api.Action
 import org.gradle.api.artifacts.*
 import org.gradle.api.internal.artifacts.DefaultModuleIdentifier

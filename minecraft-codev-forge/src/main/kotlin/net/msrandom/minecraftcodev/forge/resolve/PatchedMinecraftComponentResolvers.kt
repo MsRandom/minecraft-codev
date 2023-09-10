@@ -1,21 +1,28 @@
 package net.msrandom.minecraftcodev.forge.resolve
 
+import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
 import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
-import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftArtifactResolver.Companion.resolveMojangFile
-import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftComponentResolvers
-import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftDependencyToComponentIdResolver
-import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftMetadataGenerator
+import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver
+import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.getOrResolve
+import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.resolveMojangFile
+import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
+import net.msrandom.minecraftcodev.core.resolve.MinecraftDependencyToComponentIdResolver
+import net.msrandom.minecraftcodev.core.resolve.MinecraftMetadataGenerator
 import net.msrandom.minecraftcodev.core.utils.visitConfigurationFiles
 import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin
 import net.msrandom.minecraftcodev.forge.UserdevConfig
+import net.msrandom.minecraftcodev.forge.dependency.FmlLoaderWrappedComponentIdentifier
 import net.msrandom.minecraftcodev.forge.dependency.PatchedComponentIdentifier
 import net.msrandom.minecraftcodev.forge.dependency.PatchedMinecraftDependencyMetadata
+import net.msrandom.minecraftcodev.forge.mappings.injectForgeMappingService
 import net.msrandom.minecraftcodev.forge.resolve.PatchedSetupState.Companion.getClientExtrasOutput
+import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.copy
 import org.gradle.api.Project
 import org.gradle.api.artifacts.component.ComponentIdentifier
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.internal.artifacts.RepositoriesSupplier
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
@@ -26,9 +33,7 @@ import org.gradle.api.internal.artifacts.type.ArtifactTypeRegistry
 import org.gradle.api.internal.attributes.ImmutableAttributes
 import org.gradle.api.internal.component.ArtifactType
 import org.gradle.api.model.ObjectFactory
-import org.gradle.internal.component.external.model.DefaultModuleComponentArtifactIdentifier
-import org.gradle.internal.component.external.model.DefaultModuleComponentArtifactMetadata
-import org.gradle.internal.component.external.model.MetadataSourcedComponentArtifacts
+import org.gradle.internal.component.external.model.*
 import org.gradle.internal.component.model.*
 import org.gradle.internal.hash.ChecksumService
 import org.gradle.internal.model.CalculatedValueContainerFactory
@@ -36,13 +41,11 @@ import org.gradle.internal.resolve.resolver.ArtifactResolver
 import org.gradle.internal.resolve.resolver.ComponentMetaDataResolver
 import org.gradle.internal.resolve.resolver.DependencyToComponentIdResolver
 import org.gradle.internal.resolve.resolver.OriginArtifactSelector
-import org.gradle.internal.resolve.result.BuildableArtifactResolveResult
-import org.gradle.internal.resolve.result.BuildableArtifactSetResolveResult
-import org.gradle.internal.resolve.result.BuildableComponentIdResolveResult
-import org.gradle.internal.resolve.result.BuildableComponentResolveResult
+import org.gradle.internal.resolve.result.*
 import org.gradle.util.internal.BuildCommencedTimeProvider
 import java.io.File
 import javax.inject.Inject
+import kotlin.io.path.Path
 
 open class PatchedMinecraftComponentResolvers @Inject constructor(
     private val project: Project,
@@ -59,6 +62,12 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
     private val minecraftCacheManager = cacheProvider.manager("minecraft")
     private val patchedCacheManager = cacheProvider.manager("patched")
 
+    private val artifactCache by lazy {
+        patchedCacheManager.getMetadataCache(Path("module-artifact"), MinecraftArtifactResolver.Companion::artifactIdSerializer) {
+            CachedArtifactSerializer(patchedCacheManager.fileStoreDirectory)
+        }.asFile
+    }
+
     private val repositories = repositoriesSupplier.get()
         .filterIsInstance<MinecraftRepositoryImpl>()
         .map(MinecraftRepositoryImpl::createResolver)
@@ -70,10 +79,53 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
     override fun getArtifactSelector() = this
     override fun getArtifactResolver() = this
 
+    private fun wrapMetadata(metadata: ComponentResolveMetadata, id: FmlLoaderWrappedComponentIdentifier) = metadata.copy(
+        objectFactory,
+        id,
+        {
+            val mapArtifact = { artifact: ComponentArtifactMetadata ->
+                if (artifact is ModuleComponentArtifactMetadata && artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
+                    FmlLoaderWrappedMetadata(artifact, id)
+                } else {
+                    artifact
+                }
+            }
+
+            copy(
+                objectFactory,
+                { it },
+                attributes,
+                { this },
+                mapArtifact,
+                { map(mapArtifact) }
+            )
+        },
+        { this }
+    )
+
     override fun resolve(dependency: DependencyMetadata, acceptor: VersionSelector?, rejector: VersionSelector?, result: BuildableComponentIdResolveResult) {
         if (dependency is PatchedMinecraftDependencyMetadata) {
             componentIdResolver.resolveVersion(dependency, acceptor, rejector, result) { _, version ->
                 PatchedComponentIdentifier(version, dependency.relatedConfiguration ?: MinecraftCodevForgePlugin.PATCHES_CONFIGURATION)
+            }
+        } else if (dependency is ModuleDependencyMetadata && result !is WrappedDependencyComponentIdResult) {
+            if ((dependency.selector.group != FmlLoaderWrappedComponentIdentifier.MINECRAFT_FORGE_GROUP || dependency.selector.module != FmlLoaderWrappedComponentIdentifier.FML_LOADER_MODULE) &&
+                (dependency.selector.group != FmlLoaderWrappedComponentIdentifier.NEO_FORGED_GROUP || dependency.selector.module != FmlLoaderWrappedComponentIdentifier.NEO_FORGED_LOADER_MODULE)
+            ) {
+                return
+            }
+
+            val idResult = WrappedDependencyComponentIdResult()
+            resolvers.get().componentIdResolver.resolve(dependency, acceptor, rejector, idResult)
+
+            if (idResult.hasResult() && idResult.failure == null) {
+                val id = FmlLoaderWrappedComponentIdentifier(idResult.id as ModuleComponentIdentifier)
+
+                if (idResult.metadata == null) {
+                    result.resolved(id, idResult.moduleVersionId)
+                } else {
+                    wrapMetadata(idResult.metadata!!, id)
+                }
             }
         }
     }
@@ -112,6 +164,12 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
                         return
                     }
                 }
+            }
+        } else if (identifier is FmlLoaderWrappedComponentIdentifier) {
+            resolvers.get().componentResolver.resolve(identifier.delegate, componentOverrideMetadata, result)
+
+            if (result.hasResult() && result.failure == null) {
+                result.resolved(wrapMetadata(result.metadata, identifier))
             }
         }
     }
@@ -203,6 +261,39 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
                     objectFactory
                 )?.let(result::resolved) ?: result.notFound(artifact.id)
             }
+        } else if (artifact is FmlLoaderWrappedMetadata) {
+            getOrResolve(
+                artifact as ModuleComponentArtifactMetadata,
+                artifact.id,
+                artifactCache,
+                cachePolicy,
+                timeProvider,
+                result,
+            ) {
+                resolvers.get().artifactResolver.resolveArtifact(artifact.delegate, moduleSources, result)
+
+                if (result.hasResult() && result.failure == null) {
+                    val fmlLoader = File.createTempFile("fmlloader-patch", ".jar")
+
+                    result.result.copyTo(fmlLoader, true)
+                    if (injectForgeMappingService(fmlLoader.toPath())) {
+                        val output = patchedCacheManager.fileStoreDirectory
+                            .resolve(artifact.componentId.group)
+                            .resolve(artifact.componentId.module)
+                            .resolve(artifact.componentId.version)
+                            .resolve(checksumService.sha1(fmlLoader).toString())
+                            .toFile()
+
+                        fmlLoader.copyTo(output)
+
+                        output
+                    } else {
+                        null
+                    }
+                } else {
+                    null
+                }
+            }
         }
     }
 
@@ -292,3 +383,8 @@ open class PatchedMinecraftComponentResolvers @Inject constructor(
         }
     }
 }
+
+/**
+ * Used as a marker that this resolver should be skipped
+ */
+open class WrappedDependencyComponentIdResult : DefaultBuildableComponentIdResolveResult()

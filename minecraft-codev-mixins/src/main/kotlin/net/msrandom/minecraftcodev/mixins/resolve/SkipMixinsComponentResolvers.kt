@@ -5,7 +5,7 @@ import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
-import net.msrandom.minecraftcodev.core.resolve.minecraft.MinecraftArtifactResolver.Companion.getOrResolve
+import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.getOrResolve
 import net.msrandom.minecraftcodev.core.utils.asSerializable
 import net.msrandom.minecraftcodev.core.utils.callWithStatus
 import net.msrandom.minecraftcodev.core.utils.createDeterministicCopy
@@ -81,15 +81,6 @@ open class SkipMixinsComponentResolvers @Inject constructor(
     private fun wrapMetadata(metadata: ComponentResolveMetadata, identifier: SkipMixinsComponentIdentifier) = metadata.copy(
         objects,
         identifier,
-        {
-            map { artifact ->
-                if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
-                    SkipMixinsComponentArtifactMetadata(artifact, identifier)
-                } else {
-                    artifact
-                }
-            }
-        },
         {
             val category = attributes.findEntry(Category.CATEGORY_ATTRIBUTE.name)
 
