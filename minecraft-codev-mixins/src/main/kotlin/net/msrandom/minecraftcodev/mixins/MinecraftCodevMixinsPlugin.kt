@@ -4,8 +4,8 @@ import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.dependency.registerCustomDependency
 import net.msrandom.minecraftcodev.core.utils.applyPlugin
 import net.msrandom.minecraftcodev.core.utils.createCompilationConfigurations
-import net.msrandom.minecraftcodev.mixins.dependency.MixinIvyDependencyDescriptorFactory
-import net.msrandom.minecraftcodev.mixins.dependency.SKipMixinsIvyDependencyDescriptorFactory
+import net.msrandom.minecraftcodev.mixins.dependency.MixinDependencyMetadataConverter
+import net.msrandom.minecraftcodev.mixins.dependency.SKipMixinsDependencyMetadataConverter
 import net.msrandom.minecraftcodev.mixins.mixin.GradleMixinService
 import net.msrandom.minecraftcodev.mixins.resolve.MixinComponentResolvers
 import net.msrandom.minecraftcodev.mixins.resolve.SkipMixinsComponentResolvers
@@ -20,13 +20,13 @@ class MinecraftCodevMixinsPlugin<T : PluginAware> : Plugin<T> {
     private fun applyGradle(gradle: Gradle) {
         gradle.registerCustomDependency(
             "mixin",
-            MixinIvyDependencyDescriptorFactory::class.java,
+            MixinDependencyMetadataConverter::class.java,
             MixinComponentResolvers::class.java
         )
 
         gradle.registerCustomDependency(
             "skip-mixins",
-            SKipMixinsIvyDependencyDescriptorFactory::class.java,
+            SKipMixinsDependencyMetadataConverter::class.java,
             SkipMixinsComponentResolvers::class.java
         )
     }

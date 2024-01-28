@@ -1,4 +1,4 @@
-package net.msrandom.minecraftcodev.accesswidener.dependency
+package net.msrandom.minecraftcodev.accesswidener.dependency.accesswidened
 
 import groovy.lang.Closure
 import net.msrandom.minecraftcodev.accesswidener.MinecraftCodevAccessWidenerPlugin

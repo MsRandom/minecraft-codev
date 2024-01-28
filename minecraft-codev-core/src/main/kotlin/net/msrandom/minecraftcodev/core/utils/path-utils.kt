@@ -1,6 +1,5 @@
 package net.msrandom.minecraftcodev.core.utils
 
-import kotlinx.coroutines.sync.Mutex
 import java.net.URI
 import java.nio.file.*
 import java.util.concurrent.ConcurrentHashMap
@@ -9,7 +8,7 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.io.path.copyTo
 import kotlin.streams.asSequence
 
-private val fileSystemLocks = ConcurrentHashMap<URI, ReentrantLock>()
+private val fileSystemLocks = ConcurrentHashMap<Path, ReentrantLock>()
 
 fun Path.createDeterministicCopy(prefix: String, suffix: String): Path {
     val path = Files.createTempFile(prefix, suffix)
@@ -21,32 +20,41 @@ fun Path.createDeterministicCopy(prefix: String, suffix: String): Path {
 fun zipFileSystem(file: Path, create: Boolean = false): LockingFileSystem {
     val uri = URI.create("jar:${file.toUri()}")
 
-    val lock = fileSystemLocks.computeIfAbsent(uri) {
+    val lock = fileSystemLocks.computeIfAbsent(file.toAbsolutePath()) {
         ReentrantLock()
     }
 
     lock.lock()
 
+    var owned = true
+
     val base = if (create) {
         FileSystems.newFileSystem(uri, mapOf("create" to true.toString()))
     } else {
         try {
-            FileSystems.getFileSystem(uri)
+            val fileSystem = FileSystems.getFileSystem(uri)
+
+            owned = false
+
+            fileSystem
         } catch (exception: FileSystemNotFoundException) {
             FileSystems.newFileSystem(uri, emptyMap<String, Any>())
         }
     }
 
-    return LockingFileSystem(base, lock)
+    return LockingFileSystem(base, lock, owned)
 }
 
 fun <T> Path.walk(action: Sequence<Path>.() -> T) = Files.walk(this).use {
     it.asSequence().action()
 }
 
-class LockingFileSystem(val base: FileSystem, private val lock: Lock) : AutoCloseable {
+class LockingFileSystem(val base: FileSystem, private val lock: Lock, private val owned: Boolean) : AutoCloseable {
     override fun close() {
-        base.close()
+        if (owned) {
+            base.close()
+        }
+
         lock.unlock()
     }
 }

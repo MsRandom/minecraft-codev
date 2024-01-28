@@ -1,10 +1,13 @@
 package net.msrandom.minecraftcodev.remapper.resolve
 
+import org.gradle.api.Project
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.internal.artifacts.DefaultArtifactIdentifier
 import org.gradle.api.internal.artifacts.DefaultModuleVersionIdentifier
+import org.gradle.api.internal.tasks.AbstractTaskDependency
 import org.gradle.api.internal.tasks.TaskDependencyInternal
+import org.gradle.api.internal.tasks.TaskDependencyResolveContext
 import org.gradle.api.tasks.TaskDependency
 import org.gradle.internal.component.external.model.DefaultModuleComponentArtifactIdentifier
 import org.gradle.internal.component.external.model.ModuleComponentArtifactIdentifier
@@ -18,13 +21,22 @@ sealed interface RemapperArtifact {
     val mappingsConfiguration: String
 }
 
-class MappingsArtifact(private val componentIdentifier: ModuleComponentIdentifier, override val mappingsConfiguration: String) :
+class MappingsArtifact(
+    val project: Project,
+    private val componentIdentifier: ModuleComponentIdentifier,
+    override val mappingsConfiguration: String
+) :
     RemapperArtifact,
     ModuleComponentArtifactMetadata {
     override fun getId() = DefaultModuleComponentArtifactIdentifier(componentIdentifier, name)
     override fun getComponentId() = componentIdentifier
     override fun getName() = DefaultIvyArtifactName(componentIdentifier.module, ArtifactTypeDefinition.ZIP_TYPE, ArtifactTypeDefinition.ZIP_TYPE, "mappings")
-    override fun getBuildDependencies(): TaskDependency = TaskDependencyInternal.EMPTY
+
+    override fun getBuildDependencies() = object : AbstractTaskDependency() {
+        override fun visitDependencies(context: TaskDependencyResolveContext) {
+            context.add(project.configurations.getByName(mappingsConfiguration))
+        }
+    }
 
     override fun toArtifactIdentifier() = DefaultArtifactIdentifier(
         DefaultModuleVersionIdentifier.newId(
@@ -39,6 +51,7 @@ class MappingsArtifact(private val componentIdentifier: ModuleComponentIdentifie
 }
 
 class RemappedComponentArtifactMetadata(
+    val project: Project,
     val delegate: ModuleComponentArtifactMetadata,
     private val id: RemappedComponentIdentifier,
     val namespace: String?,
@@ -58,6 +71,14 @@ class RemappedComponentArtifactMetadata(
     override fun getComponentId() = id
 
     override fun isOptionalArtifact() = delegate.isOptionalArtifact
+
+
+    override fun getBuildDependencies() = object : AbstractTaskDependency() {
+        override fun visitDependencies(context: TaskDependencyResolveContext) {
+            context.add(delegate.buildDependencies)
+            context.add(project.configurations.getByName(id.mappingsConfiguration))
+        }
+    }
 }
 
 class PassthroughRemappedArtifactMetadata(val original: ComponentArtifactMetadata): ComponentArtifactMetadata by original

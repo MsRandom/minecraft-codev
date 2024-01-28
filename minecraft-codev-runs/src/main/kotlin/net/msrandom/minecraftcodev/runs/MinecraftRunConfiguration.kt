@@ -4,18 +4,16 @@ import org.gradle.api.Project
 import org.gradle.api.Task
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
-import org.gradle.api.plugins.JavaLibraryPlugin
 import org.gradle.api.plugins.JavaPlugin
-import org.gradle.api.plugins.JvmEcosystemPlugin
 import org.gradle.api.provider.*
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
-import org.jetbrains.kotlin.gradle.plugin.KotlinCompilation
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinJvmCompilation
 import java.io.File
 import java.nio.file.Path
+import java.sql.Struct
 import javax.inject.Inject
 
 abstract class MinecraftRunConfiguration @Inject constructor(val project: Project) {
@@ -55,7 +53,7 @@ abstract class MinecraftRunConfiguration @Inject constructor(val project: Projec
         @Input
         get
 
-    abstract val workingDirectory: DirectoryProperty
+    abstract val executableDirectory: DirectoryProperty
         @InputDirectory
         get
 
@@ -75,8 +73,8 @@ abstract class MinecraftRunConfiguration @Inject constructor(val project: Projec
             jvmArguments.finalizeValueOnRead()
             environment.finalizeValueOnRead()
 
-            workingDirectory
-                .convention(project.layout.projectDirectory.dir("run"))
+            executableDirectory
+                .convention(project.layout.projectDirectory.dir("bin"))
                 .finalizeValueOnRead()
         }
     }
@@ -88,7 +86,7 @@ abstract class MinecraftRunConfiguration @Inject constructor(val project: Projec
     class Argument(val parts: List<Any?>) {
         constructor(vararg part: Any?) : this(listOf(*part))
 
-        fun compile() = parts.joinToString("") {
+        fun compile(): String = parts.joinToString("") {
             if (it is Provider<*>) {
                 map(it.get())
             } else {
@@ -100,6 +98,7 @@ abstract class MinecraftRunConfiguration @Inject constructor(val project: Projec
             private fun map(part: Any?) = when (part) {
                 is Path -> part.toAbsolutePath().toString()
                 is File -> part.absolutePath
+                is Argument -> part.compile()
                 else -> part.toString()
             }
         }

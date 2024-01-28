@@ -11,12 +11,14 @@ import net.fabricmc.tinyremapper.OutputConsumerPath
 import net.fabricmc.tinyremapper.TinyRemapper
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.remapper.dependency.getNamespaceId
+import org.objectweb.asm.commons.Remapper
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.deleteExisting
 
 object JarRemapper {
+    @Synchronized
     fun remap(
         remapperExtension: RemapperExtension,
         mappings: MappingTreeView,
@@ -31,8 +33,26 @@ object JarRemapper {
             .newRemapper()
             .ignoreFieldDesc(true)
             .renameInvalidLocals(true)
+            .resolveMissing(true)
             .rebuildSourceFilenames(true)
+
             .extraRemapper(InnerClassRemapper(mappings, mappings.getNamespaceId(sourceNamespace), mappings.getNamespaceId(targetNamespace)))
+
+            .extraRemapper(object : Remapper() {
+                private val sourceNamespaceId = mappings.getNamespaceId(sourceNamespace)
+                private val targetNamespaceId = mappings.getNamespaceId(targetNamespace)
+
+                override fun mapMethodName(owner: String, name: String, descriptor: String) = mappings
+                    .getMethod(owner, name, descriptor, sourceNamespaceId)
+                    ?.getName(targetNamespaceId)
+                    ?: super.mapMethodName(owner, name, descriptor)
+
+                override fun mapFieldName(owner: String, name: String, descriptor: String) = mappings
+                    .getField(owner, name, descriptor, sourceNamespaceId)
+                    ?.getName(targetNamespaceId)
+                    ?: super.mapMethodName(owner, name, descriptor)
+            })
+
             .withMappings {
                 val rebuild = mappings.srcNamespace != sourceNamespace
 
@@ -47,21 +67,18 @@ object JarRemapper {
                 }
 
                 tree.accept(object : MappingVisitor {
-                    var sourceNamespaceId: Int = MappingTreeView.NULL_NAMESPACE_ID
                     var targetNamespaceId: Int = MappingTreeView.NULL_NAMESPACE_ID
 
                     lateinit var currentClass: String
 
-                    lateinit var currentFieldName: String
-                    lateinit var currentFieldDesc: String
+                    lateinit var currentName: String
+                    lateinit var currentDesc: String
 
-                    lateinit var currentMethodName: String
-                    lateinit var currentMethodDesc: String
-
-                    var currentArgIndex: Int = -1
+                    var currentLvtRowIndex: Int = -1
+                    var currentStartOpIndex: Int = -1
+                    var currentLvIndex: Int = -1
 
                     override fun visitNamespaces(srcNamespace: String, dstNamespaces: List<String>) {
-                        sourceNamespaceId = sourceNamespace.getNamespaceId(srcNamespace, dstNamespaces)
                         targetNamespaceId = targetNamespace.getNamespaceId(srcNamespace, dstNamespaces)
                     }
 
@@ -72,37 +89,47 @@ object JarRemapper {
                     }
 
                     override fun visitField(srcName: String, srcDesc: String): Boolean {
-                        currentFieldName = srcName
-                        currentFieldDesc = srcDesc
+                        currentName = srcName
+                        currentDesc = srcDesc
 
                         return true
                     }
 
                     override fun visitMethod(srcName: String, srcDesc: String): Boolean {
-                        currentMethodName = srcName
-                        currentMethodDesc = srcDesc
+                        currentName = srcName
+                        currentDesc = srcDesc
 
                         return true
                     }
 
                     override fun visitMethodArg(argPosition: Int, lvIndex: Int, srcName: String?): Boolean {
-                        currentArgIndex = lvIndex
+                        currentLvIndex = lvIndex
 
                         return true
                     }
 
-                    override fun visitMethodVar(lvtRowIndex: Int, lvIndex: Int, startOpIdx: Int, srcName: String) = false
+                    override fun visitMethodVar(lvtRowIndex: Int, lvIndex: Int, startOpIdx: Int, srcName: String?): Boolean {
+                        currentLvIndex = lvIndex
+                        currentStartOpIndex = startOpIdx
+                        currentLvtRowIndex = lvtRowIndex
+                        return true
+                    }
 
-                    // TODO does not support the source namespace in the tree being the source wanted
                     override fun visitDstName(targetKind: MappedElementKind, namespace: Int, name: String) {
                         if (namespace != targetNamespaceId) return
 
+                        if (targetKind == MappedElementKind.CLASS) {
+                            return it.acceptClass(currentClass, name)
+                        }
+
+                        val member = IMappingProvider.Member(currentClass, currentName, currentDesc)
+
                         when (targetKind) {
-                            MappedElementKind.CLASS -> it.acceptClass(currentClass, name)
-                            MappedElementKind.FIELD -> it.acceptField(IMappingProvider.Member(currentClass, currentFieldName, currentFieldDesc), name)
-                            MappedElementKind.METHOD -> it.acceptMethod(IMappingProvider.Member(currentClass, currentMethodName, currentMethodDesc), name)
-                            MappedElementKind.METHOD_ARG -> it.acceptMethodArg(IMappingProvider.Member(currentClass, currentMethodName, currentMethodDesc), currentArgIndex, name)
-                            MappedElementKind.METHOD_VAR -> {}
+                            MappedElementKind.FIELD -> it.acceptField(member, name)
+                            MappedElementKind.METHOD -> it.acceptMethod(member, name)
+                            MappedElementKind.METHOD_ARG -> it.acceptMethodArg(member, currentLvIndex, name)
+                            MappedElementKind.METHOD_VAR -> it.acceptMethodVar(member, currentLvIndex, currentStartOpIndex, currentLvtRowIndex, name)
+                            else -> {}
                         }
                     }
 
@@ -117,22 +144,20 @@ object JarRemapper {
         try {
             output.deleteExisting()
 
-            synchronized(remapperExtension) {
-                OutputConsumerPath.Builder(output).build().use {
-                    it.addNonClassFiles(input, NonClassCopyMode.FIX_META_INF, remapper)
+            OutputConsumerPath.Builder(output).build().use {
+                it.addNonClassFiles(input, NonClassCopyMode.FIX_META_INF, remapper)
 
-                    remapper.readClassPath(*classpath.map(File::toPath).toTypedArray())
+                remapper.readClassPath(*classpath.map(File::toPath).toTypedArray())
 
-                    remapper.readInputs(input)
-                    remapper.apply(it)
-                }
+                remapper.readInputs(input)
+                remapper.apply(it)
             }
         } finally {
             remapper.finish()
         }
 
         zipFileSystem(output).use {
-            remapperExtension.remapFiles(mappings, it.base.getPath("/"), mappings.getNamespaceId(sourceNamespace), mappings.getNamespaceId(targetNamespace), targetNamespace)
+            remapperExtension.remapFiles(mappings, it.base, sourceNamespace, targetNamespace)
         }
 
         return output

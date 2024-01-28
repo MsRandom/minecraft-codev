@@ -1,11 +1,10 @@
-package net.msrandom.minecraftcodev.accesswidener.resolve
+package net.msrandom.minecraftcodev.accesswidener.resolve.accesswidened
 
-import net.fabricmc.accesswidener.AccessWidener
-import net.fabricmc.accesswidener.AccessWidenerReader
+import net.msrandom.minecraftcodev.accesswidener.AccessWidenerExtension
 import net.msrandom.minecraftcodev.accesswidener.JarAccessWidener
 import net.msrandom.minecraftcodev.accesswidener.MinecraftCodevAccessWidenerPlugin
-import net.msrandom.minecraftcodev.accesswidener.dependency.AccessWidenedDependencyMetadata
-import net.msrandom.minecraftcodev.accesswidener.dependency.AccessWidenedDependencyMetadataWrapper
+import net.msrandom.minecraftcodev.accesswidener.dependency.accesswidened.AccessWidenedDependencyMetadata
+import net.msrandom.minecraftcodev.accesswidener.dependency.accesswidened.AccessWidenedDependencyMetadataWrapper
 import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
@@ -33,7 +32,6 @@ import org.gradle.internal.DisplayName
 import org.gradle.internal.component.external.model.*
 import org.gradle.internal.component.model.*
 import org.gradle.internal.hash.ChecksumService
-import org.gradle.internal.hash.HashCode
 import org.gradle.internal.model.CalculatedValueContainerFactory
 import org.gradle.internal.operations.*
 import org.gradle.internal.resolve.resolver.ArtifactResolver
@@ -43,8 +41,6 @@ import org.gradle.internal.resolve.resolver.OriginArtifactSelector
 import org.gradle.internal.resolve.result.*
 import org.gradle.util.internal.BuildCommencedTimeProvider
 import java.nio.file.Path
-import java.security.DigestInputStream
-import java.security.MessageDigest
 import javax.inject.Inject
 import kotlin.io.path.Path
 import kotlin.io.path.copyTo
@@ -102,7 +98,7 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                     },
                     {
                         if (name.type == ArtifactTypeDefinition.JAR_TYPE) {
-                            AccessWidenedComponentArtifactMetadata(this as ModuleComponentArtifactMetadata, identifier, namespace)
+                            AccessWidenedComponentArtifactMetadata(project, this as ModuleComponentArtifactMetadata, identifier, namespace)
                         } else {
                             PassthroughAccessWidenedArtifactMetadata(this)
                         }
@@ -171,9 +167,9 @@ open class AccessWidenedComponentResolvers @Inject constructor(
             resolvers.get().artifactResolver.resolveArtifact(artifact.delegate, moduleSources, result)
 
             if (result.isSuccessful) {
-                val (platforms, namespaces) = project.extensions.getByType(MinecraftCodevExtension::class.java).detectModInfo(result.result.toPath())
+                val (platforms, versions, namespaces) = project.extensions.getByType(MinecraftCodevExtension::class.java).detectModInfo(result.result.toPath())
 
-                if (platforms.isEmpty() && namespaces.isEmpty()) {
+                if (platforms.isEmpty() && versions.isEmpty() && namespaces.isEmpty()) {
                     return
                 }
 
@@ -181,27 +177,15 @@ open class AccessWidenedComponentResolvers @Inject constructor(
 
                 val accessWideners = project.configurations.getByName(id.accessWidenersConfiguration)
 
-                val messageDigest = MessageDigest.getInstance("SHA1")
-
-                val accessWidener = AccessWidener().also { visitor ->
-                    val reader = AccessWidenerReader(visitor)
-
-                    project.visitConfigurationFiles(resolvers, accessWideners) { file ->
-                        DigestInputStream(file.inputStream(), messageDigest).bufferedReader().use {
-                            if (namespace == null) {
-                                reader.read(it)
-                            } else {
-                                reader.read(it, namespace)
-                            }
-                        }
-                    }
-                }
-
-                val hash = HashCode.fromBytes(messageDigest.digest())
+                val accessWidener = project.extensions
+                    .getByType(MinecraftCodevExtension::class.java)
+                    .extensions
+                    .getByType(AccessWidenerExtension::class.java)
+                    .loadAccessWideners(accessWideners, objects, namespace)
 
                 val urlId = AccessWidenedArtifactIdentifier(
                     artifact.id.asSerializable,
-                    hash,
+                    accessWidener.hash,
                     checksumService.sha1(result.result)
                 )
 
@@ -209,16 +193,15 @@ open class AccessWidenedComponentResolvers @Inject constructor(
                     val file = buildOperationExecutor.call(object : CallableBuildOperation<Path> {
                         override fun description() = BuildOperationDescriptor
                             .displayName("Access Widening ${result.result}")
-                            .progressDisplayName("Access Widener targets: ${accessWidener.targets}")
                             .metadata(BuildOperationCategory.TASK)
 
                         override fun call(context: BuildOperationContext) = context.callWithStatus {
-                            JarAccessWidener.accessWiden(accessWidener, result.result.toPath())
+                            JarAccessWidener.accessWiden(accessWidener.tree, result.result.toPath())
                         }
                     })
 
                     val output = cacheManager.fileStoreDirectory
-                        .resolve(hash.toString())
+                        .resolve(accessWidener.hash.toString())
                         .resolve(id.group)
                         .resolve(id.module)
                         .resolve(id.version)

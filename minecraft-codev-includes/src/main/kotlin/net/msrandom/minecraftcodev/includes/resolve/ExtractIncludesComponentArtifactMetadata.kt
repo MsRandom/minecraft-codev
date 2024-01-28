@@ -24,22 +24,3 @@ class ExtractIncludesComponentArtifactMetadata(
 
     override fun getComponentId() = id
 }
-
-class ExtractedIncludeComponentArtifactMetadata(
-    val owner: ModuleComponentArtifactMetadata,
-    val path: String,
-    private val id: ExtractIncludesComponentIdentifier,
-    private val extension: String,
-    private val classifier: String
-) : ModuleComponentArtifactMetadata by owner {
-    override fun getId(): ModuleComponentArtifactIdentifier = owner.id.let {
-        if (it is DefaultModuleComponentArtifactIdentifier) {
-            DefaultModuleComponentArtifactIdentifier(id, name)
-        } else {
-            ModuleComponentFileArtifactIdentifier(id, name.toString())
-        }
-    }
-
-    override fun getComponentId() = id
-    override fun getName() = DefaultIvyArtifactName(id.module, extension, extension, classifier)
-}

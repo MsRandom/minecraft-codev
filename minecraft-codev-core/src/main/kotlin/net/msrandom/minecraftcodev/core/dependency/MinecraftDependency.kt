@@ -6,6 +6,7 @@ import org.gradle.api.artifacts.*
 import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
 import org.gradle.api.internal.artifacts.ModuleVersionSelectorStrictSpec
 import org.gradle.api.internal.artifacts.dependencies.AbstractModuleDependency
+import org.gradle.api.internal.artifacts.dependencies.DefaultImmutableVersionConstraint
 import org.gradle.api.internal.artifacts.dependencies.DefaultMutableVersionConstraint
 
 sealed interface MinecraftDependency : ExternalDependency {
@@ -18,7 +19,7 @@ sealed interface MinecraftDependency : ExternalDependency {
 class MinecraftDependencyImpl(private val name: String, version: String, configuration: String?) : AbstractModuleDependency(configuration), MinecraftDependency {
     override var isChanging = false
 
-    private val versionConstraint = DefaultMutableVersionConstraint(version)
+    private val versionConstraint = DefaultMutableVersionConstraint(DefaultImmutableVersionConstraint.of("", version, version, emptyList()))
     private val module = DefaultModuleIdentifier.newId(MinecraftComponentResolvers.GROUP, name)
 
     private fun isContentEqualsFor(dependencyRhs: MinecraftDependencyImpl) =
@@ -32,11 +33,6 @@ class MinecraftDependencyImpl(private val name: String, version: String, configu
     override fun matchesStrictly(identifier: ModuleVersionIdentifier) = ModuleVersionSelectorStrictSpec(this).isSatisfiedBy(identifier)
     override fun getModule(): ModuleIdentifier = module
     override fun isForce() = false
-
-    @Deprecated("Dependency constraints should be used instead")
-    override fun setForce(force: Boolean): ExternalDependency {
-        throw UnsupportedOperationException("minecraft() dependencies don't support force, use dependency constraints instead.")
-    }
 
     override fun version(configureAction: Action<in MutableVersionConstraint>) = configureAction.execute(versionConstraint)
     override fun getVersionConstraint() = versionConstraint

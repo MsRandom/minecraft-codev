@@ -1,19 +1,73 @@
 package net.msrandom.minecraftcodev.fabric.runs
 
-import net.msrandom.minecraftcodev.runs.DatagenRunConfigurationData
-import net.msrandom.minecraftcodev.runs.MinecraftRunConfiguration
-import net.msrandom.minecraftcodev.runs.RunConfigurationDefaultsContainer
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.decodeFromStream
+import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
+import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
+import net.msrandom.minecraftcodev.runs.*
+import net.msrandom.minecraftcodev.runs.task.DownloadAssets
+import net.msrandom.minecraftcodev.runs.task.ExtractNatives
 import org.gradle.api.Action
+import org.gradle.api.file.Directory
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.tasks.SourceSet
+import java.io.File
+import kotlin.io.path.createDirectories
 
 open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDefaultsContainer) {
     private fun defaults() {
         defaults.builder.jvmArguments("-Dfabric.development=true")
+        // defaults.builder.jvmArguments("-Dmixin.env.remapRefMap=true")
+
+        defaults.builder.action {
+            val file = project.layout.buildDirectory.dir("fabricRemapClasspath").get().file("classpath.txt")
+
+            val runtimeClasspath = compilation
+                .map { it.runtimeDependencyFiles }
+                .orElse(sourceSet.map(SourceSet::getRuntimeClasspath))
+                .get()
+
+            jvmArguments.add(project.provider {
+                file.asFile.toPath().parent.createDirectories()
+                file.asFile.writeText(runtimeClasspath.files.joinToString("\n", transform = File::getAbsolutePath))
+
+                MinecraftRunConfiguration.Argument("-Dfabric.remapClasspathFile=", file.asFile)
+            })
+        }
+        defaults.builder.jvmArguments()
     }
 
     fun client() {
         defaults()
 
         defaults.builder.mainClass(KNOT_CLIENT)
+
+        defaults.builder.action {
+            val extractNativesTask = project.tasks.withType(ExtractNatives::class.java)
+                .named(compilation.map { it.target.extractNativesTaskName }.orElse(sourceSet.map { it.extractNativesTaskName }).get())
+
+            val codev = project.extensions.getByType(MinecraftCodevExtension::class.java).extensions.getByType(RunsContainer::class.java)
+
+            val downloadAssetsTask = project.tasks.withType(DownloadAssets::class.java)
+                .named(compilation.map { it.target.downloadAssetsTaskName }.orElse(sourceSet.map { it.downloadAssetsTaskName }).get())
+
+            val nativesDirectory = extractNativesTask.flatMap(ExtractNatives::destinationDirectory).map(Directory::getAsFile)
+
+            val assetIndex = downloadAssetsTask.map {
+                it.assetIndexFile.asFile.get().inputStream().use {
+                    Json.decodeFromStream<MinecraftVersionMetadata.AssetIndex>(it)
+                }.id
+            }
+
+            arguments.add(MinecraftRunConfiguration.Argument("--assetsDir=", codev.assetsDirectory.asFile))
+            arguments.add(MinecraftRunConfiguration.Argument("--assetIndex=", assetIndex))
+
+            jvmArguments.add(MinecraftRunConfiguration.Argument("-Djava.library.path=", nativesDirectory))
+            jvmArguments.add(MinecraftRunConfiguration.Argument("-Dorg.lwjgl.librarypath=", nativesDirectory))
+
+            beforeRun.add(extractNativesTask)
+            beforeRun.add(downloadAssetsTask)
+        }
     }
 
     fun server() {

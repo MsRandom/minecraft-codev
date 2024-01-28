@@ -10,6 +10,7 @@ import org.gradle.api.plugins.ExtensionAware
 import org.gradle.api.provider.ListProperty
 import java.nio.file.FileSystem
 import java.nio.file.Path
+import kotlin.reflect.KProperty1
 
 fun interface ModMatchingRule {
     fun detectModInfo(fileSystem: FileSystem): ModInfo?
@@ -39,34 +40,31 @@ abstract class MinecraftCodevExtension(private val project: Project, private val
 
     fun call(notation: Map<String, Any>) = invoke(notation)
 
-    private fun <T : ModInfo> sortDetectedInfo(info: List<T>, factory: (String, Int) -> T, valueGetter: (T) -> String) = info
-        .groupBy(valueGetter)
-        .map { (platform, values) -> factory(platform, values.sumOf(ModInfo::score)) }
-        .sortedByDescending(ModInfo::score)
-        .map(valueGetter)
+    private fun sortDetectedInfo(info: List<ModInfo>) = info
+        .groupBy(ModInfo::type)
+        .mapValues { (_, info) ->
+            info
+                .asSequence()
+                .groupBy(ModInfo::info)
+                .map { (value, values) -> value to values.sumOf(ModInfo::score) }
+                .sortedByDescending { (_, score) -> score }
+                .map { (info, _) -> info }
+                .toList()
+        }
 
     fun detectModInfo(path: Path): DetectedModInfo {
-        val potentialPlatforms = mutableListOf<ModPlatformInfo>()
-        val potentialNamespaces = mutableListOf<ModMappingNamespaceInfo>()
-
-        zipFileSystem(path).use {
-            for (rule in modInfoDetectionRules.get()) {
-                val modInfo = rule.detectModInfo(it.base) ?: continue
-
-                when (modInfo) {
-                    is ModPlatformInfo -> potentialPlatforms.add(modInfo)
-                    is ModMappingNamespaceInfo -> potentialNamespaces.add(modInfo)
-                }
+        val info = zipFileSystem(path).use {
+            modInfoDetectionRules.get().mapNotNull { rule ->
+                rule.detectModInfo(it.base)
             }
         }
 
-        potentialNamespaces.groupBy(ModMappingNamespaceInfo::namespace).map { (namespace, values) ->
-            ModPlatformInfo(namespace, values.sumOf(ModInfo::score))
-        }
+        val sortedInfo = sortDetectedInfo(info)
 
         return DetectedModInfo(
-            sortDetectedInfo(potentialPlatforms, ::ModPlatformInfo, ModPlatformInfo::platform),
-            sortDetectedInfo(potentialNamespaces, ::ModMappingNamespaceInfo, ModMappingNamespaceInfo::namespace)
+            sortedInfo.getOrDefault(ModInfoType.Platform, emptyList()),
+            sortedInfo.getOrDefault(ModInfoType.Version, emptyList()),
+            sortedInfo.getOrDefault(ModInfoType.Namespace, emptyList()),
         )
     }
 }

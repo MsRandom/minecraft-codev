@@ -11,12 +11,13 @@ gradlePlugin {
 }
 
 dependencies {
+    implementation(projects.minecraftCodevCore.sideAnnotations)
+
     implementation(api(group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version = "1.3.3"))
     implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version = "1.6.4")
 
     implementation(api(group = "net.minecraftforge", name = "srgutils", version = "latest.release"))
 
-    implementation(api(group = "org.ow2.asm", name = "asm", version = "9.3"))
     implementation(api(group = "org.ow2.asm", name = "asm-tree", version = "9.3"))
 
     implementation(api(group = "com.google.guava", name = "guava", version = "31.1-jre"))

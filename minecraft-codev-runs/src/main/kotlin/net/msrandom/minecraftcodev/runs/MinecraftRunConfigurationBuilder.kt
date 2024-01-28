@@ -7,7 +7,6 @@ import org.gradle.api.Task
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
-import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinJvmCompilation
 import javax.inject.Inject
 
@@ -125,8 +124,12 @@ abstract class MinecraftRunConfigurationBuilder @Inject constructor(val project:
         }
     }
 
-    fun workingDirectory(path: Any) = apply {
-        action { workingDirectory.set(project.file(path)) }
+    fun executableDir(path: Any) = apply {
+        action { executableDirectory.set(project.file(path)) }
+    }
+
+    fun executableDirectory(path: Any) = apply {
+        action { executableDirectory.set(project.file(path)) }
     }
 
     private fun mapArgs(vararg args: Any?) = args.map {

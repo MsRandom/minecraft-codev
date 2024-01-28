@@ -117,7 +117,7 @@ open class MixinComponentResolvers @Inject constructor(
                     },
                     {
                         if (name.type == ArtifactTypeDefinition.JAR_TYPE) {
-                            MixinComponentArtifactMetadata(this as ModuleComponentArtifactMetadata, identifier)
+                            MixinComponentArtifactMetadata(project, this as ModuleComponentArtifactMetadata, identifier)
                         } else {
                             PassthroughMixinArtifactMetadata(this)
                         }

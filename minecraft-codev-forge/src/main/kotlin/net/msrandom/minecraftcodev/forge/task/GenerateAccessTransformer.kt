@@ -11,14 +11,11 @@ import org.cadixdev.at.io.AccessTransformFormats
 import org.cadixdev.bombe.type.signature.MethodSignature
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
-import org.gradle.api.file.RegularFile
 import org.gradle.api.file.RegularFileProperty
-import org.gradle.api.provider.Property
-import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.*
 
 @CacheableTask
-abstract class GenerateAccessTransformers : DefaultTask() {
+abstract class GenerateAccessTransformer : DefaultTask() {
     abstract val input: ConfigurableFileCollection
         @InputFiles
         @PathSensitive(PathSensitivity.RELATIVE)

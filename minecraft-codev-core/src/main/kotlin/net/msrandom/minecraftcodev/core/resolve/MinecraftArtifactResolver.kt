@@ -8,22 +8,25 @@ import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Comp
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.hash
 import net.msrandom.minecraftcodev.core.utils.asSerializable
 import org.gradle.api.artifacts.component.ComponentArtifactIdentifier
+import org.gradle.api.internal.artifacts.DefaultResolvableArtifact
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.artifacts.CachedArtifact
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.artifacts.DefaultCachedArtifact
 import org.gradle.api.internal.artifacts.metadata.ComponentArtifactIdentifierSerializer
 import org.gradle.api.internal.artifacts.metadata.ModuleComponentFileArtifactIdentifierSerializer
 import org.gradle.api.internal.component.ArtifactType
+import org.gradle.internal.Describables
 import org.gradle.internal.component.external.model.DefaultModuleComponentArtifactIdentifier
 import org.gradle.internal.component.external.model.ModuleComponentArtifactIdentifier
 import org.gradle.internal.component.external.model.ModuleComponentArtifactMetadata
 import org.gradle.internal.component.external.model.ModuleComponentFileArtifactIdentifier
 import org.gradle.internal.component.local.model.LocalComponentArtifactMetadata
 import org.gradle.internal.component.model.ComponentArtifactMetadata
-import org.gradle.internal.component.model.ComponentResolveMetadata
-import org.gradle.internal.component.model.ModuleSources
+import org.gradle.internal.component.model.ComponentArtifactResolveMetadata
 import org.gradle.internal.hash.ChecksumService
+import org.gradle.internal.model.CalculatedValueContainerFactory
 import org.gradle.internal.operations.BuildOperationExecutor
+import org.gradle.internal.resolve.ArtifactNotFoundException
 import org.gradle.internal.resolve.resolver.ArtifactResolver
 import org.gradle.internal.resolve.result.BuildableArtifactResolveResult
 import org.gradle.internal.resolve.result.BuildableArtifactSetResolveResult
@@ -45,6 +48,7 @@ open class MinecraftArtifactResolver @Inject constructor(
     private val timeProvider: BuildCommencedTimeProvider,
     private val buildOperationExecutor: BuildOperationExecutor,
     private val checksumService: ChecksumService,
+    private val calculatedValueContainerFactory: CalculatedValueContainerFactory,
 
     cacheProvider: CodevCacheProvider
 ) : ArtifactResolver {
@@ -52,22 +56,25 @@ open class MinecraftArtifactResolver @Inject constructor(
 
     private val artifactCache by lazy {
         // TODO make this more space efficient by removing the group
-        cacheManager.getMetadataCache(Path("module-artifact"), Companion::artifactIdSerializer) {
+        cacheManager.getMetadataCache(Path("module-artifact"), ::artifactIdSerializer) {
             CachedArtifactSerializer(cacheManager.fileStoreDirectory)
         }.asFile
     }
 
-    override fun resolveArtifactsWithType(component: ComponentResolveMetadata, artifactType: ArtifactType, result: BuildableArtifactSetResolveResult) {
+    override fun resolveArtifactsWithType(component: ComponentArtifactResolveMetadata?, artifactType: ArtifactType?, result: BuildableArtifactSetResolveResult?) {
     }
 
-    override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactResolveResult) {
+    override fun resolveArtifact(component: ComponentArtifactResolveMetadata, artifact: ComponentArtifactMetadata, result: BuildableArtifactResolveResult) {
         val componentIdentifier = artifact.componentId
+
         if (componentIdentifier::class == MinecraftComponentIdentifier::class) {
             componentIdentifier as MinecraftComponentIdentifier
             if (artifact is LocalComponentArtifactMetadata) {
-                result.resolved(artifact.file)
+                val calculatedValue = calculatedValueContainerFactory.create(Describables.of(artifact.id), artifact::getFile)
+
+                result.resolved(DefaultResolvableArtifact(component.moduleVersionId, artifact.name, artifact.id, { it.add(artifact.buildDependencies) }, calculatedValue, calculatedValueContainerFactory))
             } else {
-                getOrResolve(artifact as ModuleComponentArtifactMetadata, artifact.id.asSerializable, artifactCache, cachePolicy, timeProvider, result) {
+                getOrResolve(component, artifact as ModuleComponentArtifactMetadata, calculatedValueContainerFactory, artifact.id.asSerializable, artifactCache, cachePolicy, timeProvider, result) {
                     for (repository in repositories) {
                         when (componentIdentifier.module) {
                             MinecraftComponentResolvers.COMMON_MODULE -> {
@@ -80,7 +87,6 @@ open class MinecraftArtifactResolver @Inject constructor(
                                             resolveMojangFile(manifest, cacheManager, checksumService, repository, MinecraftComponentResolvers.CLIENT_DOWNLOAD)!!
                                         }
 
-                                        result.resolved(splitCommonJar.toFile())
                                         return@getOrResolve splitCommonJar.toFile()
                                     }
                                 }
@@ -132,6 +138,7 @@ open class MinecraftArtifactResolver @Inject constructor(
                             }
                         }
                     }
+
                     null
                 }
             }
@@ -184,17 +191,19 @@ open class MinecraftArtifactResolver @Inject constructor(
         }
 
         fun <T> getOrResolve(
+            component: ComponentArtifactResolveMetadata,
             artifact: ModuleComponentArtifactMetadata,
+            calculatedValueContainerFactory: CalculatedValueContainerFactory,
             id: T,
             artifactCache: CodevCacheManager.CachedPath<T, CachedArtifact>.CachedFile,
             cachePolicy: CachePolicy,
             timeProvider: BuildCommencedTimeProvider,
             result: BuildableArtifactResolveResult,
-            generate: () -> File?
+            generate: () -> File?,
         ) {
             val cached = artifactCache[id]
 
-            if (cached == null || cachePolicy.artifactExpiry(
+            val fileFactory = if (cached == null || cachePolicy.artifactExpiry(
                     artifact.toArtifactIdentifier(),
                     if (cached.isMissing) null else cached.cachedFile,
                     Duration.ofMillis(timeProvider.currentTime - cached.cachedAt),
@@ -202,17 +211,30 @@ open class MinecraftArtifactResolver @Inject constructor(
                     artifact.hash() == cached.descriptorHash
                 ).isMustCheck || cached.cachedFile?.exists() != true
             ) {
-                val file = generate()
+                {
+                    val file = generate()
 
-                if (file != null) {
-                    result.resolved(file)
-                    artifactCache[id] = DefaultCachedArtifact(file, timeProvider.currentTime, artifact.hash())
+                    if (file != null) {
+                        artifactCache[id] = DefaultCachedArtifact(file, timeProvider.currentTime, artifact.hash())
+
+                        file
+                    } else {
+                        throw ArtifactNotFoundException(artifact.id, result.attempted)
+                    }
                 }
             } else {
-                if (!cached.isMissing) {
-                    result.resolved(cached.cachedFile)
+                {
+                    if (!cached.isMissing) {
+                        cached.cachedFile
+                    } else {
+                        throw ArtifactNotFoundException(artifact.id, result.attempted)
+                    }
                 }
             }
+
+            val calculatedValue = calculatedValueContainerFactory.create(Describables.of(artifact.id), fileFactory)
+
+            result.resolved(DefaultResolvableArtifact(component.moduleVersionId, artifact.name, artifact.id, { it.add(artifact.buildDependencies) }, calculatedValue, calculatedValueContainerFactory))
         }
 
         fun getAdditionalCandidates(path: Path, checksumService: ChecksumService) =

@@ -15,7 +15,7 @@ abstract class MergeAccessWideners : DefaultTask() {
         @PathSensitive(PathSensitivity.RELATIVE)
         get
 
-    abstract val name: Property<String>
+    abstract val accessWidenerName: Property<String>
         @Input
         get
 
@@ -25,27 +25,27 @@ abstract class MergeAccessWideners : DefaultTask() {
 
     init {
         apply {
-            output.convention(project.layout.dir(project.provider { temporaryDir }).flatMap { name.map { name -> it.file("${name}.accessWidener") } })
+            output.convention(project.layout.dir(project.provider { temporaryDir }).flatMap { accessWidenerName.map { name -> it.file("${name}.accessWidener") } })
         }
     }
 
     @TaskAction
     fun generate() {
         output.get().asFile.bufferedWriter().use {
-            it.write(buildString {
-                for (accessWidener in input) {
-                    if (accessWidener.extension.lowercase() != "accesswidener") {
-                        // Implies that this is supposed to have specific handling, for example mod Jars to enable transitive Access Wideners in
-                        continue
-                    }
+            val writer = AccessWidenerWriter()
+            val reader = AccessWidenerReader(writer)
 
-                    val writer = AccessWidenerWriter()
-
-                    accessWidener.bufferedReader().use(AccessWidenerReader(writer)::read)
-
-                    append(writer.writeString())
+            for (accessWidener in input) {
+                if (accessWidener.extension.lowercase() != "accesswidener") {
+                    // Implies that this is supposed to have specific handling, for example mod Jars to enable transitive Access Wideners in
+                    continue
                 }
-            })
+
+
+                accessWidener.bufferedReader().use(reader::read)
+            }
+
+            it.write(writer.writeString())
         }
     }
 }

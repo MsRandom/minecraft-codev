@@ -17,7 +17,6 @@ dependencies {
         exclude(group = "org.apache.logging.log4j", module = "log4j-core")
     }
 
-    implementation(group = "org.cadixdev", name = "at", version = "0.1.0-rc1")
     implementation(group = "org.cadixdev", name = "lorenz", version = "0.5.8")
 
     implementation(group = "de.siegmar", name = "fastcsv", version = "2.2.0")
@@ -26,13 +25,11 @@ dependencies {
 
     compileOnly(projects.minecraftCodevGradleLinkage)
 
-    implementation(projects.minecraftCodevCore)
-
-    compileOnly(projects.minecraftCodevAccessWidener)
-    compileOnly(projects.minecraftCodevRemapper)
-    compileOnly(projects.minecraftCodevRuns)
-    compileOnly(projects.minecraftCodevMixins)
-    compileOnly(projects.minecraftCodevIncludes)
+    implementation(projects.minecraftCodevAccessWidener)
+    implementation(projects.minecraftCodevRemapper)
+    implementation(projects.minecraftCodevRuns)
+    implementation(projects.minecraftCodevMixins)
+    implementation(projects.minecraftCodevIncludes)
 }
 
 tasks.test {

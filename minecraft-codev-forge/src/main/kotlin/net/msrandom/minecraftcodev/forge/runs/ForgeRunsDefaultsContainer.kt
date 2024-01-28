@@ -22,14 +22,18 @@ import net.msrandom.minecraftcodev.runs.task.ExtractNatives
 import org.gradle.api.Action
 import org.gradle.api.artifacts.Configuration
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
+import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.plugins.JavaPlugin
+import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
 import org.jetbrains.kotlin.gradle.plugin.KotlinCompilation
+import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinJvmCompilation
 import java.io.File
 import kotlin.io.path.createDirectories
 import kotlin.io.path.reader
@@ -235,7 +239,8 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
     private fun MinecraftRunConfiguration.addData(
         caller: String,
         data: ForgeRunConfigurationData,
-        runType: (UserdevConfig.Runs) -> UserdevConfig.Run?
+        runType: (UserdevConfig.Runs) -> UserdevConfig.Run?,
+        addLwjglNatives: Boolean = false,
     ) {
         val configProvider = getUserdevData(data.patchesConfiguration.takeIf(Property<*>::isPresent))
 
@@ -277,6 +282,10 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
 
             addArgs(manifest, userdevConfig, config, arguments, userdevConfig.getRun().args, extractNativesTaskName, downloadAssetsTaskName)
 
+            for (mixinConfig in data.mixinConfigs.get()) {
+                arguments.add(MinecraftRunConfiguration.Argument("--mixin.config=", mixinConfig))
+            }
+
             arguments
         })
 
@@ -297,6 +306,12 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
 
             jvmArguments
         })
+
+        if (addLwjglNatives) {
+            val natives = project.tasks.withType(ExtractNatives::class.java).getByName(extractNativesTaskName)
+
+            jvmArguments.add(MinecraftRunConfiguration.Argument("-Dorg.lwjgl.librarypath=", natives.destinationDirectory))
+        }
     }
 
     fun client(action: Action<ForgeRunConfigurationData>? = null): Unit = defaults.builder.action {
@@ -304,7 +319,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
 
         action?.execute(data)
 
-        addData(::client.name, data, UserdevConfig.Runs::client)
+        addData(::client.name, data, UserdevConfig.Runs::client, true)
     }
 
     fun server(action: Action<ForgeRunConfigurationData>? = null): Unit = defaults.builder.action {
@@ -325,16 +340,13 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
 
             addData(UserdevConfig.Runs::data.name, data, UserdevConfig.Runs::data)
 
-            arguments.add(MinecraftRunConfiguration.Argument("--mod"))
-            arguments.add(data.modId.map(MinecraftRunConfiguration::Argument))
+            val resources = compilation.map { it.output.resourcesDir }.orElse(sourceSet.map { it.output.resourcesDir })
 
-            arguments.addAll(MinecraftRunConfiguration.Argument("--all"))
-
-            arguments.add(MinecraftRunConfiguration.Argument("--output"))
-            arguments.add(outputDirectory)
-
-            arguments.add(MinecraftRunConfiguration.Argument("--existing"))
-            arguments.add(outputDirectory)
+            arguments.add(MinecraftRunConfiguration.Argument("--mod=", data.modId.map(MinecraftRunConfiguration::Argument)))
+            arguments.add(MinecraftRunConfiguration.Argument("--all"))
+            arguments.add(MinecraftRunConfiguration.Argument("--output=", outputDirectory))
+            arguments.add(MinecraftRunConfiguration.Argument("--existing=", outputDirectory))
+            arguments.add(MinecraftRunConfiguration.Argument("--existing=", resources))
         }
     }
 
@@ -359,6 +371,10 @@ abstract class ForgeRunConfigurationData {
     abstract val patchesConfiguration: Property<Configuration>
         @Optional
         @Input
+        get
+
+    abstract val mixinConfigs: ListProperty<String>
+        @InputFiles
         get
 }
 

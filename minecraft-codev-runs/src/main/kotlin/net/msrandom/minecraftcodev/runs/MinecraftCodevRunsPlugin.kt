@@ -14,7 +14,6 @@ import org.gradle.api.tasks.JavaExec
 import org.gradle.api.tasks.SourceSet
 import org.gradle.initialization.layout.GlobalCacheDir
 import org.jetbrains.kotlin.gradle.plugin.KotlinCompilation
-import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinJvmCompilation
 import java.nio.file.Path
 import javax.inject.Inject
 
@@ -78,7 +77,7 @@ class MinecraftCodevRunsPlugin<T : PluginAware> @Inject constructor(cacheDir: Gl
 
                 javaExec.argumentProviders.add(configuration.arguments.map { arguments -> arguments.map(MinecraftRunConfiguration.Argument::compile) }::get)
                 javaExec.jvmArgumentProviders.add(configuration.jvmArguments.map { arguments -> arguments.map(MinecraftRunConfiguration.Argument::compile) }::get)
-                javaExec.workingDir(configuration.workingDirectory)
+                javaExec.workingDir(configuration.executableDirectory)
                 javaExec.mainClass.set(configuration.mainClass)
 
                 javaExec.classpath = configuration.compilation
@@ -93,6 +92,8 @@ class MinecraftCodevRunsPlugin<T : PluginAware> @Inject constructor(cacheDir: Gl
                 javaExec.dependsOn(configuration.dependsOn.map {
                     it.map { other -> "${ApplicationPlugin.TASK_RUN_NAME}${StringUtils.capitalize(other.name)}" }
                 })
+
+                javaExec.dependsOn(configuration.compilation.map(KotlinCompilation<*>::compileAllTaskName).orElse(configuration.sourceSet.map(SourceSet::getClassesTaskName)))
             }
         }
     }

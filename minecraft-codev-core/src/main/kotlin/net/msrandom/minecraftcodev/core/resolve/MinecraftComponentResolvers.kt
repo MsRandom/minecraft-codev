@@ -2,6 +2,7 @@ package net.msrandom.minecraftcodev.core.resolve
 
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
+import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.wrapComponentMetadata
 import org.gradle.api.artifacts.ModuleIdentifier
 import org.gradle.api.artifacts.component.ComponentIdentifier
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
@@ -11,20 +12,20 @@ import org.gradle.api.internal.artifacts.RepositoriesSupplier
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ComponentResolvers
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.artifact.ArtifactSet
+import org.gradle.api.internal.artifacts.ivyservice.resolveengine.artifact.ArtifactSetFactory
+import org.gradle.api.internal.artifacts.ivyservice.resolveengine.artifact.ResolvedVariant
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.excludes.specs.ExcludeSpec
-import org.gradle.api.internal.artifacts.type.ArtifactTypeRegistry
+import org.gradle.api.internal.attributes.AttributesSchemaInternal
 import org.gradle.api.internal.attributes.ImmutableAttributes
 import org.gradle.api.internal.attributes.ImmutableAttributesFactory
 import org.gradle.api.internal.model.NamedObjectInstantiator
 import org.gradle.api.model.ObjectFactory
-import org.gradle.internal.component.external.model.MetadataSourcedComponentArtifacts
 import org.gradle.internal.component.model.ComponentArtifactMetadata
+import org.gradle.internal.component.model.ComponentArtifactResolveMetadata
+import org.gradle.internal.component.model.ComponentArtifactResolveVariantState
 import org.gradle.internal.component.model.ComponentOverrideMetadata
-import org.gradle.internal.component.model.ComponentResolveMetadata
-import org.gradle.internal.component.model.ConfigurationMetadata
 import org.gradle.internal.hash.ChecksumService
 import org.gradle.internal.hash.HashCode
-import org.gradle.internal.model.CalculatedValueContainerFactory
 import org.gradle.internal.resolve.resolver.ArtifactResolver
 import org.gradle.internal.resolve.resolver.ComponentMetaDataResolver
 import org.gradle.internal.resolve.resolver.DependencyToComponentIdResolver
@@ -37,7 +38,7 @@ import javax.inject.Inject
 open class MinecraftComponentResolvers @Inject constructor(
     private val cachePolicy: CachePolicy,
     private val objects: ObjectFactory,
-    private val calculatedValueContainerFactory: CalculatedValueContainerFactory,
+    private val attributesSchema: AttributesSchemaInternal,
     private val checksumService: ChecksumService,
     private val timeProvider: BuildCommencedTimeProvider,
     cacheProvider: CodevCacheProvider,
@@ -89,6 +90,7 @@ open class MinecraftComponentResolvers @Inject constructor(
             var isChanging = false
             val id = if (identifier.version.endsWith("-SNAPSHOT")) {
                 val snapshot = versionList.snapshot(identifier.version.substring(0, identifier.version.length - "-SNAPSHOT".length))
+
                 if (snapshot == null) {
                     result.notFound(identifier)
                     return
@@ -112,19 +114,23 @@ open class MinecraftComponentResolvers @Inject constructor(
                 }
             }
 
+            val metadataGenerator = objects.newInstance(MinecraftMetadataGenerator::class.java, cacheManager)
+
             for (repository in repositories) {
-                if (result.hasResult()) break
-
-                val metadataGenerator = objects.newInstance(MinecraftMetadataGenerator::class.java, cacheManager)
-
-                metadataGenerator.resolveMetadata(
+                val metadata = metadataGenerator.resolveMetadata(
                     repository,
                     repository.resourceAccessor,
                     id,
                     isChanging,
                     componentOverrideMetadata,
-                    result
+                    result::attempted
                 )
+
+                if (metadata != null) {
+                    result.resolved(wrapComponentMetadata(metadata, objects))
+
+                    break
+                }
             }
         }
     }
@@ -132,7 +138,11 @@ open class MinecraftComponentResolvers @Inject constructor(
     override fun isFetchingMetadataCheap(identifier: ComponentIdentifier) = false
 
     override fun resolveArtifacts(
-        component: ComponentResolveMetadata, configuration: ConfigurationMetadata, artifactTypeRegistry: ArtifactTypeRegistry, exclusions: ExcludeSpec, overriddenAttributes: ImmutableAttributes
+        component: ComponentArtifactResolveMetadata,
+        allVariants: ComponentArtifactResolveVariantState,
+        legacyVariants: MutableSet<ResolvedVariant>,
+        exclusions: ExcludeSpec?,
+        overriddenAttributes: ImmutableAttributes,
     ): ArtifactSet? {
         val componentIdentifier = component.id
 
@@ -175,10 +185,7 @@ open class MinecraftComponentResolvers @Inject constructor(
             }
 
             if (valid) {
-                // TODO use artifact caches
-                MetadataSourcedComponentArtifacts().getArtifactsFor(
-                    component, configuration, artifactResolver, hashMapOf(), artifactTypeRegistry, exclusions, overriddenAttributes, calculatedValueContainerFactory
-                )
+                return ArtifactSetFactory.createFromVariantMetadata(componentIdentifier, allVariants, legacyVariants, attributesSchema, overriddenAttributes)
             } else {
                 null
             }

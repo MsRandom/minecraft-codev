@@ -1,4 +1,4 @@
-package net.msrandom.minecraftcodev.accesswidener.dependency
+package net.msrandom.minecraftcodev.accesswidener.dependency.accesswidened
 
 import org.gradle.api.artifacts.Dependency
 import org.gradle.api.artifacts.ModuleDependency

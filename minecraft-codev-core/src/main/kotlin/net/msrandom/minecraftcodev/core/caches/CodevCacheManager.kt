@@ -22,7 +22,6 @@ import kotlin.io.path.*
 
 @ThreadSafe
 open class CodevCacheManager @Inject constructor(val rootPath: Path, fileAccessTimeJournal: FileAccessTimeJournal, usedGradleVersions: UsedGradleVersions) : CleanableStore {
-    val externalResourcesStoreDirectory: Path = rootPath.resolve(CacheLayout.RESOURCES.key)
     val fileStoreDirectory: Path = rootPath.resolve(CacheLayout.FILE_STORE.key)
     val metaDataDirectory: Path = rootPath.resolve(CacheLayout.META_DATA.key)
 
@@ -30,28 +29,6 @@ open class CodevCacheManager @Inject constructor(val rootPath: Path, fileAccessT
 
     private val gcProperties = rootPath.resolve("gc.properties")
     private val lock = rootPath.resolve("${rootPath.name}.lock")
-
-    private val cleanupAction = run {
-        val maxAgeInDays = System.getProperty("org.gradle.internal.cleanup.external.max.age")?.toLongOrNull() ?: LeastRecentlyUsedCacheCleanup.DEFAULT_MAX_AGE_IN_DAYS_FOR_EXTERNAL_CACHE_ENTRIES
-
-        CompositeCleanupAction.builder()
-            .add(UnusedVersionsCacheCleanup.create(ROOT_NAME, CacheLayout.ROOT.versionMapping, usedGradleVersions))
-            .add(
-                externalResourcesStoreDirectory.toFile(),
-                UnusedVersionsCacheCleanup.create(CacheLayout.RESOURCES.getName(), CacheLayout.RESOURCES.versionMapping, usedGradleVersions),
-                LeastRecentlyUsedCacheCleanup(SingleDepthFilesFinder(DefaultExternalResourceFileStore.FILE_TREE_DEPTH_TO_TRACK_AND_CLEANUP), fileAccessTimeJournal, maxAgeInDays)
-            )
-            .add(
-                fileStoreDirectory.toFile(),
-                UnusedVersionsCacheCleanup.create(CacheLayout.FILE_STORE.getName(), CacheLayout.FILE_STORE.versionMapping, usedGradleVersions),
-                LeastRecentlyUsedCacheCleanup(SingleDepthFilesFinder(DefaultArtifactIdentifierFileStore.FILE_TREE_DEPTH_TO_TRACK_AND_CLEANUP), fileAccessTimeJournal, maxAgeInDays)
-            )
-            .add(
-                metaDataDirectory.toFile(),
-                UnusedVersionsCacheCleanup.create(CacheLayout.META_DATA.getName(), CacheLayout.META_DATA.versionMapping, usedGradleVersions)
-            )
-            .build()
-    }
 
     @Suppress("UNCHECKED_CAST")
     fun <K, V> getMetadataCache(path: Path, keySerializer: () -> Serializer<K>, valueSerializer: () -> Serializer<V>) = memoryCache.computeIfAbsent(path) {

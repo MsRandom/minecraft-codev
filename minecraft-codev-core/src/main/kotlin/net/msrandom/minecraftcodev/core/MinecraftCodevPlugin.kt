@@ -3,7 +3,7 @@ package net.msrandom.minecraftcodev.core
 import kotlinx.serialization.json.Json
 import net.msrandom.minecraftcodev.core.attributes.OperatingSystemDisambiguationRule
 import net.msrandom.minecraftcodev.core.attributes.VersionPatternCompatibilityRule
-import net.msrandom.minecraftcodev.core.dependency.MinecraftIvyDependencyDescriptorFactory
+import net.msrandom.minecraftcodev.core.dependency.MinecraftDependencyMetadataConverter
 import net.msrandom.minecraftcodev.core.dependency.handleCustomQueryResolvers
 import net.msrandom.minecraftcodev.core.dependency.registerCustomDependency
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
@@ -23,7 +23,7 @@ import kotlin.io.path.inputStream
 open class MinecraftCodevPlugin<T : PluginAware> : Plugin<T> {
     private fun applyGradle(gradle: Gradle) = gradle.registerCustomDependency(
         "minecraft",
-        MinecraftIvyDependencyDescriptorFactory::class.java,
+        MinecraftDependencyMetadataConverter::class.java,
         MinecraftComponentResolvers::class.java
     )
 
@@ -34,7 +34,7 @@ open class MinecraftCodevPlugin<T : PluginAware> : Plugin<T> {
 
         codev.modInfoDetectionRules.add {
             if (it.getPath("pack.mcmeta").exists()) {
-                ModPlatformInfo("vanilla", 1)
+                ModInfo(ModInfoType.Platform, "vanilla", 1)
             } else {
                 null
             }
@@ -46,7 +46,7 @@ open class MinecraftCodevPlugin<T : PluginAware> : Plugin<T> {
             if (path.exists()) {
                 val attributes = path.inputStream().use(::Manifest).mainAttributes
 
-                attributes.getValue(CODEV_MAPPING_NAMESPACE_ATTRIBUTE)?.let { namespace -> ModMappingNamespaceInfo(namespace, 4) }
+                attributes.getValue(CODEV_MAPPING_NAMESPACE_ATTRIBUTE)?.let { namespace -> ModInfo(ModInfoType.Namespace, namespace, 4) }
             } else {
                 null
             }

@@ -1,5 +1,7 @@
 package net.msrandom.minecraftcodev.core.resolve.legacy
 
+import net.msrandom.minecraftcodev.annotations.UnsafeForClient
+import net.msrandom.minecraftcodev.annotations.UnsafeForCommon
 import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.resolve.JarSplittingResult
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
@@ -27,8 +29,8 @@ import kotlin.io.path.*
 import kotlin.reflect.KMutableProperty1
 
 object LegacyJarSplitter {
-    private const val UNSAFE_FOR_COMMON = "Lnet/msrandom/minecraftcodev/annotations/UnsafeForCommon;"
-    private const val UNSAFE_FOR_CLIENT = "Lnet/msrandom/minecraftcodev/annotations/UnsafeForClient;"
+    private val UNSAFE_FOR_COMMON = UnsafeForCommon::class.qualifiedName!!
+    private val UNSAFE_FOR_CLIENT = UnsafeForClient::class.qualifiedName!!
 
     fun FileSystem.withAssets(action: (Path) -> Unit) {
         getPath("/").walk {

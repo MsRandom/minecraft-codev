@@ -12,7 +12,6 @@ class DecompiledComponentArtifactMetadata(
     private val id: DecompiledComponentIdentifier,
     val selectedArtifacts: List<Pair<ModuleSources, List<ComponentArtifactMetadata>>>
 ) : ModuleComponentArtifactMetadata by delegate {
-
     override fun getId(): ModuleComponentArtifactIdentifier = delegate.id.let {
         if (it is DefaultModuleComponentArtifactIdentifier) {
             DefaultModuleComponentArtifactIdentifier(id, it.name)

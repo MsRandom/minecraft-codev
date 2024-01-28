@@ -1,4 +1,4 @@
-package net.msrandom.minecraftcodev.accesswidener.resolve
+package net.msrandom.minecraftcodev.accesswidener.resolve.accesswidened
 
 import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.artifactIdSerializer
 import org.gradle.api.artifacts.component.ComponentArtifactIdentifier

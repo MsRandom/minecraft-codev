@@ -59,18 +59,11 @@ open class ExtractIncludesComponentResolvers @Inject constructor(
 
     cacheProvider: CodevCacheProvider
 ) : ComponentResolvers, DependencyToComponentIdResolver, ComponentMetaDataResolver, OriginArtifactSelector, ArtifactResolver {
-    private val includesExtractedCache = cacheProvider.manager("includes/includes-extracted")
-    private val extractedIncludeCache = cacheProvider.manager("includes/extracted-includes")
+    private val cacheManager = cacheProvider.manager("includes-extracted")
 
-    private val includesExtractedArtifactCache by lazy {
-        includesExtractedCache.getMetadataCache(Path("module-artifact"), MinecraftArtifactResolver.Companion::artifactIdSerializer) {
-            CachedArtifactSerializer(includesExtractedCache.fileStoreDirectory)
-        }.asFile
-    }
-
-    private val extractedIncludeArtifactCache by lazy {
-        extractedIncludeCache.getMetadataCache(Path("module-artifact"), { ExtractedIncludeArtifactIdentifier.ArtifactSerializer }) {
-            CachedArtifactSerializer(extractedIncludeCache.fileStoreDirectory)
+    private val artifactCache by lazy {
+        cacheManager.getMetadataCache(Path("module-artifact"), MinecraftArtifactResolver.Companion::artifactIdSerializer) {
+            CachedArtifactSerializer(cacheManager.fileStoreDirectory)
         }.asFile
     }
 
@@ -83,7 +76,6 @@ open class ExtractIncludesComponentResolvers @Inject constructor(
         if (attributes.getAttribute(Category.CATEGORY_ATTRIBUTE.name) == Category.LIBRARY && attributes.getAttribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE.name) == LibraryElements.JAR) {
             val includeRules = project.extensions.getByType(MinecraftCodevExtension::class.java).extensions.getByType(IncludesExtension::class.java).rules
 
-            val includedArtifacts = mutableListOf<ComponentArtifactMetadata>()
             val extraDependencies = mutableListOf<DependencyMetadata>()
             val extractIncludes = hashSetOf<ComponentArtifactMetadata>()
 
@@ -128,32 +120,29 @@ open class ExtractIncludesComponentResolvers @Inject constructor(
                     extractIncludes.add(artifact)
 
                     for (include in included) {
-                        val (path, fileName, group, module, version, versionRange, classifier) = include
+                        val (_, group, module, version) = include
 
-                        if (group != null && module != null && (versionRange != null || version != null)) {
+                        if (group != null && module != null && version != null) {
                             extraDependencies.add(
                                 GradleDependencyMetadata(
                                     DefaultModuleComponentSelector.newSelector(
-                                        DefaultModuleIdentifier.newId(group, module), (versionRange ?: version).toString()
-                                    ), emptyList(), false, false, null, false, null
+                                        DefaultModuleIdentifier.newId(group, module),
+                                        version
+                                    ),
+                                    emptyList(),
+                                    false,
+                                    false,
+                                    null,
+                                    false,
+                                    null
                                 )
                             )
                         }
-
-                        includedArtifacts.add(
-                            ExtractedIncludeComponentArtifactMetadata(
-                                artifact,
-                                path,
-                                identifier,
-                                fileName.substringAfterLast('.', ArtifactTypeDefinition.JAR_TYPE),
-                                classifier ?: module ?: fileName
-                            )
-                        )
                     }
                 }
             }
 
-            if (extraDependencies.isEmpty() && includedArtifacts.isEmpty()) {
+            if (extraDependencies.isEmpty()) {
                 return@copy this
             }
 
@@ -179,7 +168,7 @@ open class ExtractIncludesComponentResolvers @Inject constructor(
                 },
                 wrapArtifact,
                 {
-                    map(wrapArtifact) + includedArtifacts
+                    map(wrapArtifact)
                 }
             )
         } else {
@@ -241,47 +230,7 @@ open class ExtractIncludesComponentResolvers @Inject constructor(
     }
 
     override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactResolveResult) {
-        if (artifact is ExtractedIncludeComponentArtifactMetadata) {
-            resolvers.get().artifactResolver.resolveArtifact(artifact.owner, moduleSources, result)
-
-            if (result.isSuccessful) {
-                val urlId = ExtractedIncludeArtifactIdentifier(
-                    artifact.owner.id, checksumService.sha1(result.result), artifact.path
-                )
-
-                getOrResolve(artifact, urlId, extractedIncludeArtifactCache, cachePolicy, timeProvider, result) {
-                    buildOperationExecutor.call(object : CallableBuildOperation<Path> {
-                        override fun description() =
-                            BuildOperationDescriptor
-                                .displayName("Extracting ${artifact.path} from ${result.result}")
-                                .progressDisplayName("Extracting include from ${result.result}")
-                                .metadata(BuildOperationCategory.TASK)
-
-                        override fun call(context: BuildOperationContext) = context.callWithStatus {
-                            val file = Files.createTempFile("extracted-include", ".jar")
-
-                            zipFileSystem(result.result.toPath()).use {
-                                it.base.getPath(artifact.path).copyTo(file, true)
-                            }
-
-                            val output = extractedIncludeCache.fileStoreDirectory
-                                .resolve(checksumService.sha1(file.toFile()).toString())
-                                .resolve(artifact.path.substringAfterLast('/'))
-
-                            output.parent.createDirectories()
-                            file.copyTo(output)
-
-                            output
-                        }
-                    }).toFile()
-
-                }
-            }
-
-            if (!result.hasResult()) {
-                result.notFound(artifact.id)
-            }
-        } else if (artifact is ExtractIncludesComponentArtifactMetadata) {
+        if (artifact is ExtractIncludesComponentArtifactMetadata) {
             resolvers.get().artifactResolver.resolveArtifact(artifact.delegate, moduleSources, result)
 
             if (result.isSuccessful) {
@@ -297,7 +246,7 @@ open class ExtractIncludesComponentResolvers @Inject constructor(
 
                 val id = artifact.componentId
 
-                getOrResolve(artifact, artifact.id.asSerializable, includesExtractedArtifactCache, cachePolicy, timeProvider, result) {
+                getOrResolve(artifact, artifact.id.asSerializable, artifactCache, cachePolicy, timeProvider, result) {
                     buildOperationExecutor.call(object : CallableBuildOperation<Path> {
                         override fun description() = BuildOperationDescriptor
                             .displayName("Removing includes from ${result.result}")
@@ -319,7 +268,7 @@ open class ExtractIncludesComponentResolvers @Inject constructor(
                                 handler.remove(root)
                             }
 
-                            val output = includesExtractedCache.fileStoreDirectory
+                            val output = cacheManager.fileStoreDirectory
                                 .resolve(id.group)
                                 .resolve(id.module)
                                 .resolve(id.version)

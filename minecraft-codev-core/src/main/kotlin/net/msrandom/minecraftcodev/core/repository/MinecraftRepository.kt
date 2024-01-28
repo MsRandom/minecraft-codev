@@ -12,9 +12,11 @@ import org.gradle.api.artifacts.repositories.UrlArtifactRepository
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ComponentResolvers
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ConfiguredModuleComponentRepository
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ModuleComponentRepositoryAccess
+import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionParser
 import org.gradle.api.internal.artifacts.repositories.AbstractArtifactRepository
 import org.gradle.api.internal.artifacts.repositories.ResolutionAwareRepository
 import org.gradle.api.internal.artifacts.repositories.descriptor.FlatDirRepositoryDescriptor
+import org.gradle.api.internal.artifacts.repositories.descriptor.IvyRepositoryDescriptor
 import org.gradle.api.internal.artifacts.repositories.resolver.MetadataFetchingCost
 import org.gradle.api.internal.artifacts.repositories.transport.RepositoryTransport
 import org.gradle.api.internal.artifacts.repositories.transport.RepositoryTransportFactory
@@ -23,6 +25,7 @@ import org.gradle.api.internal.file.FileResolver
 import org.gradle.api.invocation.Gradle
 import org.gradle.api.model.ObjectFactory
 import org.gradle.internal.action.InstantiatingAction
+import org.gradle.internal.component.external.model.ModuleComponentResolveMetadata
 import org.gradle.internal.component.external.model.ModuleDependencyMetadata
 import org.gradle.internal.component.model.ComponentArtifactMetadata
 import org.gradle.internal.component.model.ComponentOverrideMetadata
@@ -34,10 +37,7 @@ import org.gradle.internal.reflect.Instantiator
 import org.gradle.internal.resolve.caching.ImplicitInputRecorder
 import org.gradle.internal.resolve.caching.ImplicitInputsCapturingInstantiator
 import org.gradle.internal.resolve.caching.ImplicitInputsProvidingService
-import org.gradle.internal.resolve.result.BuildableArtifactResolveResult
-import org.gradle.internal.resolve.result.BuildableArtifactSetResolveResult
-import org.gradle.internal.resolve.result.BuildableModuleComponentMetaDataResolveResult
-import org.gradle.internal.resolve.result.BuildableModuleVersionListingResolveResult
+import org.gradle.internal.resolve.result.*
 import org.gradle.internal.resource.local.FileStore
 import org.gradle.internal.service.DefaultServiceRegistry
 import org.gradle.internal.verifier.HttpRedirectVerifierFactory
@@ -54,11 +54,12 @@ interface MinecraftRepository : ArtifactRepository, UrlArtifactRepository, Metad
 
 open class MinecraftRepositoryImpl @Inject constructor(
     private val objectFactory: ObjectFactory,
+    versionParser: VersionParser,
     private val fileResolver: FileResolver,
     private val transportFactory: RepositoryTransportFactory,
     private val instantiatorFactory: InstantiatorFactory,
-    private val gradle: Gradle
-) : AbstractArtifactRepository(objectFactory), MinecraftRepository, ResolutionAwareRepository {
+    private val gradle: Gradle,
+) : AbstractArtifactRepository(objectFactory, versionParser), MinecraftRepository, ResolutionAwareRepository {
     private var url: Any = MinecraftRepository.URL
     private var allowInsecureProtocol = false
 
@@ -116,7 +117,17 @@ open class MinecraftRepositoryImpl @Inject constructor(
         }
     )
 
-    override fun getDescriptor() = FlatDirRepositoryDescriptor(name, emptyList())
+    override fun getDescriptor() = FlatDirRepositoryDescriptor(
+        name,
+        emptyList(),
+        IvyRepositoryDescriptor.Builder(name, null)
+            .setM2Compatible(false)
+            .setLayoutType("Unknown")
+            .setMetadataSources(emptyList())
+            .setAuthenticated(false)
+            .setAuthenticationSchemes(emptyList())
+            .create()
+    )
 
     private fun createInjectorForMetadataSuppliers(): ImplicitInputsCapturingInstantiator {
         val registry = DefaultServiceRegistry().apply {
@@ -139,7 +150,7 @@ open class MinecraftRepositoryImpl @Inject constructor(
         override fun isUpToDate(s: String, oldValue: Long?) = true
     }
 
-    class Resolver(private val name: String, val url: URI, val transport: RepositoryTransport, private val injector: Instantiator, gradle: Gradle, objectFactory: ObjectFactory) : ConfiguredModuleComponentRepository {
+    class Resolver(private val name: String, val url: URI, transport: RepositoryTransport, private val injector: Instantiator, gradle: Gradle, objectFactory: ObjectFactory) : ConfiguredModuleComponentRepository {
         val resourceAccessor: DefaultCacheAwareExternalResourceAccessor = objectFactory.newInstance(DefaultCacheAwareExternalResourceAccessor::class.java, transport.repository, getCacheProvider(gradle))
 
         private val access = NoOpAccess()
@@ -155,18 +166,18 @@ open class MinecraftRepositoryImpl @Inject constructor(
         override fun setComponentResolvers(resolver: ComponentResolvers) = Unit
         override fun getComponentMetadataInstantiator() = injector
 
-        class NoOpAccess : ModuleComponentRepositoryAccess {
+        class NoOpAccess : ModuleComponentRepositoryAccess<ModuleComponentResolveMetadata> {
             override fun listModuleVersions(dependency: ModuleDependencyMetadata, result: BuildableModuleVersionListingResolveResult) = Unit
 
             override fun resolveComponentMetaData(
                 moduleComponentIdentifier: ModuleComponentIdentifier,
                 requestMetaData: ComponentOverrideMetadata,
-                result: BuildableModuleComponentMetaDataResolveResult
+                result: BuildableModuleComponentMetaDataResolveResult<ModuleComponentResolveMetadata>
             ) = result.missing()
 
             override fun resolveArtifactsWithType(component: ComponentResolveMetadata, artifactType: ArtifactType, result: BuildableArtifactSetResolveResult) = Unit
 
-            override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactResolveResult){
+            override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactFileResolveResult) {
                 result.notFound(artifact.id)
             }
 

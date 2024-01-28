@@ -7,16 +7,11 @@ import org.gradle.api.attributes.CompatibilityCheckDetails
 class VersionPatternCompatibilityRule : AttributeCompatibilityRule<String> {
     override fun execute(details: CompatibilityCheckDetails<String>) {
         val consumerValue = details.consumerValue
-        val version = details.producerValue ?: osVersion()
 
-        if (consumerValue == null) {
-            details.compatible()
-        } else {
-            if (version matches Regex(consumerValue)) {
-                details.compatible()
-            } else {
-                details.incompatible()
-            }
+        when {
+            consumerValue == null -> details.compatible()
+            (details.producerValue ?: osVersion()) matches Regex(consumerValue) -> details.compatible()
+            else -> details.incompatible()
         }
     }
 }

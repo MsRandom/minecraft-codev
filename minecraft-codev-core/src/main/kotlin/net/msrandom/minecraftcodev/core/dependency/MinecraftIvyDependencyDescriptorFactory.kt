@@ -5,16 +5,16 @@ import org.gradle.api.artifacts.component.ComponentIdentifier
 import org.gradle.api.attributes.AttributeContainer
 import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
 import org.gradle.api.internal.artifacts.VersionConstraintInternal
-import org.gradle.api.internal.artifacts.ivyservice.moduleconverter.dependencies.AbstractIvyDependencyDescriptorFactory
+import org.gradle.api.internal.artifacts.ivyservice.moduleconverter.dependencies.AbstractDependencyMetadataConverter
 import org.gradle.api.internal.artifacts.ivyservice.moduleconverter.dependencies.ExcludeRuleConverter
 import org.gradle.internal.component.external.model.DefaultModuleComponentSelector
 import org.gradle.internal.component.model.LocalComponentDependencyMetadata
 import org.gradle.internal.component.model.LocalOriginDependencyMetadata
 import javax.inject.Inject
 
-open class MinecraftIvyDependencyDescriptorFactory @Inject constructor(excludeRuleConverter: ExcludeRuleConverter) :
-    AbstractIvyDependencyDescriptorFactory(excludeRuleConverter) {
-    override fun createDependencyDescriptor(
+open class MinecraftDependencyMetadataConverter @Inject constructor(excludeRuleConverter: ExcludeRuleConverter) :
+    AbstractDependencyMetadataConverter(excludeRuleConverter) {
+    override fun createDependencyMetadata(
         componentId: ComponentIdentifier,
         clientConfiguration: String?,
         attributes: AttributeContainer?,

@@ -110,7 +110,7 @@ open class DecompiledComponentResolvers @Inject constructor(
                 componentResult.metadata
             }
 
-            val configurations = dependency.selectConfigurations(
+            val configurations = dependency.selectVariants(
                 (configuration.attributes as AttributeContainerInternal).asImmutable(),
                 metadata,
                 project.dependencies.attributesSchema as AttributesSchemaInternal,
@@ -302,7 +302,7 @@ open class DecompiledComponentResolvers @Inject constructor(
         }
     }
 
-    override fun isFetchingMetadataCheap(identifier: ComponentIdentifier) = identifier is DecompiledComponentIdentifier && resolvers.get().componentResolver.isFetchingMetadataCheap(identifier)
+    override fun isFetchingMetadataCheap(identifier: ComponentIdentifier) = false
 
     override fun resolveArtifacts(
         component: ComponentResolveMetadata,

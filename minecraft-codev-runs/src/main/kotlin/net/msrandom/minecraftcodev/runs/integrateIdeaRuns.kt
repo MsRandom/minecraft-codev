@@ -27,7 +27,7 @@ fun Project.integrateIdeaRuns() {
                             val config = builder.build()
 
                             application.mainClass = config.mainClass.get()
-                            application.workingDirectory = config.workingDirectory.get().asFile.absolutePath
+                            application.workingDirectory = config.executableDirectory.get().asFile.absolutePath
                             application.envs = config.environment.get().mapValues { it.value.compile() }
                             application.programParameters = config.arguments.get().joinToString(" ", transform = MinecraftRunConfiguration.Argument::compile)
                             application.jvmArgs = config.jvmArguments.get().joinToString(" ", transform = MinecraftRunConfiguration.Argument::compile)

@@ -70,11 +70,7 @@ fun Project.createCompilationConfigurations(name: String, transitive: Boolean = 
 }
 
 fun Project.createTargetConfigurations(name: String, transitive: Boolean = false) {
-    fun createConfiguration(name: String, bucket: Boolean = false) = configurations.maybeCreate(name).apply {
-        if (bucket) {
-            isCanBeResolved = false
-        }
-
+    fun createConfiguration(name: String) = configurations.maybeCreate(name).apply {
         isCanBeConsumed = false
         isTransitive = transitive
     }
@@ -86,10 +82,9 @@ fun Project.createTargetConfigurations(name: String, transitive: Boolean = false
         val compilationConfigurationName = it.defaultSourceSet.disambiguateName(name)
 
         if (targetConfiguration.name != compilationConfigurationName) {
-            targetConfiguration.extendsFrom(createConfiguration(compilationConfigurationName, true))
+            targetConfiguration.extendsFrom(createConfiguration(compilationConfigurationName))
         }
     }, {
         createConfiguration(it.disambiguateName(name))
     })
 }
-

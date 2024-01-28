@@ -1,7 +1,7 @@
 plugins {
     java
-    kotlin("jvm") version "1.6.21"
-    kotlin("plugin.serialization") version "1.6.21" apply false
+    kotlin("jvm") version "1.8.+"
+    kotlin("plugin.serialization") version "1.8.+" apply false
     `java-gradle-plugin`
     `maven-publish`
 }
@@ -10,7 +10,7 @@ subprojects {
     apply(plugin = "java")
 
     java {
-        toolchain.languageVersion.set(JavaLanguageVersion.of(8))
+        toolchain.languageVersion.set(JavaLanguageVersion.of(11))
         withSourcesJar()
         withJavadocJar()
     }

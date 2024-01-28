@@ -11,13 +11,11 @@ gradlePlugin {
 }
 
 dependencies {
-    implementation(projects.minecraftCodevCore)
-
-    compileOnly(projects.minecraftCodevAccessWidener)
-    compileOnly(projects.minecraftCodevRemapper)
-    compileOnly(projects.minecraftCodevMixins)
-    compileOnly(projects.minecraftCodevIncludes)
-    compileOnly(projects.minecraftCodevRuns)
+    implementation(projects.minecraftCodevAccessWidener)
+    implementation(projects.minecraftCodevRemapper)
+    implementation(projects.minecraftCodevMixins)
+    implementation(projects.minecraftCodevIncludes)
+    implementation(projects.minecraftCodevRuns)
 }
 
 tasks.test {

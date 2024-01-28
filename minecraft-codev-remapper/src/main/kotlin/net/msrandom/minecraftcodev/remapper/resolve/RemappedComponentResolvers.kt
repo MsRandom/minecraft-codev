@@ -8,6 +8,7 @@ import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
 import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
+import net.msrandom.minecraftcodev.core.resolve.IvyDependencyDescriptorFactoriesProvider
 import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.getOrResolve
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentIdentifier
 import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers.Companion.addNamed
@@ -18,6 +19,7 @@ import net.msrandom.minecraftcodev.remapper.FieldAddDescVisitor
 import net.msrandom.minecraftcodev.remapper.JarRemapper
 import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
 import net.msrandom.minecraftcodev.remapper.RemapperExtension
+import net.msrandom.minecraftcodev.remapper.dependency.DslOriginRemappedDependencyMetadata
 import net.msrandom.minecraftcodev.remapper.dependency.RemappedDependencyMetadata
 import net.msrandom.minecraftcodev.remapper.dependency.RemappedDependencyMetadataWrapper
 import org.gradle.api.Project
@@ -62,6 +64,7 @@ import kotlin.io.path.*
 open class RemappedComponentResolvers @Inject constructor(
     private val configuration: Configuration,
     private val resolvers: ComponentResolversChainProvider,
+    private val dependencyDescriptorFactories: IvyDependencyDescriptorFactoriesProvider,
     private val project: Project,
     private val objects: ObjectFactory,
     private val cachePolicy: CachePolicy,
@@ -88,7 +91,11 @@ open class RemappedComponentResolvers @Inject constructor(
     override fun getArtifactSelector() = this
     override fun getArtifactResolver() = this
 
-    private fun buildClasspath(selectedVariants: MutableList<Pair<ModuleSources, List<ComponentArtifactMetadata>>>, dependencies: Iterable<DependencyMetadata>, visited: MutableSet<ComponentSelector> = hashSetOf()) {
+    private fun buildClasspath(
+        selectedVariants: MutableList<Pair<ModuleSources, List<ComponentArtifactMetadata>>>,
+        dependencies: Iterable<DependencyMetadata>,
+        visited: MutableSet<ComponentSelector> = hashSetOf()
+    ) {
         for (dependency in dependencies) {
             val selector = dependency.selector
 
@@ -114,7 +121,7 @@ open class RemappedComponentResolvers @Inject constructor(
                 componentResult.metadata
             }
 
-            val configurations = dependency.selectConfigurations(
+            val configurations = dependency.selectVariants(
                 (configuration.attributes as AttributeContainerInternal).asImmutable(),
                 metadata,
                 project.dependencies.attributesSchema as AttributesSchemaInternal,
@@ -157,6 +164,7 @@ open class RemappedComponentResolvers @Inject constructor(
                     buildClasspath(selectedArtifacts, transitiveDependencies)
 
                     RemappedComponentArtifactMetadata(
+                        project,
                         artifact as ModuleComponentArtifactMetadata,
                         identifier,
                         sourceNamespace,
@@ -210,7 +218,7 @@ open class RemappedComponentResolvers @Inject constructor(
 
                         if (identifier.original is MinecraftComponentIdentifier && identifier.original.isBase) {
                             // Add the mappings file if we're remapping Minecraft.
-                            artifacts + MappingsArtifact(identifier, identifier.mappingsConfiguration)
+                            artifacts + MappingsArtifact(project, identifier, identifier.mappingsConfiguration)
                         } else {
                             artifacts
                         }
@@ -225,7 +233,6 @@ open class RemappedComponentResolvers @Inject constructor(
     override fun resolve(dependency: DependencyMetadata, acceptor: VersionSelector?, rejector: VersionSelector?, result: BuildableComponentIdResolveResult) {
         if (dependency is RemappedDependencyMetadata) {
             resolvers.get().componentIdResolver.resolve(dependency.delegate, acceptor, rejector, result)
-
             if (result.hasResult() && result.failure == null) {
                 val metadata = result.metadata
                 val mappingsConfiguration = dependency.relatedConfiguration ?: MinecraftCodevRemapperPlugin.MAPPINGS_CONFIGURATION
@@ -235,7 +242,8 @@ open class RemappedComponentResolvers @Inject constructor(
                         result.id as ModuleComponentIdentifier,
                         dependency.sourceNamespace,
                         dependency.targetNamespace,
-                        mappingsConfiguration
+                        mappingsConfiguration,
+                        dependency is LocalOriginDependencyMetadata
                     )
 
                     if (metadata == null) {
@@ -258,7 +266,7 @@ open class RemappedComponentResolvers @Inject constructor(
         }
     }
 
-    override fun isFetchingMetadataCheap(identifier: ComponentIdentifier) = identifier is RemappedComponentIdentifier && resolvers.get().componentResolver.isFetchingMetadataCheap(identifier)
+    override fun isFetchingMetadataCheap(identifier: ComponentIdentifier) = false
 
     override fun resolveArtifacts(
         component: ComponentResolveMetadata,
@@ -296,9 +304,9 @@ open class RemappedComponentResolvers @Inject constructor(
                     resolvers.get().artifactResolver.resolveArtifact(artifact.delegate, moduleSources, result)
 
                     if (result.isSuccessful) {
-                        val (platforms, namespaces) = project.extensions.getByType(MinecraftCodevExtension::class.java).detectModInfo(result.result.toPath())
+                        val (platforms, versions, namespaces) = project.extensions.getByType(MinecraftCodevExtension::class.java).detectModInfo(result.result.toPath())
 
-                        if (platforms.isEmpty() && namespaces.isEmpty()) {
+                        if (!id.requested && platforms.isEmpty() && versions.isEmpty() && namespaces.isEmpty()) {
                             return
                         }
 
@@ -316,6 +324,31 @@ open class RemappedComponentResolvers @Inject constructor(
 
                         getOrResolve(artifact, urlId, artifactCache, cachePolicy, timeProvider, result) {
                             val classpath = mutableSetOf<File>()
+
+                            val minecraftVersion = versions.firstOrNull()
+
+                            if (minecraftVersion != null) {
+                                val extraClasspathDependencies = project
+                                    .extension<MinecraftCodevExtension>()
+                                    .extension<RemapperExtension>()
+                                    .remapClasspathRules
+                                    .get()
+                                    .flatMap { it(sourceNamespace, id.targetNamespace.name, minecraftVersion, id.mappingsConfiguration) }
+
+                                for (extraClasspathDependency in extraClasspathDependencies) {
+                                    val dependency = dependencyDescriptorFactories.get().firstNotNullOfOrNull {
+                                        if (it.canConvert(extraClasspathDependency)) {
+                                            it.createDependencyMetadata(id, configuration.name, configuration.attributes, extraClasspathDependency)
+                                        } else {
+                                            null
+                                        }
+                                    } ?: continue
+
+                                    project.visitDependencyArtifacts(resolvers, configuration, dependency, true) {
+                                        classpath.add(it)
+                                    }
+                                }
+                            }
 
                             for ((sources, artifacts) in artifact.selectedArtifacts) {
                                 for (dependencyArtifact in artifacts) {
@@ -410,7 +443,8 @@ class RemappedComponentIdentifier(
     val original: ModuleComponentIdentifier,
     val sourceNamespace: MappingsNamespace?,
     val targetNamespace: MappingsNamespace,
-    val mappingsConfiguration: String
+    val mappingsConfiguration: String,
+    val requested: Boolean,
 ) : ModuleComponentIdentifier by original {
     override fun getDisplayName() = "${original.displayName} (Remapped to $targetNamespace)"
 

@@ -22,9 +22,10 @@ import org.gradle.api.internal.attributes.ImmutableAttributes
 import org.gradle.api.internal.attributes.ImmutableAttributesFactory
 import org.gradle.api.internal.component.ComponentTypeRegistry
 import org.gradle.api.invocation.Gradle
+import org.gradle.api.model.ObjectFactory
 import org.gradle.internal.Describables
 import org.gradle.internal.component.external.model.DefaultModuleComponentIdentifier
-import org.gradle.internal.component.model.ComponentResolveMetadata
+import org.gradle.internal.component.model.ComponentArtifactResolveState
 import org.gradle.internal.component.model.DefaultComponentOverrideMetadata
 import org.gradle.internal.model.CalculatedValueContainerFactory
 import org.gradle.internal.resolve.caching.ComponentMetadataSupplierRuleExecutor
@@ -43,9 +44,8 @@ open class CodevArtifactResolutionQuery @Inject constructor(
     private val componentTypeRegistry: ComponentTypeRegistry,
     private val attributesFactory: ImmutableAttributesFactory,
     private val componentMetadataSupplierRuleExecutor: ComponentMetadataSupplierRuleExecutor,
-    private val artifactTypeRegistry: ArtifactTypeRegistry,
-    private val calculatedValueContainerFactory: CalculatedValueContainerFactory,
-    private val gradle: Gradle
+    private val objectFactory: ObjectFactory,
+    private val gradle: Gradle,
 ) : ArtifactResolutionQuery {
     private val componentIds = mutableSetOf<ComponentIdentifier>()
     private var componentType: Class<out Component>? = null
@@ -92,7 +92,7 @@ open class CodevArtifactResolutionQuery @Inject constructor(
             componentMetadataSupplierRuleExecutor
         ))
 
-        val componentResolvers = ComponentResolversChain(resolvers, artifactTypeRegistry, calculatedValueContainerFactory)
+        val componentResolvers =  objectFactory.newInstance(ComponentResolversChain::class.java, resolvers)
 
         val componentMetaDataResolver = componentResolvers.componentResolver
         val artifactResolver = ErrorHandlingArtifactResolver(componentResolvers.artifactResolver)
@@ -115,7 +115,7 @@ open class CodevArtifactResolutionQuery @Inject constructor(
     private fun buildComponentResult(componentId: ComponentIdentifier, componentMetaDataResolver: ComponentMetaDataResolver, artifactResolver: ArtifactResolver): ComponentArtifactsResult {
         val moduleResolveResult = DefaultBuildableComponentResolveResult()
         componentMetaDataResolver.resolve(componentId, DefaultComponentOverrideMetadata.EMPTY, moduleResolveResult)
-        val component = moduleResolveResult.metadata
+        val component = moduleResolveResult.state.prepareForArtifactResolution()
         val componentResult = DefaultComponentArtifactsResult(component.id)
         for (artifactType in artifactTypes) {
             addArtifacts(componentResult, artifactType, component, artifactResolver)
@@ -123,12 +123,12 @@ open class CodevArtifactResolutionQuery @Inject constructor(
         return componentResult
     }
 
-    private fun <T : Artifact> addArtifacts(artifacts: DefaultComponentArtifactsResult, type: Class<T>, component: ComponentResolveMetadata, artifactResolver: ArtifactResolver) {
+    private fun <T : Artifact> addArtifacts(artifacts: DefaultComponentArtifactsResult, type: Class<T>, component: ComponentArtifactResolveState, artifactResolver: ArtifactResolver) {
         val artifactSetResolveResult = DefaultBuildableArtifactSetResolveResult()
-        artifactResolver.resolveArtifactsWithType(component, convertType(type), artifactSetResolveResult)
+        component.resolveArtifactsWithType(artifactResolver, convertType(type), artifactSetResolveResult)
         for (artifactMetaData in artifactSetResolveResult.result) {
             val resolveResult = DefaultBuildableArtifactResolveResult()
-            artifactResolver.resolveArtifact(artifactMetaData, component.sources, resolveResult)
+            artifactResolver.resolveArtifact(component.resolveMetadata, artifactMetaData, resolveResult)
             if (resolveResult.failure != null) {
                 artifacts.addArtifact(DefaultUnresolvedArtifactResult(artifactMetaData.id, type, resolveResult.failure))
             } else {
@@ -140,7 +140,7 @@ open class CodevArtifactResolutionQuery @Inject constructor(
                             emptyList(),
                             Describables.of(component.id.displayName),
                             type,
-                            resolveResult.result
+                            resolveResult.result.file
                         )
                     )
                 )

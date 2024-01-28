@@ -11,7 +11,7 @@ gradlePlugin {
 }
 
 dependencies {
-    implementation(group = "org.quiltmc", name = "quiltflower", version = "1.8.1")
+    implementation(group = "org.vineflower", name = "vineflower", version = "1.9.3")
 
     compileOnly(projects.minecraftCodevGradleLinkage)
     implementation(projects.minecraftCodevCore)

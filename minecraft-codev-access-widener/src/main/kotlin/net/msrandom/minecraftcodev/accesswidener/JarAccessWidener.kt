@@ -1,7 +1,5 @@
 package net.msrandom.minecraftcodev.accesswidener
 
-import net.fabricmc.accesswidener.AccessWidener
-import net.fabricmc.accesswidener.AccessWidenerClassVisitor
 import net.msrandom.minecraftcodev.core.utils.walk
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.objectweb.asm.ClassReader
@@ -13,7 +11,7 @@ import java.nio.file.StandardCopyOption
 import kotlin.io.path.*
 
 object JarAccessWidener {
-    fun accessWiden(accessWidener: AccessWidener, input: Path): Path {
+    fun accessWiden(accessWidener: AccessModifiers, input: Path): Path {
         val output = Files.createTempFile("access-widened", ".tmp.jar")
 
         output.deleteExisting()
@@ -27,11 +25,18 @@ object JarAccessWidener {
                         outputPath.parent?.createDirectories()
 
                         if (name.endsWith(".class")) {
-                            val reader = path.inputStream().use(::ClassReader)
-                            val writer = ClassWriter(0)
-                            reader.accept(AccessWidenerClassVisitor.createClassVisitor(Opcodes.ASM9, writer, accessWidener), 0)
+                            val className = name.substring(1, name.length - ".class".length)
 
-                            outputPath.writeBytes(writer.toByteArray())
+                            if (accessWidener.canModifyAccess(className)) {
+                                val reader = path.inputStream().use(::ClassReader)
+                                val writer = ClassWriter(0)
+
+                                reader.accept(AccessModifierClassVisitor(Opcodes.ASM9, writer, accessWidener), 0)
+
+                                outputPath.writeBytes(writer.toByteArray())
+                            } else {
+                                path.copyTo(outputPath, StandardCopyOption.COPY_ATTRIBUTES)
+                            }
                         } else {
                             path.copyTo(outputPath, StandardCopyOption.COPY_ATTRIBUTES)
                         }

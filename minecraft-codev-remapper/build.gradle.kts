@@ -13,7 +13,7 @@ gradlePlugin {
 dependencies {
     api(group = "net.fabricmc", name = "mapping-io", version = "0.3.0")
 
-    api(group = "net.fabricmc", name = "tiny-remapper", version = "0.8.6")
+    api(group = "net.fabricmc", name = "tiny-remapper", version = "0.8.11")
 
     compileOnly(projects.minecraftCodevGradleLinkage)
 
