@@ -16,10 +16,11 @@ data class ModuleLibraryIdentifier(val group: String, val module: String, val ve
 
     @Serializer(ModuleLibraryIdentifier::class)
     class IdentifierSerializer : KSerializer<ModuleLibraryIdentifier> {
-        override fun deserialize(decoder: Decoder) =
-            load(decoder.decodeString())
+        override fun deserialize(decoder: Decoder) = load(decoder.decodeString())
 
-        override fun serialize(encoder: Encoder, value: ModuleLibraryIdentifier) =
-            encoder.encodeString(value.toString())
+        override fun serialize(
+            encoder: Encoder,
+            value: ModuleLibraryIdentifier,
+        ) = encoder.encodeString(value.toString())
     }
 }

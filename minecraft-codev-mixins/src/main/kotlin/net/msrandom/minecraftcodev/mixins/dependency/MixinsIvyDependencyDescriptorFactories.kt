@@ -11,13 +11,13 @@ import javax.inject.Inject
 
 open class MixinDependencyMetadataConverter @Inject constructor(
     excludeRuleConverter: ExcludeRuleConverter,
-    private val descriptorFactory: DependencyMetadataFactory
+    private val descriptorFactory: DependencyMetadataFactory,
 ) : AbstractDependencyMetadataConverter(excludeRuleConverter) {
     override fun createDependencyMetadata(
         componentId: ComponentIdentifier,
         clientConfiguration: String?,
         attributes: AttributeContainer?,
-        dependency: ModuleDependency
+        dependency: ModuleDependency,
     ): LocalOriginDependencyMetadata {
         val source = (dependency as MixinDependency<*>).sourceDependency
         val sourceDescriptor = descriptorFactory.createDependencyMetadata(componentId, clientConfiguration, attributes, source)
@@ -25,7 +25,7 @@ open class MixinDependencyMetadataConverter @Inject constructor(
         return DslOriginMixinDependencyMetadata(
             sourceDescriptor,
             dependency,
-            dependency.mixinsConfiguration
+            dependency.mixinsConfiguration,
         )
     }
 
@@ -34,13 +34,13 @@ open class MixinDependencyMetadataConverter @Inject constructor(
 
 open class SKipMixinsDependencyMetadataConverter @Inject constructor(
     excludeRuleConverter: ExcludeRuleConverter,
-    private val descriptorFactory: DependencyMetadataFactory
+    private val descriptorFactory: DependencyMetadataFactory,
 ) : AbstractDependencyMetadataConverter(excludeRuleConverter) {
     override fun createDependencyMetadata(
         componentId: ComponentIdentifier,
         clientConfiguration: String?,
         attributes: AttributeContainer?,
-        dependency: ModuleDependency
+        dependency: ModuleDependency,
     ): LocalOriginDependencyMetadata {
         val source = (dependency as SkipMixinsDependency<*>).sourceDependency
         val sourceDescriptor = descriptorFactory.createDependencyMetadata(componentId, clientConfiguration, attributes, source)

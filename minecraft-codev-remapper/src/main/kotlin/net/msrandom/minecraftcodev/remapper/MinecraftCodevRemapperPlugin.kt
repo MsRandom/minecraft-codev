@@ -11,16 +11,18 @@ import org.gradle.api.invocation.Gradle
 import org.gradle.api.plugins.PluginAware
 
 class MinecraftCodevRemapperPlugin<T : PluginAware> : Plugin<T> {
-    private fun applyGradle(gradle: Gradle) = gradle.registerCustomDependency(
-        "remapped",
-        RemappedDependencyMetadataConverter::class.java,
-        RemappedComponentResolvers::class.java
-    )
+    private fun applyGradle(gradle: Gradle) =
+        gradle.registerCustomDependency(
+            "remapped",
+            RemappedDependencyMetadataConverter::class.java,
+            RemappedComponentResolvers::class.java,
+        )
 
-    override fun apply(target: T) = applyPlugin(target, ::applyGradle) {
-        extensions.getByType(MinecraftCodevExtension::class.java).extensions.create("remapper", RemapperExtension::class.java)
-        createTargetConfigurations(MAPPINGS_CONFIGURATION)
-    }
+    override fun apply(target: T) =
+        applyPlugin(target, ::applyGradle) {
+            extensions.getByType(MinecraftCodevExtension::class.java).extensions.create("remapper", RemapperExtension::class.java)
+            createTargetConfigurations(MAPPINGS_CONFIGURATION)
+        }
 
     companion object {
         const val NAMED_MAPPINGS_NAMESPACE = "named"

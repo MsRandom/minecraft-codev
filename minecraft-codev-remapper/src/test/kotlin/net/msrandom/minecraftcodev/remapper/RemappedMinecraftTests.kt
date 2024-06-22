@@ -12,7 +12,11 @@ class RemappedMinecraftTests {
         GradleRunner.create()
             .withProjectDir(File("basic-remapped-test"))
             .withPluginClasspath()
-            .withArguments("jar", "printCompileClasspath", "-s")
+            .withArguments(
+                "printCompileClasspath",
+                "jar",
+                "-s",
+            )
             .forwardOutput()
             .withDebug(true)
             .build()

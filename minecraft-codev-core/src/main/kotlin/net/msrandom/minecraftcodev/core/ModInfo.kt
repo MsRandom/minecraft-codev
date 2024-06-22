@@ -3,7 +3,7 @@ package net.msrandom.minecraftcodev.core
 enum class ModInfoType {
     Platform,
     Version,
-    Namespace
+    Namespace,
 }
 
 data class ModInfo(val type: ModInfoType, val info: String, val score: Int)

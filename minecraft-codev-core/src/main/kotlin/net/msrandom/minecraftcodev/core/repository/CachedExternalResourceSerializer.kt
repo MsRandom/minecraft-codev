@@ -41,7 +41,10 @@ data class CachedExternalResourceSerializer(private val commonRootPath: Path) : 
     }
 
     @Throws(Exception::class)
-    override fun write(encoder: Encoder, value: CachedExternalResource) {
+    override fun write(
+        encoder: Encoder,
+        value: CachedExternalResource,
+    ) {
         encoder.writeBoolean(value.cachedFile != null)
         if (value.cachedFile != null) {
             encoder.writeString(relativizeAndNormalizeFilePath(value.cachedFile))
@@ -69,7 +72,9 @@ data class CachedExternalResourceSerializer(private val commonRootPath: Path) : 
         val systemDependentPath = commonRootPath.relativize(filePath).toString()
         return if (filePath.fileSystem.separator != "/") {
             systemDependentPath.replace(filePath.fileSystem.separator, "/")
-        } else systemDependentPath
+        } else {
+            systemDependentPath
+        }
     }
 
     @Throws(IOException::class)

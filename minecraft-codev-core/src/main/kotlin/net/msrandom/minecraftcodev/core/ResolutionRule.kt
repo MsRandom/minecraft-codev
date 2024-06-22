@@ -14,15 +14,14 @@ open class ResolutionData<T>(
     val visitor: T,
     private val messageDigest: MessageDigest,
 ) {
-    fun decorate(inputStream: InputStream): InputStream =
-        DigestInputStream(inputStream, messageDigest)
+    fun decorate(inputStream: InputStream): InputStream = DigestInputStream(inputStream, messageDigest)
 }
 
 fun interface ResolutionRule<T : ResolutionData<*>> {
     fun load(
         path: Path,
         extension: String,
-        data: T
+        data: T,
     ): Boolean
 }
 
@@ -31,7 +30,7 @@ fun interface ZipResolutionRule<T : ResolutionData<*>> {
         path: Path,
         fileSystem: FileSystem,
         isJar: Boolean,
-        data: T
+        data: T,
     ): Boolean
 }
 
@@ -40,7 +39,9 @@ fun <T : ResolutionData<*>> ObjectFactory.zipResolutionRules() =
     listProperty(ZipResolutionRule::class.java) as ListProperty<ZipResolutionRule<T>>
 
 @Suppress("UNCHECKED_CAST")
-fun <T : ResolutionData<*>> ObjectFactory.resolutionRules(zipResolutionRules: ListProperty<ZipResolutionRule<T>>): ListProperty<ResolutionRule<T>> {
+fun <T : ResolutionData<*>> ObjectFactory.resolutionRules(
+    zipResolutionRules: ListProperty<ZipResolutionRule<T>>,
+): ListProperty<ResolutionRule<T>> {
     val rules = listProperty(ResolutionRule::class.java) as ListProperty<ResolutionRule<T>>
 
     rules.add { path, extension, data ->

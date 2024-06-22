@@ -14,9 +14,16 @@ import org.gradle.internal.serialize.Serializer
 
 data class PatchedArtifactIdentifier(val id: ComponentArtifactIdentifier, private val patchesHash: HashCode) {
     object ArtifactSerializer : Serializer<PatchedArtifactIdentifier> {
-        override fun read(decoder: Decoder) = PatchedArtifactIdentifier(MinecraftArtifactResolver.artifactIdSerializer.read(decoder), HashCode.fromBytes(decoder.readBinary()))
+        override fun read(decoder: Decoder) =
+            PatchedArtifactIdentifier(
+                MinecraftArtifactResolver.artifactIdSerializer.read(decoder),
+                HashCode.fromBytes(decoder.readBinary()),
+            )
 
-        override fun write(encoder: Encoder, value: PatchedArtifactIdentifier) {
+        override fun write(
+            encoder: Encoder,
+            value: PatchedArtifactIdentifier,
+        ) {
             MinecraftArtifactResolver.artifactIdSerializer.write(encoder, value.id)
             encoder.writeBinary(value.patchesHash.toByteArray())
         }
@@ -25,15 +32,16 @@ data class PatchedArtifactIdentifier(val id: ComponentArtifactIdentifier, privat
 
 class FmlLoaderWrappedMetadata(
     val delegate: ModuleComponentArtifactMetadata,
-    private val id: FmlLoaderWrappedComponentIdentifier
+    private val id: FmlLoaderWrappedComponentIdentifier,
 ) : ModuleComponentArtifactMetadata by delegate {
-    override fun getId(): ModuleComponentArtifactIdentifier = delegate.id.let {
-        if (it is DefaultModuleComponentArtifactIdentifier) {
-            DefaultModuleComponentArtifactIdentifier(id, it.name)
-        } else {
-            ModuleComponentFileArtifactIdentifier(id, delegate.id.fileName)
+    override fun getId(): ModuleComponentArtifactIdentifier =
+        delegate.id.let {
+            if (it is DefaultModuleComponentArtifactIdentifier) {
+                DefaultModuleComponentArtifactIdentifier(id, it.name)
+            } else {
+                ModuleComponentFileArtifactIdentifier(id, delegate.id.fileName)
+            }
         }
-    }
 
     override fun getComponentId() = id
 }

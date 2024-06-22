@@ -21,13 +21,13 @@ class MinecraftCodevMixinsPlugin<T : PluginAware> : Plugin<T> {
         gradle.registerCustomDependency(
             "mixin",
             MixinDependencyMetadataConverter::class.java,
-            MixinComponentResolvers::class.java
+            MixinComponentResolvers::class.java,
         )
 
         gradle.registerCustomDependency(
             "skip-mixins",
             SKipMixinsDependencyMetadataConverter::class.java,
-            SkipMixinsComponentResolvers::class.java
+            SkipMixinsComponentResolvers::class.java,
         )
     }
 

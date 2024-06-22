@@ -10,7 +10,10 @@ import java.io.File
 import java.nio.file.Path
 
 data class CachedArtifactSerializer(private val commonRootPath: Path) : Serializer<CachedArtifact> {
-    override fun write(encoder: Encoder, value: CachedArtifact) {
+    override fun write(
+        encoder: Encoder,
+        value: CachedArtifact,
+    ) {
         encoder.writeBoolean(value.isMissing)
         encoder.writeLong(value.cachedAt)
         val hash = value.descriptorHash.toByteArray()
@@ -56,11 +59,12 @@ data class CachedArtifactSerializer(private val commonRootPath: Path) : Serializ
     }
 
     private fun denormalizeAndResolveFilePath(relativePath: String): File {
-        val systemDependantPath = if (commonRootPath.fileSystem.separator != "/") {
-            relativePath.replace("/", commonRootPath.fileSystem.separator)
-        } else {
-            relativePath
-        }
+        val systemDependantPath =
+            if (commonRootPath.fileSystem.separator != "/") {
+                relativePath.replace("/", commonRootPath.fileSystem.separator)
+            } else {
+                relativePath
+            }
 
         return commonRootPath.resolve(systemDependantPath).toFile()
     }

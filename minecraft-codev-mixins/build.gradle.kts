@@ -5,7 +5,8 @@ plugins {
 gradlePlugin {
     plugins.create("minecraftCodevMixins") {
         id = project.name
-        description = "A Minecraft Codev module that allows applying mixins to Minecraft dependencies and injecting mixins into run configurations."
+        description = "A Minecraft Codev module that allows applying mixins to Minecraft dependencies " +
+            "and injecting mixins into run configurations."
         implementationClass = "net.msrandom.minecraftcodev.mixins.MinecraftCodevMixinsPlugin"
     }
 }

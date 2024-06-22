@@ -19,15 +19,14 @@ data class MinecraftVersionMetadata(
     val libraries: List<Library>,
     val type: String,
     val mainClass: String,
-    val minecraftArguments: String = ""
+    val minecraftArguments: String = "",
 ) {
     @Serializable
     data class Arguments(
         @Serializable(ArgumentListSerializer::class)
         val game: List<Argument>,
-
         @Serializable(ArgumentListSerializer::class)
-        val jvm: List<Argument>
+        val jvm: List<Argument>,
     )
 
     @Serializable
@@ -45,7 +44,7 @@ data class MinecraftVersionMetadata(
         Allow,
 
         @SerialName("disallow")
-        Disallow
+        Disallow,
     }
 
     @Serializable
@@ -54,7 +53,7 @@ data class MinecraftVersionMetadata(
         val sha1: String,
         val size: Long,
         val totalSize: Long,
-        @Serializable(URISerializer::class) val url: URI
+        @Serializable(URISerializer::class) val url: URI,
     )
 
     @Serializable
@@ -62,7 +61,7 @@ data class MinecraftVersionMetadata(
         val path: String = "",
         val sha1: String,
         val size: Long,
-        @Serializable(URISerializer::class) val url: URI
+        @Serializable(URISerializer::class) val url: URI,
     )
 
     @Serializable
@@ -74,7 +73,7 @@ data class MinecraftVersionMetadata(
         val extract: ExtractData? = null,
         val name: ModuleLibraryIdentifier,
         val natives: Map<String, String> = emptyMap(),
-        val rules: List<Rule> = emptyList()
+        val rules: List<Rule> = emptyList(),
     ) {
         @Serializable
         data class LibraryDownloads(val artifact: Download? = null, val classifiers: Map<String, Download> = emptyMap())
@@ -84,31 +83,32 @@ data class MinecraftVersionMetadata(
     }
 
     class ArgumentListSerializer : JsonTransformingSerializer<List<Argument>>(ListSerializer(Argument.serializer())) {
-        override fun transformDeserialize(element: JsonElement) = if (element is JsonArray) {
-            JsonArray(
-                element.map {
-                    if (it is JsonPrimitive) {
-                        JsonObject(
-                            mapOf("value" to JsonArray(listOf(it)))
-                        )
-                    } else {
-                        val rules = it.jsonObject["rules"]
-                        val value = it.jsonObject["value"]
-                        if (rules is JsonArray && value is JsonPrimitive) {
+        override fun transformDeserialize(element: JsonElement) =
+            if (element is JsonArray) {
+                JsonArray(
+                    element.map {
+                        if (it is JsonPrimitive) {
                             JsonObject(
-                                mapOf(
-                                    "rules" to rules,
-                                    "value" to JsonArray(listOf(value))
-                                )
+                                mapOf("value" to JsonArray(listOf(it))),
                             )
                         } else {
-                            it
+                            val rules = it.jsonObject["rules"]
+                            val value = it.jsonObject["value"]
+                            if (rules is JsonArray && value is JsonPrimitive) {
+                                JsonObject(
+                                    mapOf(
+                                        "rules" to rules,
+                                        "value" to JsonArray(listOf(value)),
+                                    ),
+                                )
+                            } else {
+                                it
+                            }
                         }
-                    }
-                }
-            )
-        } else {
-            element
-        }
+                    },
+                )
+            } else {
+                element
+            }
     }
 }

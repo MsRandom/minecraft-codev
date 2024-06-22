@@ -9,13 +9,15 @@ import org.gradle.api.internal.artifacts.ivyservice.moduleconverter.dependencies
 import org.gradle.internal.component.model.LocalOriginDependencyMetadata
 import javax.inject.Inject
 
-open class DecompiledDependencyMetadataConverter @Inject constructor(excludeRuleConverter: ExcludeRuleConverter, private val descriptorFactory: DependencyMetadataFactory) :
+open class DecompiledDependencyMetadataConverter
+@Inject
+constructor(excludeRuleConverter: ExcludeRuleConverter, private val descriptorFactory: DependencyMetadataFactory) :
     AbstractDependencyMetadataConverter(excludeRuleConverter) {
     override fun createDependencyMetadata(
         componentId: ComponentIdentifier,
         clientConfiguration: String?,
         attributes: AttributeContainer?,
-        dependency: ModuleDependency
+        dependency: ModuleDependency,
     ): LocalOriginDependencyMetadata {
         val source = (dependency as DecompiledDependency<*>).sourceDependency
         val sourceDescriptor = descriptorFactory.createDependencyMetadata(componentId, clientConfiguration, attributes, source)

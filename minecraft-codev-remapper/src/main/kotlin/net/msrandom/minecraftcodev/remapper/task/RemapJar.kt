@@ -44,16 +44,25 @@ abstract class RemapJar : Jar() {
 
     @TaskAction
     fun remap() {
-        val remapper = project
-            .extensions
-            .getByType(MinecraftCodevExtension::class.java)
-            .extensions
-            .getByType(RemapperExtension::class.java)
+        val remapper =
+            project
+                .extensions
+                .getByType(MinecraftCodevExtension::class.java)
+                .extensions
+                .getByType(RemapperExtension::class.java)
 
         // TODO This will break in contexts where the mapping rules expect an object factory with a resolver chain provider
         val mappings = remapper.loadMappings(mappings.get(), objectFactory, true)
 
-        val remapped = JarRemapper.remap(remapper, mappings.tree, sourceNamespace.get(), targetNamespace.get(), input.asFile.get().toPath(), classpath)
+        val remapped =
+            JarRemapper.remap(
+                remapper,
+                mappings.tree,
+                sourceNamespace.get(),
+                targetNamespace.get(),
+                input.asFile.get().toPath(),
+                classpath,
+            )
 
         remapped.copyTo(archiveFile.get().asFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
     }

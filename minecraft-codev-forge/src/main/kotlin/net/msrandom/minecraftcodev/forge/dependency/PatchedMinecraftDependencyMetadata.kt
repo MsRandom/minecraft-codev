@@ -10,20 +10,23 @@ import org.gradle.internal.component.model.LocalOriginDependencyMetadata
 
 sealed interface PatchedMinecraftDependencyMetadata : ConfiguredDependencyMetadata
 
-class PatchedMinecraftDependencyMetadataWrapper(private val delegate: DependencyMetadata, override val relatedConfiguration: String?) :
+class PatchedMinecraftDependencyMetadataWrapper(private val delegate: DependencyMetadata, override val relatedConfiguration: String) :
     PatchedMinecraftDependencyMetadata,
     DependencyMetadata by delegate
 
-class DslOriginPatchedMinecraftDependencyMetadata(private val delegate: LocalOriginDependencyMetadata, private val source: Dependency, override val relatedConfiguration: String?) :
+class DslOriginPatchedMinecraftDependencyMetadata(private val delegate: LocalOriginDependencyMetadata, private val source: Dependency, override val relatedConfiguration: String) :
     LocalOriginDependencyMetadata by delegate,
     DslOriginDependencyMetadata,
     PatchedMinecraftDependencyMetadata {
     override fun withTarget(target: ComponentSelector) =
         DslOriginPatchedMinecraftDependencyMetadata(delegate.withTarget(target), source, relatedConfiguration)
 
-    override fun withTargetAndArtifacts(target: ComponentSelector, artifacts: List<IvyArtifactName>) =
-        DslOriginPatchedMinecraftDependencyMetadata(delegate.withTargetAndArtifacts(target, artifacts), source, relatedConfiguration)
+    override fun withTargetAndArtifacts(
+        target: ComponentSelector,
+        artifacts: List<IvyArtifactName>,
+    ) = DslOriginPatchedMinecraftDependencyMetadata(delegate.withTargetAndArtifacts(target, artifacts), source, relatedConfiguration)
 
     override fun getSource() = source
+
     override fun forced() = DslOriginPatchedMinecraftDependencyMetadata(delegate.forced(), source, relatedConfiguration)
 }

@@ -9,12 +9,16 @@ import org.gradle.internal.serialize.Serializer
 
 data class DecompiledArtifactIdentifier(val id: ComponentArtifactIdentifier, private val artifactHash: HashCode) {
     object ArtifactSerializer : Serializer<DecompiledArtifactIdentifier> {
-        override fun read(decoder: Decoder) = DecompiledArtifactIdentifier(
-            artifactIdSerializer.read(decoder),
-            HashCode.fromBytes(decoder.readBinary())
-        )
+        override fun read(decoder: Decoder) =
+            DecompiledArtifactIdentifier(
+                artifactIdSerializer.read(decoder),
+                HashCode.fromBytes(decoder.readBinary()),
+            )
 
-        override fun write(encoder: Encoder, value: DecompiledArtifactIdentifier) {
+        override fun write(
+            encoder: Encoder,
+            value: DecompiledArtifactIdentifier,
+        ) {
             artifactIdSerializer.write(encoder, value.id)
             encoder.writeBinary(value.artifactHash.toByteArray())
         }

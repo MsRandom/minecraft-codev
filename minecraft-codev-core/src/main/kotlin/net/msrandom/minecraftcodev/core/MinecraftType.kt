@@ -28,7 +28,8 @@ enum class MinecraftType(val module: String) {
     /**
      * Marker module holding a dependency to everything [Client] needs in a special natives directory during runtime for things like java.library.path and org.lwjgl.librarypath.
      */
-    ClientNatives(MinecraftComponentResolvers.CLIENT_NATIVES_MODULE);
+    ClientNatives(MinecraftComponentResolvers.CLIENT_NATIVES_MODULE),
+    ;
 
     override fun toString() = module
 }

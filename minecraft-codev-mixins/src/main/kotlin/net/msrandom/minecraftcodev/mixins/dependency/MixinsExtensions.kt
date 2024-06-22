@@ -28,62 +28,74 @@ val <T : ModuleDependency> T.skipMixins
 val FileCollectionDependency.skipMixins
     get() = skipMixins()
 
-fun KotlinDependencyHandler.mixins(dependencyNotation: Any) = (this as DefaultKotlinDependencyHandler).let {
-    it.project.dependencies.add(it.parent.mixinsConfigurationName, dependencyNotation)
-}
+fun KotlinDependencyHandler.mixins(dependencyNotation: Any) =
+    (this as DefaultKotlinDependencyHandler).let {
+        it.project.dependencies.add(it.parent.mixinsConfigurationName, dependencyNotation)
+    }
 
-fun KotlinDependencyHandler.mixins(dependencyNotation: String, configure: ExternalModuleDependency.() -> Unit) =
-    (mixins(dependencyNotation) as ExternalModuleDependency).also(configure)
+fun KotlinDependencyHandler.mixins(
+    dependencyNotation: String,
+    configure: ExternalModuleDependency.() -> Unit,
+) = (mixins(dependencyNotation) as ExternalModuleDependency).also(configure)
 
-fun <T : Dependency> KotlinDependencyHandler.mixins(dependency: T, configure: T.() -> Unit) = (this as DefaultKotlinDependencyHandler).let {
+fun <T : Dependency> KotlinDependencyHandler.mixins(
+    dependency: T,
+    configure: T.() -> Unit,
+) = (this as DefaultKotlinDependencyHandler).let {
     configure(dependency)
     it.project.dependencies.add(it.parent.mixinsConfigurationName, dependency)
 }
 
-fun KotlinDependencyHandler.mixins(dependencyNotation: String, configure: Closure<*>) =
-    mixins(dependencyNotation) { project.configure(this, configure) }
+fun KotlinDependencyHandler.mixins(
+    dependencyNotation: String,
+    configure: Closure<*>,
+) = mixins(dependencyNotation) { project.configure(this, configure) }
 
-fun <T : Dependency> KotlinDependencyHandler.mixins(dependency: T, configure: Closure<*>) =
-    mixins(dependency) { project.configure(this, configure) }
+fun <T : Dependency> KotlinDependencyHandler.mixins(
+    dependency: T,
+    configure: Closure<*>,
+) = mixins(dependency) { project.configure(this, configure) }
 
 @JvmOverloads
-fun <T : ModuleDependency> T.mixin(arguments: Map<String, Any>, configure: Action<T>? = null) = getMixin(arguments, configure)
+fun <T : ModuleDependency> T.mixin(
+    arguments: Map<String, Any>,
+    configure: Action<T>? = null,
+) = getMixin(arguments, configure)
 
 fun FileCollectionDependency.mixin(arguments: Map<String, Any>) = getMixin(arguments)
 
 fun <T : ModuleDependency> T.mixin(
-    mixinsConfiguration: String? = null,
-    configure: Action<T>? = null
+    mixinsConfiguration: String = "",
+    configure: Action<T>? = null,
 ) = getMixin(mixinsConfiguration, configure)
 
-fun FileCollectionDependency.mixin(
-    mixinsConfiguration: String? = null
-) = getMixin(mixinsConfiguration)
+fun FileCollectionDependency.mixin(mixinsConfiguration: String? = null) = getMixin(mixinsConfiguration)
 
 @JvmOverloads
-fun <T : ModuleDependency> T.getMixin(arguments: Map<String, Any>, configure: Action<T>? = null) =
-    getMixin(arguments["mixinsConfiguration"]?.toString(), configure)
+fun <T : ModuleDependency> T.getMixin(
+    arguments: Map<String, Any>,
+    configure: Action<T>? = null,
+) = getMixin(arguments["mixinsConfiguration"]?.toString().orEmpty(), configure)
 
-fun FileCollectionDependency.getMixin(arguments: Map<String, Any>) =
-    getMixin(arguments["mixinsConfiguration"]?.toString())
+fun FileCollectionDependency.getMixin(arguments: Map<String, Any>) = getMixin(arguments["mixinsConfiguration"]?.toString())
 
 @Suppress("UNCHECKED_CAST")
 fun <T : ModuleDependency> T.getMixin(
-    mixinsConfiguration: String? = null,
-    configure: Action<T>? = null
-): MixinDependency<T> = MixinDependency(copy() as T, mixinsConfiguration).apply {
-    configure?.execute(sourceDependency)
-}
+    mixinsConfiguration: String = "",
+    configure: Action<T>? = null,
+): MixinDependency<T> =
+    MixinDependency(copy() as T, mixinsConfiguration).apply {
+        configure?.execute(sourceDependency)
+    }
 
-fun FileCollectionDependency.getMixin(
-    mixinsConfiguration: String? = null
-): FileCollectionDependency = TODO("Not yet implemented")
+fun FileCollectionDependency.getMixin(mixinsConfiguration: String? = null): FileCollectionDependency = TODO("Not yet implemented")
 
 fun <T : ModuleDependency> T.skipMixins(configure: Action<T>? = null) = getSkipMixins(configure)
 
 fun FileCollectionDependency.skipMixins(): FileCollectionDependency = TODO("Not yet implemented")
 
 @Suppress("UNCHECKED_CAST")
-fun <T : ModuleDependency> T.getSkipMixins(configure: Action<T>? = null): SkipMixinsDependency<T> = SkipMixinsDependency(copy() as T).apply {
-    configure?.execute(sourceDependency)
-}
+fun <T : ModuleDependency> T.getSkipMixins(configure: Action<T>? = null): SkipMixinsDependency<T> =
+    SkipMixinsDependency(copy() as T).apply {
+        configure?.execute(sourceDependency)
+    }

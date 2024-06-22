@@ -16,6 +16,7 @@ fun <T : ModuleDependency> T.withSources(configure: Action<T>? = null) = getWith
 fun SelfResolvingDependency.withSources(): SelfResolvingDependency = TODO("Not yet implemented")
 
 @Suppress("UNCHECKED_CAST")
-fun <T : ModuleDependency> T.getWithSources(configure: Action<T>?): DecompiledDependency<T> = DecompiledDependency(copy() as T).apply {
-    configure?.execute(sourceDependency)
-}
+fun <T : ModuleDependency> T.getWithSources(configure: Action<T>?): DecompiledDependency<T> =
+    DecompiledDependency(copy() as T).apply {
+        configure?.execute(sourceDependency)
+    }

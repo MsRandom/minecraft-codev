@@ -12,9 +12,18 @@ import kotlin.io.path.outputStream
 
 const val CODEV_MAPPING_NAMESPACE_ATTRIBUTE = "Codev-Mapping-Namespace"
 
-fun addNamespaceManifest(fileSystem: FileSystem, namespace: String) = addNamespaceManifest(fileSystem.getPath("META-INF", "MANIFEST.MF"), namespace)
+fun addNamespaceManifest(
+    fileSystem: FileSystem,
+    namespace: String,
+) = addNamespaceManifest(
+    fileSystem.getPath("META-INF", "MANIFEST.MF"),
+    namespace,
+)
 
-fun addNamespaceManifest(manifestPath: Path, namespace: String) {
+fun addNamespaceManifest(
+    manifestPath: Path,
+    namespace: String,
+) {
     val manifest = if (manifestPath.exists()) manifestPath.inputStream().use(::Manifest) else Manifest()
 
     manifest.mainAttributes.putIfAbsent(Attributes.Name.MANIFEST_VERSION, "1.0")

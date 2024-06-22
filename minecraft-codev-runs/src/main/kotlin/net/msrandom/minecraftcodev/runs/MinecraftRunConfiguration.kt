@@ -13,10 +13,11 @@ import org.gradle.api.tasks.SourceSetContainer
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinJvmCompilation
 import java.io.File
 import java.nio.file.Path
-import java.sql.Struct
 import javax.inject.Inject
 
-abstract class MinecraftRunConfiguration @Inject constructor(val project: Project) {
+abstract class MinecraftRunConfiguration
+@Inject
+constructor(val project: Project) {
     abstract val mainClass: Property<String>
         @Input
         get
@@ -79,28 +80,31 @@ abstract class MinecraftRunConfiguration @Inject constructor(val project: Projec
         }
     }
 
-    fun mod(name: String) = modClasspaths.computeIfAbsent(name) {
-        project.objects.fileCollection().apply { finalizeValueOnRead() }
-    }
+    fun mod(name: String) =
+        modClasspaths.computeIfAbsent(name) {
+            project.objects.fileCollection().apply { finalizeValueOnRead() }
+        }
 
     class Argument(val parts: List<Any?>) {
         constructor(vararg part: Any?) : this(listOf(*part))
 
-        fun compile(): String = parts.joinToString("") {
-            if (it is Provider<*>) {
-                map(it.get())
-            } else {
-                map(it)
+        fun compile(): String =
+            parts.joinToString("") {
+                if (it is Provider<*>) {
+                    map(it.get())
+                } else {
+                    map(it)
+                }
             }
-        }
 
         private companion object {
-            private fun map(part: Any?) = when (part) {
-                is Path -> part.toAbsolutePath().toString()
-                is File -> part.absolutePath
-                is Argument -> part.compile()
-                else -> part.toString()
-            }
+            private fun map(part: Any?) =
+                when (part) {
+                    is Path -> part.toAbsolutePath().toString()
+                    is File -> part.absolutePath
+                    is Argument -> part.compile()
+                    else -> part.toString()
+                }
         }
     }
 }

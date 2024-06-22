@@ -3,13 +3,14 @@ package net.msrandom.minecraftcodev.remapper.dependency
 import org.gradle.api.artifacts.Dependency
 import org.gradle.api.artifacts.ModuleDependency
 
-class RemappedDependency<T : ModuleDependency>(
+data class RemappedDependency<T : ModuleDependency>(
     val sourceDependency: T,
-    internal val sourceNamespace: String?,
+    internal val sourceNamespace: String,
     val targetNamespace: String,
-    internal val mappingsConfiguration: String?
+    internal val mappingsConfiguration: String,
 ) : ModuleDependency by sourceDependency {
-    override fun contentEquals(dependency: Dependency) = dependency is RemappedDependency<*> &&
+    override fun contentEquals(dependency: Dependency) =
+        dependency is RemappedDependency<*> &&
             sourceDependency.contentEquals(dependency.sourceDependency) &&
             sourceNamespace == dependency.sourceNamespace &&
             targetNamespace == dependency.targetNamespace &&

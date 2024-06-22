@@ -17,55 +17,63 @@ import org.gradle.api.internal.artifacts.repositories.DefaultBaseRepositoryFacto
 import org.gradle.api.internal.artifacts.repositories.resolver.AbstractDependenciesMetadataAdapter
 import org.gradle.api.internal.attributes.ImmutableAttributes
 import org.gradle.api.internal.attributes.ImmutableAttributesFactory
-import org.gradle.api.internal.project.DefaultProject
 import org.gradle.api.internal.project.ProjectInternal
 import org.gradle.api.model.ObjectFactory
 import org.gradle.configurationcache.extensions.serviceOf
-import org.gradle.internal.component.model.DependencyMetadata
 import org.gradle.internal.reflect.Instantiator
 
-private val baseRepository = DefaultRepositoryHandler::class.java.getDeclaredField("repositoryFactory").apply {
-    isAccessible = true
-}
+private val baseRepository =
+    DefaultRepositoryHandler::class.java.getDeclaredField("repositoryFactory").apply {
+        isAccessible = true
+    }
 
-private val objectFactory = DefaultBaseRepositoryFactory::class.java.getDeclaredField("objectFactory").apply {
-    isAccessible = true
-}
+private val objectFactory =
+    DefaultBaseRepositoryFactory::class.java.getDeclaredField("objectFactory").apply {
+        isAccessible = true
+    }
 
-private val adapterImplementationType = AbstractDependenciesMetadataAdapter::class.java.getDeclaredMethod("adapterImplementationType").apply {
-    isAccessible = true
-}
+private val adapterImplementationType =
+    AbstractDependenciesMetadataAdapter::class.java.getDeclaredMethod("adapterImplementationType").apply {
+        isAccessible = true
+    }
 
 private fun RepositoryHandler.getObjectFactory() = objectFactory[baseRepository[this]] as ObjectFactory
 
-fun RepositoryHandler.minecraft(): MinecraftRepository = (this as DefaultArtifactRepositoryContainer)
-    .addRepository(getObjectFactory().newInstance(MinecraftRepositoryImpl::class.java), "minecraft")
+fun RepositoryHandler.minecraft(): MinecraftRepository =
+    (this as DefaultArtifactRepositoryContainer)
+        .addRepository(getObjectFactory().newInstance(MinecraftRepositoryImpl::class.java), "minecraft")
 
-fun RepositoryHandler.minecraft(configure: Action<MinecraftRepository>): MinecraftRepository = (this as DefaultArtifactRepositoryContainer)
-    .addRepository(getObjectFactory().newInstance(MinecraftRepositoryImpl::class.java), "minecraft", configure)
+fun RepositoryHandler.minecraft(configure: Action<MinecraftRepository>): MinecraftRepository =
+    (this as DefaultArtifactRepositoryContainer)
+        .addRepository(getObjectFactory().newInstance(MinecraftRepositoryImpl::class.java), "minecraft", configure)
 
 @Suppress("unused", "UnusedReceiverParameter")
-fun DependencyConstraintHandler.minecraft(name: Any, version: String?) =
-    DefaultDependencyConstraint(MinecraftComponentResolvers.GROUP, name.toString(), version.orEmpty())
+fun DependencyConstraintHandler.minecraft(
+    name: Any,
+    version: String?,
+) = DefaultDependencyConstraint(MinecraftComponentResolvers.GROUP, name.toString(), version.orEmpty())
 
-fun DependencyConstraintHandler.minecraft(name: Any) =
-    minecraft(name, null)
+fun DependencyConstraintHandler.minecraft(name: Any) = minecraft(name, null)
 
 fun DependencyConstraintHandler.minecraft(notation: Map<String, Any>) =
     minecraft(notation.getValue("name"), notation["version"]?.toString())
 
 // Used to allow dependency metadata rules to add custom module dependencies
 @Suppress("UNCHECKED_CAST")
-fun DependenciesMetadata<*>.add(project: Project, dependency: ModuleDependency) {
+fun DependenciesMetadata<*>.add(
+    project: Project,
+    dependency: ModuleDependency,
+) {
     val id = (project as ProjectInternal).owner.componentIdentifier
 
-    val descriptor = project.gradle.getDependencyDescriptorFactories().firstNotNullOf {
-        if (it.canConvert(dependency)) {
-            it.createDependencyMetadata(id, Dependency.DEFAULT_CONFIGURATION, ImmutableAttributes.EMPTY, dependency)
-        } else {
-            null
+    val descriptor =
+        project.gradle.getDependencyDescriptorFactories().firstNotNullOf {
+            if (it.canConvert(dependency)) {
+                it.createDependencyMetadata(id, Dependency.DEFAULT_CONFIGURATION, ImmutableAttributes.EMPTY, dependency)
+            } else {
+                null
+            }
         }
-    }
 
     val dependencies = this as MutableList<org.gradle.api.artifacts.DependencyMetadata<*>>
 

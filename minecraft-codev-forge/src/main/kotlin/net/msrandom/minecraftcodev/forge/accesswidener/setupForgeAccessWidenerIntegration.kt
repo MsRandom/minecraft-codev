@@ -61,7 +61,13 @@ fun Project.setupForgeAccessWidenerIntegration() {
                     }
 
                     for ((methodSignature, methodValue) in classValue.methods) {
-                        visitor.visitMethod(name, methodSignature.name, methodSignature.descriptor.toString(), methodValue.access, methodValue.final)
+                        visitor.visitMethod(
+                            name,
+                            methodSignature.name,
+                            methodSignature.descriptor.toString(),
+                            methodValue.access,
+                            methodValue.final,
+                        )
                     }
                 }
             }

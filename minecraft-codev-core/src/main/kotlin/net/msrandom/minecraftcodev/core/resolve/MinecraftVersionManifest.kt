@@ -18,12 +18,16 @@ data class MinecraftVersionManifest(val latest: Map<String, String>, val version
         @Serializable(URISerializer::class) val url: URI,
         val sha1: String?,
         @Serializable(OffsetDateTimeSerializer::class) val time: OffsetDateTime,
-        @Serializable(OffsetDateTimeSerializer::class) val releaseTime: OffsetDateTime
+        @Serializable(OffsetDateTimeSerializer::class) val releaseTime: OffsetDateTime,
     )
 
     @Serializer(OffsetDateTime::class)
     class OffsetDateTimeSerializer : KSerializer<OffsetDateTime> {
         override fun deserialize(decoder: Decoder): OffsetDateTime = OffsetDateTime.parse(decoder.decodeString())
-        override fun serialize(encoder: Encoder, value: OffsetDateTime) = encoder.encodeString(value.toString())
+
+        override fun serialize(
+            encoder: Encoder,
+            value: OffsetDateTime,
+        ) = encoder.encodeString(value.toString())
     }
 }

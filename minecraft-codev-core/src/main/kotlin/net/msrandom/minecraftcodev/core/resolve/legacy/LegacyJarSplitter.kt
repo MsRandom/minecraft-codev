@@ -35,15 +35,20 @@ object LegacyJarSplitter {
     fun FileSystem.withAssets(action: (Path) -> Unit) {
         getPath("/").walk {
             filter {
-                it.isRegularFile() && it.toString().let { path ->
-                    !path.endsWith(".class") && (!path.startsWith("/META-INF") || (!path.endsWith(".DSA") && !path.endsWith(".SF")))
-                }
+                it.isRegularFile() &&
+                    it.toString().let { path ->
+                        !path.endsWith(".class") && (!path.startsWith("/META-INF") || (!path.endsWith(".DSA") && !path.endsWith(".SF")))
+                    }
             }.forEach(action)
         }
     }
 
     // Copied from fabric's stitch and modified
-    private fun <T> mergeLists(client: List<T>, server: List<T>, getName: T.() -> String): ListMergeResult<T> {
+    private fun <T> mergeLists(
+        client: List<T>,
+        server: List<T>,
+        getName: T.() -> String,
+    ): ListMergeResult<T> {
         val merged = mutableListOf<T>()
         val clientOnly = mutableListOf<T>()
         val serverOnly = mutableListOf<T>()
@@ -73,13 +78,21 @@ object LegacyJarSplitter {
         return ListMergeResult(merged, clientOnly, serverOnly)
     }
 
-    private fun <T> addAnnotation(list: List<T>, property: KMutableProperty1<T, MutableList<AnnotationNode>?>, annotation: String) {
+    private fun <T> addAnnotation(
+        list: List<T>,
+        property: KMutableProperty1<T, MutableList<AnnotationNode>?>,
+        annotation: String,
+    ) {
         for (value in list) {
             addAnnotation(value, property, annotation)
         }
     }
 
-    private fun <T> addAnnotation(owner: T, property: KMutableProperty1<T, MutableList<AnnotationNode>?>, annotation: String) {
+    private fun <T> addAnnotation(
+        owner: T,
+        property: KMutableProperty1<T, MutableList<AnnotationNode>?>,
+        annotation: String,
+    ) {
         var value = property(owner)
 
         if (value == null) {
@@ -87,7 +100,7 @@ object LegacyJarSplitter {
             property.set(owner, value)
         }
 
-        value.add(AnnotationNode(annotation))
+        value.add(AnnotationNode(Type.getObjectType(annotation).descriptor))
     }
 
     fun <R> useFileSystems(action: ((LockingFileSystem) -> Unit) -> R): R {
@@ -127,83 +140,84 @@ object LegacyJarSplitter {
         }
     }
 
-    fun MethodNode.collectTypeReferences() = buildList {
-        val descriptor = Type.getMethodType(desc)
-        add(descriptor.returnType)
-        addAll(descriptor.argumentTypes)
+    fun MethodNode.collectTypeReferences() =
+        buildList {
+            val descriptor = Type.getMethodType(desc)
+            add(descriptor.returnType)
+            addAll(descriptor.argumentTypes)
 
-        for (instruction in instructions) {
-            when (instruction) {
-                is FieldInsnNode -> {
-                    add(Type.getObjectType(instruction.owner))
-                    add(Type.getType(instruction.desc))
-                }
+            for (instruction in instructions) {
+                when (instruction) {
+                    is FieldInsnNode -> {
+                        add(Type.getObjectType(instruction.owner))
+                        add(Type.getType(instruction.desc))
+                    }
 
-                is FrameNode -> {
-                    if (instruction.local != null) {
-                        for (any in instruction.local) {
-                            if (any is String) {
-                                add(Type.getObjectType(any))
+                    is FrameNode -> {
+                        if (instruction.local != null) {
+                            for (any in instruction.local) {
+                                if (any is String) {
+                                    add(Type.getObjectType(any))
+                                }
+                            }
+                        }
+
+                        if (instruction.stack != null) {
+                            for (any in instruction.stack) {
+                                if (any is String) {
+                                    add(Type.getObjectType(any))
+                                }
                             }
                         }
                     }
 
-                    if (instruction.stack != null) {
-                        for (any in instruction.stack) {
-                            if (any is String) {
-                                add(Type.getObjectType(any))
+                    is InvokeDynamicInsnNode -> {
+                        fun addHandle(handle: Handle) {
+                            val bsmDescriptor = Type.getType(handle.desc)
+
+                            if (bsmDescriptor.sort == Type.METHOD) {
+                                add(bsmDescriptor.returnType)
+                                addAll(bsmDescriptor.argumentTypes)
+                            } else {
+                                add(bsmDescriptor)
+                            }
+                            add(Type.getObjectType(handle.owner))
+                        }
+
+                        val invokeDescriptor = Type.getMethodType(instruction.desc)
+                        add(invokeDescriptor.returnType)
+                        addAll(invokeDescriptor.argumentTypes)
+
+                        addHandle(instruction.bsm)
+
+                        for (arg in instruction.bsmArgs) {
+                            if (arg is Type) {
+                                add(arg)
+                            } else if (arg is Handle) {
+                                addHandle(arg)
                             }
                         }
                     }
-                }
 
-                is InvokeDynamicInsnNode -> {
-                    fun addHandle(handle: Handle) {
-                        val bsmDescriptor = Type.getType(handle.desc)
-
-                        if (bsmDescriptor.sort == Type.METHOD) {
-                            add(bsmDescriptor.returnType)
-                            addAll(bsmDescriptor.argumentTypes)
-                        } else {
-                            add(bsmDescriptor)
-                        }
-                        add(Type.getObjectType(handle.owner))
-                    }
-
-                    val invokeDescriptor = Type.getMethodType(instruction.desc)
-                    add(invokeDescriptor.returnType)
-                    addAll(invokeDescriptor.argumentTypes)
-
-                    addHandle(instruction.bsm)
-
-                    for (arg in instruction.bsmArgs) {
-                        if (arg is Type) {
-                            add(arg)
-                        } else if (arg is Handle) {
-                            addHandle(arg)
+                    is LdcInsnNode -> {
+                        val cst = instruction.cst
+                        if (cst is Type) {
+                            add(if (cst.sort == Type.ARRAY) cst.elementType else cst)
                         }
                     }
-                }
 
-                is LdcInsnNode -> {
-                    val cst = instruction.cst
-                    if (cst is Type) {
-                        add(if (cst.sort == Type.ARRAY) cst.elementType else cst)
+                    is MethodInsnNode -> {
+                        val methodDescriptor = Type.getMethodType(instruction.desc)
+                        add(methodDescriptor.returnType)
+                        addAll(methodDescriptor.argumentTypes)
+                        add(Type.getObjectType(instruction.owner))
                     }
-                }
 
-                is MethodInsnNode -> {
-                    val methodDescriptor = Type.getMethodType(instruction.desc)
-                    add(methodDescriptor.returnType)
-                    addAll(methodDescriptor.argumentTypes)
-                    add(Type.getObjectType(instruction.owner))
+                    is MultiANewArrayInsnNode -> add(Type.getType(instruction.desc).elementType)
+                    is TypeInsnNode -> add(Type.getObjectType(instruction.desc))
                 }
-
-                is MultiANewArrayInsnNode -> add(Type.getType(instruction.desc).elementType)
-                is TypeInsnNode -> add(Type.getObjectType(instruction.desc))
             }
         }
-    }
 
     fun split(
         checksumService: ChecksumService,
@@ -212,7 +226,7 @@ object LegacyJarSplitter {
         outputCommon: Path,
         outputClient: Path,
         client: Path,
-        server: Path
+        server: Path,
     ): JarSplittingResult {
         useFileSystems { handle ->
             val clientFs = zipFileSystem(client).also(handle)
@@ -264,7 +278,11 @@ object LegacyJarSplitter {
 
                             newClientFs.base.getPath(pathName).deleteExisting()
                         } else {
-                            clientEntry.copyTo(newClientFs.base.getPath(pathName), StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
+                            clientEntry.copyTo(
+                                newClientFs.base.getPath(pathName),
+                                StandardCopyOption.COPY_ATTRIBUTES,
+                                StandardCopyOption.REPLACE_EXISTING,
+                            )
                         }
                     } else {
                         newClientFs.base.getPath(pathName).deleteExisting()
@@ -321,8 +339,10 @@ object LegacyJarSplitter {
             addNamespaceManifest(newClientFs.base, MappingsNamespace.OBF)
         }
 
-        val commonPath = pathFunction(makeId(MinecraftComponentResolvers.COMMON_MODULE, version), checksumService.sha1(outputCommon.toFile()).toString())
-        val clientPath = pathFunction(makeId(MinecraftComponentResolvers.CLIENT_MODULE, version), checksumService.sha1(outputClient.toFile()).toString())
+        val commonPath =
+            pathFunction(makeId(MinecraftComponentResolvers.COMMON_MODULE, version), checksumService.sha1(outputCommon.toFile()).toString())
+        val clientPath =
+            pathFunction(makeId(MinecraftComponentResolvers.CLIENT_MODULE, version), checksumService.sha1(outputClient.toFile()).toString())
 
         commonPath.parent.createDirectories()
         clientPath.parent.createDirectories()
@@ -331,21 +351,36 @@ object LegacyJarSplitter {
 
         return JarSplittingResult(
             commonPath,
-            clientPath
+            clientPath,
         )
     }
 
-    internal fun makeId(name: String, version: String) = DefaultModuleComponentArtifactIdentifier(
+    internal fun makeId(
+        name: String,
+        version: String,
+    ) = DefaultModuleComponentArtifactIdentifier(
         DefaultModuleComponentIdentifier.newId(DefaultModuleIdentifier.newId(MinecraftComponentResolvers.GROUP, name), version),
         name,
         ArtifactTypeDefinition.JAR_TYPE,
-        ArtifactTypeDefinition.JAR_TYPE
+        ArtifactTypeDefinition.JAR_TYPE,
     )
 
-    fun copyAssets(client: FileSystem, server: FileSystem, commonOut: FileSystem, clientOut: FileSystem, legacy: Boolean = server.getPath("data").notExists()) {
+    fun copyAssets(
+        client: FileSystem,
+        server: FileSystem,
+        commonOut: FileSystem,
+        clientOut: FileSystem,
+        legacy: Boolean =
+            server.getPath(
+                "data",
+            ).notExists(),
+    ) {
         client.withAssets { path ->
             val name = path.toString()
-            if (server.getPath(name).notExists() || (!legacy && ("lang" in name || (path.parent.name == "assets" && path.name.startsWith('.'))))) {
+            if (server.getPath(
+                    name,
+                ).notExists() || (!legacy && ("lang" in name || (path.parent.name == "assets" && path.name.startsWith('.'))))
+            ) {
                 val newPath = clientOut.getPath(name)
                 newPath.parent?.createDirectories()
                 path.copyTo(newPath, StandardCopyOption.COPY_ATTRIBUTES)

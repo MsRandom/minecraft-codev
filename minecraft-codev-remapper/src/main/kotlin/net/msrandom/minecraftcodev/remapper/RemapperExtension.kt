@@ -39,7 +39,10 @@ import kotlin.io.path.inputStream
 import kotlin.io.path.notExists
 
 class MappingTreeProvider(val tree: MemoryMappingTree) {
-    fun withTree(sourceNamespace: String, action: Action<MemoryMappingTree>) {
+    fun withTree(
+        sourceNamespace: String,
+        action: Action<MemoryMappingTree>,
+    ) {
         if (tree.srcNamespace != sourceNamespace) {
             // Need to switch source to match
             val newTree = MemoryMappingTree()
@@ -58,26 +61,40 @@ class MappingTreeProvider(val tree: MemoryMappingTree) {
 class MappingResolutionData(
     visitor: MappingTreeProvider,
     messageDigest: MessageDigest,
-
     val configuration: Configuration,
     val objectFactory: ObjectFactory,
 ) : ResolutionData<MappingTreeProvider>(visitor, messageDigest)
 
 fun interface ExtraFileRemapper {
-    operator fun invoke(mappings: MappingTreeView, fileSystem: FileSystem, sourceNamespace: String, targetNamespace: String)
+    operator fun invoke(
+        mappings: MappingTreeView,
+        fileSystem: FileSystem,
+        sourceNamespace: String,
+        targetNamespace: String,
+    )
 }
 
 fun interface RemapClasspathRule {
-    operator fun invoke(sourceNamespace: String, targetNamespace: String, version: String, mappingsConfiguration: String): Iterable<ModuleDependency>
+    operator fun invoke(
+        sourceNamespace: String,
+        targetNamespace: String,
+        version: String,
+        mappingsConfiguration: String,
+    ): Iterable<ModuleDependency>
 }
 
-fun sourceNamespaceVisitor(data: MappingResolutionData, sourceNamespace: String) = if (data.visitor.tree.srcNamespace == sourceNamespace) {
+fun sourceNamespaceVisitor(
+    data: MappingResolutionData,
+    sourceNamespace: String,
+) = if (data.visitor.tree.srcNamespace == sourceNamespace) {
     data.visitor.tree
 } else {
-    MappingSourceNsSwitch(data.visitor.tree, data.visitor.tree.srcNamespace)
+    MappingSourceNsSwitch(data.visitor.tree, data.visitor.tree.srcNamespace ?: MappingsNamespace.OBF)
 }
 
-open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory, private val project: Project) {
+open class RemapperExtension
+@Inject
+constructor(objectFactory: ObjectFactory, private val project: Project) {
     val zipMappingsResolution = objectFactory.zipResolutionRules<MappingResolutionData>()
     val mappingsResolution = objectFactory.resolutionRules(zipMappingsResolution)
     val extraFileRemappers: ListProperty<ExtraFileRemapper> = objectFactory.listProperty(ExtraFileRemapper::class.java)
@@ -93,7 +110,7 @@ open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory, p
                         it,
                         MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE,
                         MappingsNamespace.OBF,
-                        sourceNamespaceVisitor(data, MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
+                        sourceNamespaceVisitor(data, MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE),
                     )
                 }
 
@@ -130,12 +147,16 @@ open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory, p
         }
     }
 
-    private fun handleParchment(data: MappingResolutionData, path: Path) {
+    private fun handleParchment(
+        data: MappingResolutionData,
+        path: Path,
+    ) {
         data.visitor.withTree(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE) {
             val visitor = it
-            val parchment = data.decorate(path.inputStream()).use {
-                json.decodeFromStream<Parchment>(it)
-            }
+            val parchment =
+                data.decorate(path.inputStream()).use {
+                    json.decodeFromStream<Parchment>(it)
+                }
 
             do {
                 if (visitor.visitHeader()) {
@@ -148,7 +169,10 @@ open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory, p
                             return@CLASS_LOOP
                         }
 
-                        fun visitComment(element: Parchment.Element, type: MappedElementKind) {
+                        fun visitComment(
+                            element: Parchment.Element,
+                            type: MappedElementKind,
+                        ) {
                             element.javadoc?.let {
                                 if (it.lines.isNotEmpty()) {
                                     visitor.visitComment(type, it.lines.joinToString("\n"))
@@ -159,7 +183,11 @@ open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory, p
                         visitComment(classElement, MappedElementKind.CLASS)
 
                         classElement.fields?.forEach FIELD_LOOP@{ fieldElement ->
-                            if (!visitor.visitField(fieldElement.name, fieldElement.descriptor) || !visitor.visitElementContent(MappedElementKind.METHOD)) {
+                            if (!visitor.visitField(
+                                    fieldElement.name,
+                                    fieldElement.descriptor,
+                                ) || !visitor.visitElementContent(MappedElementKind.METHOD)
+                            ) {
                                 return@FIELD_LOOP
                             }
 
@@ -167,7 +195,11 @@ open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory, p
                         }
 
                         classElement.methods?.forEach METHOD_LOOP@{ methodElement ->
-                            if (!visitor.visitMethod(methodElement.name, methodElement.descriptor) || !visitor.visitElementContent(MappedElementKind.METHOD)) {
+                            if (!visitor.visitMethod(
+                                    methodElement.name,
+                                    methodElement.descriptor,
+                                ) || !visitor.visitElementContent(MappedElementKind.METHOD)
+                            ) {
                                 return@METHOD_LOOP
                             }
 
@@ -185,7 +217,11 @@ open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory, p
         }
     }
 
-    fun loadMappings(files: Configuration, objects: ObjectFactory, resolve: Boolean) = mappingsCache.computeIfAbsent(files) { configuration ->
+    fun loadMappings(
+        files: Configuration,
+        objects: ObjectFactory,
+        resolve: Boolean,
+    ) = mappingsCache.computeIfAbsent(files) { configuration ->
         val tree = MemoryMappingTree()
         val md = MessageDigest.getInstance("SHA1")
 
@@ -219,15 +255,16 @@ open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory, p
                         ImmutableAttributes.EMPTY,
                         null,
                         project.serviceOf(),
-                        project.serviceOf()
-                    )
+                        project.serviceOf(),
+                    ),
                 )
 
-                ComponentResolversChain(resolvers, project.serviceOf(), project.serviceOf())
+                ComponentResolversChain(resolvers, project.serviceOf(), project.serviceOf(), project.serviceOf())
             }
 
             for (dependency in configuration.allDependencies) {
-                project.visitConfigurationFiles({ resolvers }, configuration, dependency) { file ->
+                project.visitConfigurationFiles({ resolvers }, configuration, dependency) { supplier ->
+                    val file = supplier.get()
                     for (rule in mappingsResolution.get()) {
                         if (rule.load(file.toPath(), file.extension, data)) {
                             break
@@ -239,11 +276,16 @@ open class RemapperExtension @Inject constructor(objectFactory: ObjectFactory, p
 
         Mappings(
             tree,
-            HashCode.fromBytes(md.digest())
+            HashCode.fromBytes(md.digest()),
         )
     }
 
-    fun remapFiles(mappings: MappingTreeView, fileSystem: FileSystem, sourceNamespace: String, targetNamespace: String) {
+    fun remapFiles(
+        mappings: MappingTreeView,
+        fileSystem: FileSystem,
+        sourceNamespace: String,
+        targetNamespace: String,
+    ) {
         for (extraMapper in extraFileRemappers.get()) {
             extraMapper(mappings, fileSystem, sourceNamespace, targetNamespace)
         }

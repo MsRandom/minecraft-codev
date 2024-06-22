@@ -21,46 +21,51 @@ import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 
 open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
-    private fun applyGradle(gradle: Gradle) = gradle.registerCustomDependency(
-        "patched",
-        PatchedMinecraftDependencyMetadataConverter::class.java,
-        PatchedMinecraftComponentResolvers::class.java
-    )
+    private fun applyGradle(gradle: Gradle) =
+        gradle.registerCustomDependency(
+            "patched",
+            PatchedMinecraftDependencyMetadataConverter::class.java,
+            PatchedMinecraftComponentResolvers::class.java,
+        )
 
-    override fun apply(target: T) = applyPlugin(target, ::applyGradle) {
-        createTargetConfigurations(PATCHES_CONFIGURATION)
+    override fun apply(target: T) =
+        applyPlugin(target, ::applyGradle) {
+            createTargetConfigurations(PATCHES_CONFIGURATION)
 
-        val codev = extensions.getByType(MinecraftCodevExtension::class.java)
-        codev.extensions.create("patched", PatchedMinecraftCodevExtension::class.java)
+            val codev = extensions.getByType(MinecraftCodevExtension::class.java)
+            codev.extensions.create("patched", PatchedMinecraftCodevExtension::class.java)
 
-        setupForgeAccessWidenerIntegration()
-        setupForgeRemapperIntegration()
-        setupForgeRunsIntegration()
+            setupForgeAccessWidenerIntegration()
+            setupForgeRemapperIntegration()
+            setupForgeRunsIntegration()
 
-        fun isForge(fs: FileSystem) = fs.getPath("META-INF", "mods.toml").exists() || fs.getPath("mcmod.info").exists()
+            fun isForge(fs: FileSystem) = fs.getPath("META-INF", "mods.toml").exists() || fs.getPath("mcmod.info").exists()
 
-        codev.modInfoDetectionRules.add {
-            if (isForge(it)) {
-                ModInfo(ModInfoType.Platform, "forge", 3)
-            } else {
-                null
+            codev.modInfoDetectionRules.add {
+                if (isForge(it)) {
+                    ModInfo(ModInfoType.Platform, "forge", 3)
+                } else {
+                    null
+                }
+            }
+
+            codev.modInfoDetectionRules.add {
+                if (isForge(it)) {
+                    ModInfo(ModInfoType.Namespace, SRG_MAPPINGS_NAMESPACE, 2)
+                } else {
+                    null
+                }
             }
         }
-
-        codev.modInfoDetectionRules.add {
-            if (isForge(it)) {
-                ModInfo(ModInfoType.Namespace, SRG_MAPPINGS_NAMESPACE, 2)
-            } else {
-                null
-            }
-        }
-    }
 
     companion object {
         const val SRG_MAPPINGS_NAMESPACE = "srg"
         const val PATCHES_CONFIGURATION = "patches"
 
-        internal fun userdevConfig(file: File, action: FileSystem.(config: UserdevConfig) -> Unit) = zipFileSystem(file.toPath()).use { fs ->
+        internal fun userdevConfig(
+            file: File,
+            action: FileSystem.(config: UserdevConfig) -> Unit,
+        ) = zipFileSystem(file.toPath()).use { fs ->
             val configPath = fs.base.getPath("config.json")
             if (configPath.exists()) {
                 fs.base.action(configPath.inputStream().use(json::decodeFromStream))

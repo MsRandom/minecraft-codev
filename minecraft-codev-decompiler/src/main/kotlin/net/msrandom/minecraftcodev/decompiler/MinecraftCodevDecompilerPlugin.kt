@@ -9,11 +9,12 @@ import org.gradle.api.invocation.Gradle
 import org.gradle.api.plugins.PluginAware
 
 class MinecraftCodevDecompilerPlugin<T : PluginAware> : Plugin<T> {
-    private fun applyGradle(gradle: Gradle) = gradle.registerCustomDependency(
-        "decompiled",
-        DecompiledDependencyMetadataConverter::class.java,
-        DecompiledComponentResolvers::class.java
-    )
+    private fun applyGradle(gradle: Gradle) =
+        gradle.registerCustomDependency(
+            "decompiled",
+            DecompiledDependencyMetadataConverter::class.java,
+            DecompiledComponentResolvers::class.java,
+        )
 
     override fun apply(target: T) = applyPlugin(target, ::applyGradle) {}
 }

@@ -3,8 +3,6 @@ package net.msrandom.minecraftcodev.accesswidener
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import net.fabricmc.accesswidener.AccessWidenerReader
-import net.msrandom.minecraftcodev.accesswidener.dependency.intersection.AccessModifierIntersectionDependency
-import net.msrandom.minecraftcodev.accesswidener.dependency.intersection.AccessModifierIntersectionDependencyImpl
 import net.msrandom.minecraftcodev.core.ResolutionData
 import net.msrandom.minecraftcodev.core.dependency.resolverFactories
 import net.msrandom.minecraftcodev.core.resolutionRules
@@ -12,7 +10,6 @@ import net.msrandom.minecraftcodev.core.utils.visitConfigurationFiles
 import net.msrandom.minecraftcodev.core.zipResolutionRules
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
-import org.gradle.api.artifacts.ModuleDependency
 import org.gradle.api.internal.artifacts.GlobalDependencyResolutionRules
 import org.gradle.api.internal.artifacts.RepositoriesSupplier
 import org.gradle.api.internal.artifacts.ResolveContext
@@ -25,7 +22,6 @@ import org.gradle.api.model.ObjectFactory
 import org.gradle.configurationcache.extensions.serviceOf
 import org.gradle.internal.hash.HashCode
 import java.io.File
-import java.security.DigestInputStream
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.inputStream
@@ -33,7 +29,6 @@ import kotlin.io.path.inputStream
 class AccessModifierResolutionData(
     visitor: AccessModifiers,
     messageDigest: MessageDigest,
-
     val namespace: String?,
 ) : ResolutionData<AccessModifiers>(visitor, messageDigest)
 
@@ -63,9 +58,10 @@ open class AccessWidenerExtension(objectFactory: ObjectFactory, private val proj
                 return@add false
             }
 
-            val modifiers = data.decorate(path.inputStream()).use {
-                Json.decodeFromStream<AccessModifiers>(it)
-            }
+            val modifiers =
+                data.decorate(path.inputStream()).use {
+                    Json.decodeFromStream<AccessModifiers>(it)
+                }
 
             data.visitor.visit(modifiers)
 
@@ -73,9 +69,11 @@ open class AccessWidenerExtension(objectFactory: ObjectFactory, private val proj
         }
     }
 
-    fun intersection(vararg dependencies: ModuleDependency): AccessModifierIntersectionDependency = AccessModifierIntersectionDependencyImpl(listOf(*dependencies))
-
-    fun loadAccessWideners(files: Configuration, objects: ObjectFactory, namespace: String?) = accessWidenerCache.computeIfAbsent(files) { configuration ->
+    fun loadAccessWideners(
+        files: Configuration,
+        objects: ObjectFactory,
+        namespace: String?,
+    ) = accessWidenerCache.computeIfAbsent(files) { configuration ->
         val widener = AccessModifiers(false, namespace)
 
         val md = MessageDigest.getInstance("SHA1")
@@ -97,17 +95,18 @@ open class AccessWidenerExtension(objectFactory: ObjectFactory, private val proj
                     ImmutableAttributes.EMPTY,
                     null,
                     project.serviceOf(),
-                    project.serviceOf()
-                )
+                    project.serviceOf(),
+                ),
             )
 
-            ComponentResolversChain(resolvers, project.serviceOf(), project.serviceOf())
+            ComponentResolversChain(resolvers, project.serviceOf(), project.serviceOf(), project.serviceOf())
         }
 
         val data = AccessModifierResolutionData(widener, md, namespace)
 
         for (dependency in configuration.allDependencies) {
-            project.visitConfigurationFiles({ resolvers }, configuration, dependency) { file ->
+            project.visitConfigurationFiles({ resolvers }, configuration, dependency) { supplier ->
+                val file = supplier.get()
                 for (rule in accessWidenerResolution.get()) {
                     if (rule.load(file.toPath(), file.extension, data)) {
                         break
@@ -118,11 +117,14 @@ open class AccessWidenerExtension(objectFactory: ObjectFactory, private val proj
 
         LoadedAccessWideners(
             widener,
-            HashCode.fromBytes(md.digest())
+            HashCode.fromBytes(md.digest()),
         )
     }
 
-    fun loadAccessWideners(files: Iterable<File>, objects: ObjectFactory): LoadedAccessWideners {
+    fun loadAccessWideners(
+        files: Iterable<File>,
+        objects: ObjectFactory,
+    ): LoadedAccessWideners {
         val widener = AccessModifiers(false, null)
 
         val md = MessageDigest.getInstance("SHA1")
@@ -139,7 +141,7 @@ open class AccessWidenerExtension(objectFactory: ObjectFactory, private val proj
 
         return LoadedAccessWideners(
             widener,
-            HashCode.fromBytes(md.digest())
+            HashCode.fromBytes(md.digest()),
         )
     }
 

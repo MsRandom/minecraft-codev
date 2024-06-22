@@ -13,7 +13,7 @@ class MinecraftCodevIncludesPlugin<T : PluginAware> : Plugin<T> {
     private fun applyGradle(gradle: Gradle) = gradle.registerCustomDependency(
         "includes-extracted",
         ExtractIncludesDependencyMetadataConverter::class.java,
-        ExtractIncludesComponentResolvers::class.java
+        ExtractIncludesComponentResolvers::class.java,
     )
 
     override fun apply(target: T) = applyPlugin(target, ::applyGradle) {

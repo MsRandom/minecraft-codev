@@ -18,13 +18,12 @@ class DslOriginMinecraftDependencyMetadata(private val delegate: LocalOriginDepe
     LocalOriginDependencyMetadata by delegate,
     DslOriginDependencyMetadata,
     MinecraftDependencyMetadata {
-
     /**
      * This is simply a bug fix:
      * Kotlin MultiPlatform Plugin collects all dependencies requested in a configuration, along with transitive dependencies into a 'metadata' configuration
      * It then locks every dependency version to match
      * This would typically be fine, but in the case of Minecraft, which may be remapped or configured in various ways, a common source set may include a version that differs which would then be locked to a higher version
-     * With that, it will have an invalid configuration(for example mappings for a different Minecraft versions), causing resolution errorsz
+     * With that, it will have an invalid configuration(for example mappings for a different Minecraft versions), causing resolution errors
      *
      * Solution: Blocks target changing if this version is strict(which Minecraft's is by default) and the versions do not match.
      */
@@ -41,18 +40,23 @@ class DslOriginMinecraftDependencyMetadata(private val delegate: LocalOriginDepe
         return true
     }
 
-    override fun withTarget(target: ComponentSelector) = if (shouldModify(target)) {
-        DslOriginMinecraftDependencyMetadata(delegate.withTarget(target), source)
-    } else {
-        this
-    }
+    override fun withTarget(target: ComponentSelector) =
+        if (shouldModify(target)) {
+            DslOriginMinecraftDependencyMetadata(delegate.withTarget(target), source)
+        } else {
+            this
+        }
 
-    override fun withTargetAndArtifacts(target: ComponentSelector, artifacts: List<IvyArtifactName>) = if (shouldModify(target)) {
+    override fun withTargetAndArtifacts(
+        target: ComponentSelector,
+        artifacts: List<IvyArtifactName>,
+    ) = if (shouldModify(target)) {
         DslOriginMinecraftDependencyMetadata(delegate.withTargetAndArtifacts(target, artifacts), source)
     } else {
         this
     }
 
     override fun getSource() = source
+
     override fun forced() = DslOriginMinecraftDependencyMetadata(delegate.forced(), source)
 }

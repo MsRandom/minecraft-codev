@@ -30,13 +30,18 @@ fun getCommonJar(
     pathFunction: (artifact: ModuleComponentArtifactIdentifier, sha1: String) -> Path,
     manifest: MinecraftVersionMetadata,
     serverJar: File,
-    clientJar: () -> File
+    clientJar: () -> File,
 ): Lazy<Path> {
     val (extractedServer, isBundled) = getExtractionState(cacheManager, buildOperationExecutor, manifest, { serverJar }, clientJar).value!!
+
     return if (isBundled) {
         bundledCommonJarStates.computeIfAbsent(extractedServer) {
             lazy {
-                val path = pathFunction(LegacyJarSplitter.makeId(MinecraftComponentResolvers.COMMON_MODULE, manifest.id), checksumService.sha1(extractedServer.toFile()).toString())
+                val path =
+                    pathFunction(
+                        LegacyJarSplitter.makeId(MinecraftComponentResolvers.COMMON_MODULE, manifest.id),
+                        checksumService.sha1(extractedServer.toFile()).toString(),
+                    )
                 path.parent.createDirectories()
                 extractedServer.copyTo(path, StandardCopyOption.REPLACE_EXISTING)
                 zipFileSystem(path).use {
@@ -46,7 +51,8 @@ fun getCommonJar(
             }
         }
     } else {
-        val legacySplitState = getLegacySplitJarsState(buildOperationExecutor, checksumService, pathFunction, manifest, clientJar().toPath(), extractedServer)
+        val legacySplitState =
+            getLegacySplitJarsState(buildOperationExecutor, checksumService, pathFunction, manifest, clientJar().toPath(), extractedServer)
         lazy { legacySplitState.value.common }
     }
 }
@@ -58,15 +64,36 @@ fun getClientJar(
     pathFunction: (artifact: ModuleComponentArtifactIdentifier, sha1: String) -> Path,
     manifest: MinecraftVersionMetadata,
     clientJar: File,
-    serverJar: File
+    serverJar: File,
 ): Path {
-    val (extractedServer, isBundled) = getExtractionState(cacheManager, buildOperationExecutor, manifest, { serverJar }) { clientJar }.value!!
+    val (extractedServer, isBundled) =
+        getExtractionState(
+            cacheManager,
+            buildOperationExecutor,
+            manifest,
+            { serverJar },
+        ) { clientJar }.value!!
 
     return if (isBundled) {
-        val commonJar = getCommonJar(cacheManager, buildOperationExecutor, checksumService, pathFunction, manifest, serverJar) { clientJar }.value
+        val commonJar =
+            getCommonJar(
+                cacheManager,
+                buildOperationExecutor,
+                checksumService,
+                pathFunction,
+                manifest,
+                serverJar,
+            ) { clientJar }.value
         getBundledClientJarState(buildOperationExecutor, checksumService, pathFunction, manifest, clientJar.toPath(), commonJar).value
     } else {
-        getLegacySplitJarsState(buildOperationExecutor, checksumService, pathFunction, manifest, clientJar.toPath(), extractedServer).value.client
+        getLegacySplitJarsState(
+            buildOperationExecutor,
+            checksumService,
+            pathFunction,
+            manifest,
+            clientJar.toPath(),
+            extractedServer,
+        ).value.client
     }
 }
 
@@ -76,23 +103,28 @@ private fun getBundledClientJarState(
     pathFunction: (artifact: ModuleComponentArtifactIdentifier, sha1: String) -> Path,
     manifest: MinecraftVersionMetadata,
     clientJar: Path,
-    serverJar: Path
-): Lazy<Path> = bundledClientJarStates.computeIfAbsent(clientJar to serverJar) {
-    lazy {
-        buildOperationExecutor.call(object : CallableBuildOperation<Path> {
-            val result = Files.createTempFile("split-client-", ".tmp.jar")
+    serverJar: Path,
+): Lazy<Path> =
+    bundledClientJarStates.computeIfAbsent(clientJar to serverJar) {
+        lazy {
+            buildOperationExecutor.call(
+                object : CallableBuildOperation<Path> {
+                    val result = Files.createTempFile("split-client-", ".tmp.jar")
 
-            override fun description() = BuildOperationDescriptor
-                .displayName("Making split client from $clientJar and $serverJar")
-                .progressDisplayName("Output: $result")
-                .metadata(BuildOperationCategory.TASK)
+                    override fun description() =
+                        BuildOperationDescriptor
+                            .displayName("Making split client from $clientJar and $serverJar")
+                            .progressDisplayName("Output: $result")
+                            .metadata(BuildOperationCategory.TASK)
 
-            override fun call(context: BuildOperationContext) = context.callWithStatus {
-                BundledClientJarSplitter.split(checksumService, pathFunction, manifest.id, result, clientJar, serverJar)
-            }
-        })
+                    override fun call(context: BuildOperationContext) =
+                        context.callWithStatus {
+                            BundledClientJarSplitter.split(checksumService, pathFunction, manifest.id, result, clientJar, serverJar)
+                        }
+                },
+            )
+        }
     }
-}
 
 private fun getLegacySplitJarsState(
     buildOperationExecutor: BuildOperationExecutor,
@@ -100,23 +132,28 @@ private fun getLegacySplitJarsState(
     pathFunction: (artifact: ModuleComponentArtifactIdentifier, sha1: String) -> Path,
     manifest: MinecraftVersionMetadata,
     clientJar: Path,
-    serverJar: Path
-): Lazy<JarSplittingResult> = legacySplitJarStates.computeIfAbsent(clientJar to serverJar) {
-    lazy {
-        buildOperationExecutor.call(object : CallableBuildOperation<JarSplittingResult> {
-            val common = serverJar.createDeterministicCopy("split-common-", ".tmp.jar")
-            val client = clientJar.createDeterministicCopy("split-client-", ".tmp.jar")
+    serverJar: Path,
+): Lazy<JarSplittingResult> =
+    legacySplitJarStates.computeIfAbsent(clientJar to serverJar) {
+        lazy {
+            buildOperationExecutor.call(
+                object : CallableBuildOperation<JarSplittingResult> {
+                    val common = serverJar.createDeterministicCopy("split-common-", ".tmp.jar")
+                    val client = clientJar.createDeterministicCopy("split-client-", ".tmp.jar")
 
-            override fun description() = BuildOperationDescriptor
-                .displayName("Splitting $clientJar and $serverJar")
-                .progressDisplayName("Common: $common, Client: $client")
-                .metadata(BuildOperationCategory.TASK)
+                    override fun description() =
+                        BuildOperationDescriptor
+                            .displayName("Splitting $clientJar and $serverJar")
+                            .progressDisplayName("Common: $common, Client: $client")
+                            .metadata(BuildOperationCategory.TASK)
 
-            override fun call(context: BuildOperationContext) = context.callWithStatus {
-                LegacyJarSplitter.split(checksumService, pathFunction, manifest.id, common, client, clientJar, serverJar)
-            }
-        })
+                    override fun call(context: BuildOperationContext) =
+                        context.callWithStatus {
+                            LegacyJarSplitter.split(checksumService, pathFunction, manifest.id, common, client, clientJar, serverJar)
+                        }
+                },
+            )
+        }
     }
-}
 
 data class JarSplittingResult(val common: Path, val client: Path)

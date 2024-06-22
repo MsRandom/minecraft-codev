@@ -3,31 +3,30 @@ package net.msrandom.minecraftcodev.includes.resolve
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.caches.CachedArtifactSerializer
 import net.msrandom.minecraftcodev.core.caches.CodevCacheProvider
-import net.msrandom.minecraftcodev.core.resolve.ComponentResolversChainProvider
 import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver
 import net.msrandom.minecraftcodev.core.resolve.MinecraftArtifactResolver.Companion.getOrResolve
-import net.msrandom.minecraftcodev.core.utils.*
-import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.allArtifacts
-import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader.copy
+import net.msrandom.minecraftcodev.core.resolve.PassthroughArtifactMetadata
+import net.msrandom.minecraftcodev.core.utils.asSerializable
+import net.msrandom.minecraftcodev.core.utils.callWithStatus
+import net.msrandom.minecraftcodev.core.utils.zipFileSystem
+import net.msrandom.minecraftcodev.gradle.CodevGradleLinkageLoader
+import net.msrandom.minecraftcodev.gradle.api.ComponentResolversChainProvider
 import net.msrandom.minecraftcodev.includes.IncludesExtension
 import net.msrandom.minecraftcodev.includes.dependency.ExtractIncludesDependencyMetadata
 import org.gradle.api.Project
 import org.gradle.api.artifacts.component.ComponentIdentifier
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
-import org.gradle.api.artifacts.type.ArtifactTypeDefinition
-import org.gradle.api.attributes.Category
-import org.gradle.api.attributes.LibraryElements
-import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ComponentResolvers
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionSelector
+import org.gradle.api.internal.artifacts.ivyservice.resolveengine.artifact.ArtifactSetFactory
+import org.gradle.api.internal.artifacts.ivyservice.resolveengine.artifact.ResolvedVariant
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.excludes.specs.ExcludeSpec
-import org.gradle.api.internal.artifacts.type.ArtifactTypeRegistry
+import org.gradle.api.internal.attributes.AttributesSchemaInternal
 import org.gradle.api.internal.attributes.ImmutableAttributes
 import org.gradle.api.internal.component.ArtifactType
 import org.gradle.api.model.ObjectFactory
-import org.gradle.internal.DisplayName
-import org.gradle.internal.component.external.model.*
+import org.gradle.internal.component.external.model.ModuleComponentArtifactMetadata
 import org.gradle.internal.component.model.*
 import org.gradle.internal.hash.ChecksumService
 import org.gradle.internal.model.CalculatedValueContainerFactory
@@ -37,7 +36,10 @@ import org.gradle.internal.resolve.resolver.ArtifactResolver
 import org.gradle.internal.resolve.resolver.ComponentMetaDataResolver
 import org.gradle.internal.resolve.resolver.DependencyToComponentIdResolver
 import org.gradle.internal.resolve.resolver.OriginArtifactSelector
-import org.gradle.internal.resolve.result.*
+import org.gradle.internal.resolve.result.BuildableArtifactResolveResult
+import org.gradle.internal.resolve.result.BuildableArtifactSetResolveResult
+import org.gradle.internal.resolve.result.BuildableComponentIdResolveResult
+import org.gradle.internal.resolve.result.BuildableComponentResolveResult
 import org.gradle.util.internal.BuildCommencedTimeProvider
 import java.nio.file.Files
 import java.nio.file.Path
@@ -47,7 +49,9 @@ import kotlin.io.path.copyTo
 import kotlin.io.path.createDirectories
 import kotlin.io.path.deleteExisting
 
-open class ExtractIncludesComponentResolvers @Inject constructor(
+open class ExtractIncludesComponentResolvers
+@Inject
+constructor(
     private val resolvers: ComponentResolversChainProvider,
     private val project: Project,
     private val objects: ObjectFactory,
@@ -56,8 +60,8 @@ open class ExtractIncludesComponentResolvers @Inject constructor(
     private val timeProvider: BuildCommencedTimeProvider,
     private val calculatedValueContainerFactory: CalculatedValueContainerFactory,
     private val buildOperationExecutor: BuildOperationExecutor,
-
-    cacheProvider: CodevCacheProvider
+    private val attributesSchema: AttributesSchemaInternal,
+    cacheProvider: CodevCacheProvider,
 ) : ComponentResolvers, DependencyToComponentIdResolver, ComponentMetaDataResolver, OriginArtifactSelector, ArtifactResolver {
     private val cacheManager = cacheProvider.manager("includes-extracted")
 
@@ -68,232 +72,196 @@ open class ExtractIncludesComponentResolvers @Inject constructor(
     }
 
     override fun getComponentIdResolver() = this
+
     override fun getComponentResolver() = this
+
     override fun getArtifactSelector() = this
+
     override fun getArtifactResolver() = this
 
-    private fun wrapMetadata(metadata: ComponentResolveMetadata, identifier: ExtractIncludesComponentIdentifier) = metadata.copy(objects, identifier, {
-        if (attributes.getAttribute(Category.CATEGORY_ATTRIBUTE.name) == Category.LIBRARY && attributes.getAttribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE.name) == LibraryElements.JAR) {
-            val includeRules = project.extensions.getByType(MinecraftCodevExtension::class.java).extensions.getByType(IncludesExtension::class.java).rules
+    private fun metadataDelegate(
+        identifier: ExtractIncludesComponentIdentifier,
+        overrideArtifact: IvyArtifactName?,
+    ) = ExtractIncludesComponentMetadataDelegate(identifier, overrideArtifact, project)
 
-            val extraDependencies = mutableListOf<DependencyMetadata>()
-            val extractIncludes = hashSetOf<ComponentArtifactMetadata>()
+    override fun resolve(
+        dependency: DependencyMetadata,
+        acceptor: VersionSelector?,
+        rejector: VersionSelector?,
+        result: BuildableComponentIdResolveResult,
+    ) {
+        if (dependency !is ExtractIncludesDependencyMetadata) return
 
-            // Expensive operations ahead:
-            //  We need to either add the included Jars as dependencies, or as artifacts
-            //  But... this is metadata resolution, we do not have the artifact, so we can't tell what included Jars there is
-            //  Hence, we need to resolve the artifact early(yay), which is why metadata fetching is marked as expensive for this resolver
-            //  Another side effect is that this resolver can not be transitive, as that would require transitively resolving artifacts which... yea
-            //  So here we go, resolving artifacts early
+        resolvers.get().componentIdResolver.resolve(dependency.delegate, acceptor, rejector, result)
 
-            for (artifact in allArtifacts) {
-                if (artifact is ModuleComponentArtifactMetadata && artifact.name.type == ArtifactTypeDefinition.JAR_TYPE) {
-                    val result = DefaultBuildableArtifactResolveResult()
-                    resolvers.get().artifactResolver.resolveArtifact(artifact, metadata.sources, result)
+        if (!result.hasResult() || result.failure != null) return
 
-                    if (!result.hasResult()) continue
+        val metadata = result.state
+        if (result.id !is ModuleComponentIdentifier) return
 
-                    val failure = result.failure
+        val id = ExtractIncludesComponentIdentifier(result.id as ModuleComponentIdentifier)
 
-                    if (failure != null) {
-                        if (artifact.isOptionalArtifact) {
-                            continue
-                        }
-
-                        throw failure
-                    }
-
-                    val included = zipFileSystem(result.result.toPath()).use {
-                        val root = it.base.getPath("/")
-
-                        val handler = includeRules.get().firstNotNullOfOrNull { rule ->
-                            rule.load(root)
-                        } ?: return@use emptyList()
-
-                        handler.list(root)
-                    }
-
-                    if (included.isEmpty()) {
-                        continue
-                    }
-
-                    extractIncludes.add(artifact)
-
-                    for (include in included) {
-                        val (_, group, module, version) = include
-
-                        if (group != null && module != null && version != null) {
-                            extraDependencies.add(
-                                GradleDependencyMetadata(
-                                    DefaultModuleComponentSelector.newSelector(
-                                        DefaultModuleIdentifier.newId(group, module),
-                                        version
-                                    ),
-                                    emptyList(),
-                                    false,
-                                    false,
-                                    null,
-                                    false,
-                                    null
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-
-            if (extraDependencies.isEmpty()) {
-                return@copy this
-            }
-
-            val wrapArtifact = { artifact: ComponentArtifactMetadata ->
-                if (artifact.name.type == ArtifactTypeDefinition.JAR_TYPE && artifact in extractIncludes) {
-                    ExtractIncludesComponentArtifactMetadata(artifact as ModuleComponentArtifactMetadata, identifier)
-                } else {
-                    PassthroughExtractIncludesArtifactMetadata(artifact)
-                }
-            }
-
-            copy(
-                objects,
-                { oldName ->
-                    object : DisplayName {
-                        override fun getDisplayName() = "includes extracted ${oldName.displayName}"
-                        override fun getCapitalizedDisplayName() = "Includes Extracted ${oldName.capitalizedDisplayName}"
-                    }
-                },
-                attributes,
-                {
-                    this + extraDependencies
-                },
-                wrapArtifact,
-                {
-                    map(wrapArtifact)
-                }
-            )
-        } else {
-            this
+        if (metadata == null) {
+            result.resolved(id, result.moduleVersionId)
+            return
         }
-    })
 
-    override fun resolve(dependency: DependencyMetadata, acceptor: VersionSelector?, rejector: VersionSelector?, result: BuildableComponentIdResolveResult) {
-        if (dependency is ExtractIncludesDependencyMetadata) {
-            resolvers.get().componentIdResolver.resolve(dependency.delegate, acceptor, rejector, result)
-
-            if (result.hasResult() && result.failure == null) {
-                val metadata = result.metadata
-                if (result.id is ModuleComponentIdentifier) {
-                    val id = ExtractIncludesComponentIdentifier(result.id as ModuleComponentIdentifier)
-
-                    if (metadata == null) {
-                        result.resolved(id, result.moduleVersionId)
-                    } else {
-                        try {
-                            result.resolved(wrapMetadata(metadata, id))
-                        } catch (error: Throwable) {
-                            result.failed(ModuleVersionResolveException(dependency.selector, error))
-                        }
-                    }
-                }
-            }
+        try {
+            result.resolved(
+                CodevGradleLinkageLoader.wrapComponentMetadata(
+                    metadata,
+                    metadataDelegate(id, dependency.artifacts.firstOrNull()),
+                    resolvers,
+                    objects,
+                ),
+            )
+        } catch (error: Throwable) {
+            result.failed(ModuleVersionResolveException(dependency.selector, error))
         }
     }
 
-    override fun resolve(identifier: ComponentIdentifier, componentOverrideMetadata: ComponentOverrideMetadata, result: BuildableComponentResolveResult) {
-        if (identifier is ExtractIncludesComponentIdentifier) {
-            resolvers.get().componentResolver.resolve(identifier.original, componentOverrideMetadata, result)
+    override fun resolve(
+        identifier: ComponentIdentifier,
+        componentOverrideMetadata: ComponentOverrideMetadata,
+        result: BuildableComponentResolveResult,
+    ) {
+        if (identifier !is ExtractIncludesComponentIdentifier) return
 
-            if (result.hasResult() && result.failure == null) {
-                try {
-                    result.resolved(wrapMetadata(result.metadata, identifier))
-                } catch (error: Throwable) {
-                    result.failed(ModuleVersionResolveException(identifier, error))
-                }
-            }
+        resolvers.get().componentResolver.resolve(identifier.original, componentOverrideMetadata, result)
+
+        if (!result.hasResult() || result.failure != null) return
+
+        try {
+            result.resolved(
+                CodevGradleLinkageLoader.wrapComponentMetadata(
+                    result.state,
+                    metadataDelegate(identifier, componentOverrideMetadata.artifact),
+                    resolvers,
+                    objects,
+                ),
+            )
+        } catch (error: Throwable) {
+            result.failed(ModuleVersionResolveException(identifier, error))
         }
     }
 
     override fun isFetchingMetadataCheap(identifier: ComponentIdentifier) = false
 
     override fun resolveArtifacts(
-        component: ComponentResolveMetadata, configuration: ConfigurationMetadata, artifactTypeRegistry: ArtifactTypeRegistry, exclusions: ExcludeSpec, overriddenAttributes: ImmutableAttributes
+        component: ComponentArtifactResolveMetadata,
+        allVariants: ComponentArtifactResolveVariantState,
+        legacyVariants: MutableSet<ResolvedVariant>,
+        exclusions: ExcludeSpec,
+        overriddenAttributes: ImmutableAttributes,
     ) = if (component.id is ExtractIncludesComponentIdentifier) {
-        MetadataSourcedComponentArtifacts().getArtifactsFor(
-            component, configuration, artifactResolver, hashMapOf(), artifactTypeRegistry, exclusions, overriddenAttributes, calculatedValueContainerFactory
+        ArtifactSetFactory.createFromVariantMetadata(
+            component.id,
+            allVariants,
+            legacyVariants,
+            attributesSchema,
+            overriddenAttributes,
         )
         // resolvers.artifactSelector.resolveArtifacts(CodevGradleLinkageLoader.getDelegate(component), configuration, exclusions, overriddenAttributes)
     } else {
         null
     }
 
-    override fun resolveArtifactsWithType(component: ComponentResolveMetadata, artifactType: ArtifactType, result: BuildableArtifactSetResolveResult) {
+    override fun resolveArtifactsWithType(
+        component: ComponentArtifactResolveMetadata,
+        artifactType: ArtifactType,
+        result: BuildableArtifactSetResolveResult,
+    ) {
     }
 
-    override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactResolveResult) {
+    override fun resolveArtifact(
+        component: ComponentArtifactResolveMetadata,
+        artifact: ComponentArtifactMetadata,
+        result: BuildableArtifactResolveResult,
+    ) {
         if (artifact is ExtractIncludesComponentArtifactMetadata) {
-            resolvers.get().artifactResolver.resolveArtifact(artifact.delegate, moduleSources, result)
+            resolvers.get().artifactResolver.resolveArtifact(component, artifact.delegate, result)
 
             if (result.isSuccessful) {
-                val includeRules = project.extensions.getByType(MinecraftCodevExtension::class.java).extensions.getByType(IncludesExtension::class.java).rules
+                val includeRules =
+                    project.extensions.getByType(
+                        MinecraftCodevExtension::class.java,
+                    ).extensions.getByType(IncludesExtension::class.java).rules
 
-                val handler = zipFileSystem(result.result.toPath()).use {
-                    val root = it.base.getPath("/")
+                val base = result.result
 
-                    includeRules.get().firstNotNullOfOrNull { rule ->
-                        rule.load(root)
-                    }
-                } ?: return
+                val handler =
+                    zipFileSystem(base.file.toPath()).use {
+                        val root = it.base.getPath("/")
+
+                        includeRules.get().firstNotNullOfOrNull { rule ->
+                            rule.load(root)
+                        }
+                    } ?: return
 
                 val id = artifact.componentId
 
-                getOrResolve(artifact, artifact.id.asSerializable, artifactCache, cachePolicy, timeProvider, result) {
-                    buildOperationExecutor.call(object : CallableBuildOperation<Path> {
-                        override fun description() = BuildOperationDescriptor
-                            .displayName("Removing includes from ${result.result}")
-                            .progressDisplayName("Removing extracted includes")
-                            .metadata(BuildOperationCategory.TASK)
+                getOrResolve(
+                    component,
+                    artifact as ModuleComponentArtifactMetadata,
+                    calculatedValueContainerFactory,
+                    artifact.id.asSerializable,
+                    artifactCache,
+                    cachePolicy,
+                    timeProvider,
+                    result,
+                ) {
+                    buildOperationExecutor.call(
+                        object : CallableBuildOperation<Path> {
+                            override fun description() =
+                                BuildOperationDescriptor
+                                    .displayName("Removing includes from ${result.result}")
+                                    .progressDisplayName("Removing extracted includes")
+                                    .metadata(BuildOperationCategory.TASK)
 
-                        override fun call(context: BuildOperationContext) = context.callWithStatus {
-                            val file = Files.createTempFile("includes-extracted", ".jar")
+                            override fun call(context: BuildOperationContext) =
+                                context.callWithStatus {
+                                    val file = Files.createTempFile("includes-extracted", ".jar")
 
-                            result.result.toPath().copyTo(file, true)
+                                    base.file.toPath().copyTo(file, true)
 
-                            zipFileSystem(file).use {
-                                val root = it.base.getPath("/")
+                                    zipFileSystem(file).use {
+                                        val root = it.base.getPath("/")
 
-                                for (jar in handler.list(root)) {
-                                    it.base.getPath(jar.path).deleteExisting()
+                                        for (jar in handler.list(root)) {
+                                            it.base.getPath(jar.path).deleteExisting()
+                                        }
+
+                                        handler.remove(root)
+                                    }
+
+                                    val output =
+                                        cacheManager.fileStoreDirectory
+                                            .resolve(id.group)
+                                            .resolve(id.module)
+                                            .resolve(id.version)
+                                            .resolve(checksumService.sha1(file.toFile()).toString())
+                                            .resolve("${base.file.nameWithoutExtension}-without-includes.${base.file.extension}")
+
+                                    output.parent.createDirectories()
+                                    file.copyTo(output)
+
+                                    output
                                 }
-
-                                handler.remove(root)
-                            }
-
-                            val output = cacheManager.fileStoreDirectory
-                                .resolve(id.group)
-                                .resolve(id.module)
-                                .resolve(id.version)
-                                .resolve(checksumService.sha1(file.toFile()).toString())
-                                .resolve("${result.result.nameWithoutExtension}-without-includes.${result.result.extension}")
-
-                            output.parent.createDirectories()
-                            file.copyTo(output)
-
-                            output
-                        }
-                    }).toFile()
+                        },
+                    ).toFile()
                 }
 
                 if (!result.hasResult()) {
                     result.notFound(artifact.id)
                 }
             }
-        } else if (artifact is PassthroughExtractIncludesArtifactMetadata) {
-            resolvers.get().artifactResolver.resolveArtifact(artifact.original, moduleSources, result)
+        } else if (artifact is PassthroughArtifactMetadata) {
+            resolvers.get().artifactResolver.resolveArtifact(component, artifact.original, result)
         }
     }
 }
 
-class ExtractIncludesComponentIdentifier(val original: ModuleComponentIdentifier) : ModuleComponentIdentifier by original {
+data class ExtractIncludesComponentIdentifier(val original: ModuleComponentIdentifier) : ModuleComponentIdentifier by original {
     override fun getDisplayName() = "${original.displayName} (Includes Extracted)"
 
     override fun toString() = displayName

@@ -44,18 +44,20 @@ abstract class ExtractNatives : DefaultTask() {
 
         for (file in natives) {
             if (file.extension == "json") {
-                val native = file.inputStream().use {
-                    Json.decodeFromStream<LibraryData.Native>(it)
-                }
+                val native =
+                    file.inputStream().use {
+                        Json.decodeFromStream<LibraryData.Native>(it)
+                    }
 
                 rules.add(native)
             }
         }
 
         for (rule in rules) {
-            val artifacts = natives.resolvedConfiguration.resolvedArtifacts.filter {
-                it.moduleVersion.id.group == rule.library.group && it.moduleVersion.id.name == rule.library.module && it.moduleVersion.id.version == rule.library.version
-            }
+            val artifacts =
+                natives.resolvedConfiguration.resolvedArtifacts.filter {
+                    it.moduleVersion.id.group == rule.library.group && it.moduleVersion.id.name == rule.library.module && it.moduleVersion.id.version == rule.library.version
+                }
 
             val exclude = rule.extractData?.exclude.orEmpty()
 

@@ -22,14 +22,20 @@ sealed interface RunsContainer : NamedDomainObjectContainer<MinecraftRunConfigur
     val resourcesDirectory: DirectoryProperty
 }
 
-abstract class RunsContainerImpl @Inject constructor(cacheDirectory: Path, instantiator: Instantiator, callbackActionDecorator: CollectionCallbackActionDecorator, private val objects: ObjectFactory) :
+abstract class RunsContainerImpl
+@Inject
+constructor(
+    cacheDirectory: Path,
+    instantiator: Instantiator,
+    callbackActionDecorator: CollectionCallbackActionDecorator,
+    private val objects: ObjectFactory,
+) :
     AbstractValidatingNamedDomainObjectContainer<MinecraftRunConfigurationBuilder>(
         MinecraftRunConfigurationBuilder::class.java,
         instantiator,
-        callbackActionDecorator
+        callbackActionDecorator,
     ),
     RunsContainer {
-
     init {
         apply {
             assetsDirectory.convention(objects.directoryProperty().apply { set(cacheDirectory.resolve("assets").toFile()) })

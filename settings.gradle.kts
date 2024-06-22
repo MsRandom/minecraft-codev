@@ -12,10 +12,11 @@ dependencyResolutionManagement {
         maven(url = "https://maven.msrandom.net/repository/root/")
         maven(url = "https://maven.fabricmc.net/")
         maven(url = "https://s01.oss.sonatype.org/content/repositories/releases/")
-        maven(url = "https://repo.spongepowered.org/repository/maven-public/")
         maven(url = "https://maven.minecraftforge.net/")
         // maven(url = "https://maven.architectury.dev/")
         maven(url = "https://maven.neoforged.net/")
+        // maven(url = "https://repo.spongepowered.org/repository/maven-public/")
+        maven(url = "https://oss.sonatype.org/content/repositories/releases")
     }
 }
 
@@ -26,6 +27,7 @@ include("minecraft-codev-remapper")
 include("minecraft-codev-forge", "minecraft-codev-forge:forge-runtime")
 include("minecraft-codev-fabric")
 include("minecraft-codev-includes")
+include("minecraft-codev-intersections")
 include("minecraft-codev-runs")
 include("minecraft-codev-access-widener")
 include("minecraft-codev-mixins")

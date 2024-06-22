@@ -16,13 +16,17 @@ import java.nio.file.StandardCopyOption
 import kotlin.io.path.*
 
 object ForgeJarSplitter {
-    private val annotationNames = hashSetOf(
-        "Lnet/minecraftforge/api/distmarker/OnlyIn;",
-        "Lcpw/mods/fml/relauncher/SideOnly;",
-        "Lnet/minecraftforge/fml/relauncher/SideOnly;",
-    )
+    private val annotationNames =
+        hashSetOf(
+            "Lnet/minecraftforge/api/distmarker/OnlyIn;",
+            "Lcpw/mods/fml/relauncher/SideOnly;",
+            "Lnet/minecraftforge/fml/relauncher/SideOnly;",
+        )
 
-    private fun workingName(name: String, mappings: IMappingFile): String? {
+    private fun workingName(
+        name: String,
+        mappings: IMappingFile,
+    ): String? {
         val typeName = name.trim('/').substringBeforeLast(".")
         val mapping = mappings.getClass(typeName)
         return if (mapping == null) {
@@ -38,7 +42,11 @@ object ForgeJarSplitter {
         }
     }
 
-    private fun classType(name: String, server: FileSystem, mappings: IMappingFile): ClassType {
+    private fun classType(
+        name: String,
+        server: FileSystem,
+        mappings: IMappingFile,
+    ): ClassType {
         val mappedName = workingName(name, mappings)
 
         return when {
@@ -53,63 +61,68 @@ object ForgeJarSplitter {
         val reader = path.inputStream().use(::ClassReader)
         reader.accept(node, 0)
 
-        val used = buildSet {
-            fun tryAdd(type: Type) {
-                if (type.sort == Type.ARRAY) {
-                    add(type.elementType)
-                } else {
-                    add(type)
+        val used =
+            buildSet {
+                fun tryAdd(type: Type) {
+                    if (type.sort == Type.ARRAY) {
+                        add(type.elementType)
+                    } else {
+                        add(type)
+                    }
                 }
-            }
 
-            tryAdd(Type.getObjectType(node.superName))
+                tryAdd(Type.getObjectType(node.superName))
 
-            for (itf in node.interfaces) {
-                tryAdd(Type.getObjectType(itf))
-            }
-
-            for (field in node.fields) {
-                if (!isClient(field.name, field.visibleAnnotations)) {
-                    tryAdd(Type.getType(field.desc))
+                for (itf in node.interfaces) {
+                    tryAdd(Type.getObjectType(itf))
                 }
-            }
 
-            for (method in node.methods) {
-                if (!isClient(method.name, method.visibleAnnotations)) {
-                    for (reference in method.collectTypeReferences()) {
-                        tryAdd(reference)
+                for (field in node.fields) {
+                    if (!isClient(field.name, field.visibleAnnotations)) {
+                        tryAdd(Type.getType(field.desc))
+                    }
+                }
+
+                for (method in node.methods) {
+                    if (!isClient(method.name, method.visibleAnnotations)) {
+                        for (reference in method.collectTypeReferences()) {
+                            tryAdd(reference)
+                        }
                     }
                 }
             }
-        }
 
-        val associated = buildSet {
-            for (innerClass in node.innerClasses) {
-                if (innerClass.name.startsWith(node.name)) {
-                    add(Type.getObjectType(innerClass.name))
-                }
-            }
-
-            var name = node.name
-
-            while (true) {
-                val innerEnd = name.lastIndexOf('$')
-                if (innerEnd != -1) {
-                    name = node.name.substring(0, innerEnd)
-
-                    add(Type.getObjectType(name))
-
-                    continue
+        val associated =
+            buildSet {
+                for (innerClass in node.innerClasses) {
+                    if (innerClass.name.startsWith(node.name)) {
+                        add(Type.getObjectType(innerClass.name))
+                    }
                 }
 
-                break
+                var name = node.name
+
+                while (true) {
+                    val innerEnd = name.lastIndexOf('$')
+                    if (innerEnd != -1) {
+                        name = node.name.substring(0, innerEnd)
+
+                        add(Type.getObjectType(name))
+
+                        continue
+                    }
+
+                    break
+                }
             }
-        }
 
         return TypeReferences(used, associated)
     }
 
-    private fun isClient(name: String, annotations: List<AnnotationNode>?): Boolean {
+    private fun isClient(
+        name: String,
+        annotations: List<AnnotationNode>?,
+    ): Boolean {
         // vanilla srg names will include underscores, so we know this is a vanilla function, and we shouldn't skip it
         if ('_' in name) return false
 
@@ -134,7 +147,7 @@ object ForgeJarSplitter {
         merged: FileSystem,
         server: FileSystem,
         allInvalid: Boolean,
-        mappings: IMappingFile
+        mappings: IMappingFile,
     ) {
         commonPaths.add(path)
 
@@ -156,7 +169,6 @@ object ForgeJarSplitter {
                         if (newTypePath in commonPaths) continue
 
                         if (newTypePath.exists()) {
-
                             val type = classType(referenceName, server, mappings)
                             if (type == ClassType.Client) {
                                 invalid = true
@@ -191,7 +203,16 @@ object ForgeJarSplitter {
                         if (newTypePath in commonPaths) continue
 
                         if (newTypePath.exists()) {
-                            handleServerClass(commonPaths, blacklist, classType(referenceName, server, mappings) == ClassType.Modded, newTypePath, merged, server, false, mappings)
+                            handleServerClass(
+                                commonPaths,
+                                blacklist,
+                                classType(referenceName, server, mappings) == ClassType.Modded,
+                                newTypePath,
+                                merged,
+                                server,
+                                false,
+                                mappings,
+                            )
                         } else {
                             blacklist.add(referencedType)
                         }
@@ -271,7 +292,12 @@ object ForgeJarSplitter {
             }
         }
 
-        val clientPaths = merged.getPath("/").walk { filter(Path::isRegularFile).filter { it.toString().endsWith(".class") && !it.toString().contains('-') && !commonPaths.contains(it) }.toList() }
+        val clientPaths =
+            merged.getPath("/").walk {
+                filter(Path::isRegularFile).filter {
+                    it.toString().endsWith(".class") && !it.toString().contains('-') && !commonPaths.contains(it)
+                }.toList()
+            }
 
         for (path in commonPaths) {
             val commonPath = commonOut.getPath(path.toString())
@@ -320,6 +346,6 @@ object ForgeJarSplitter {
     enum class ClassType {
         Client, // From the vanilla client Jar
         Server, // From the vanilla server Jar
-        Modded // From an external source, like Forge's universal Jar or userdev injects
+        Modded, // From an external source, like Forge's universal Jar or userdev injects
     }
 }

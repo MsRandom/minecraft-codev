@@ -24,67 +24,86 @@ val <T : ModuleDependency> T.remapped
 val SelfResolvingDependency.remapped
     get() = remapped()
 
-fun KotlinDependencyHandler.mappings(dependencyNotation: Any) = (this as DefaultKotlinDependencyHandler).let {
-    it.project.dependencies.add(it.parent.mappingsConfigurationName, dependencyNotation)
-}
+fun KotlinDependencyHandler.mappings(dependencyNotation: Any) =
+    (this as DefaultKotlinDependencyHandler).let {
+        it.project.dependencies.add(it.parent.mappingsConfigurationName, dependencyNotation)
+    }
 
-fun KotlinDependencyHandler.mappings(dependencyNotation: String, configure: ExternalModuleDependency.() -> Unit) =
-    (mappings(dependencyNotation) as ExternalModuleDependency).also(configure)
+fun KotlinDependencyHandler.mappings(
+    dependencyNotation: String,
+    configure: ExternalModuleDependency.() -> Unit,
+) = (mappings(dependencyNotation) as ExternalModuleDependency).also(configure)
 
-fun <T : Dependency> KotlinDependencyHandler.mappings(dependency: T, configure: T.() -> Unit) = (this as DefaultKotlinDependencyHandler).let {
+fun <T : Dependency> KotlinDependencyHandler.mappings(
+    dependency: T,
+    configure: T.() -> Unit,
+) = (this as DefaultKotlinDependencyHandler).let {
     configure(dependency)
     it.project.dependencies.add(it.parent.mappingsConfigurationName, dependency)
 }
 
-fun KotlinDependencyHandler.mappings(dependencyNotation: String, configure: Closure<*>) =
-    mappings(dependencyNotation) { project.configure(this, configure) }
+fun KotlinDependencyHandler.mappings(
+    dependencyNotation: String,
+    configure: Closure<*>,
+) = mappings(dependencyNotation) { project.configure(this, configure) }
 
-fun <T : Dependency> KotlinDependencyHandler.mappings(dependency: T, configure: Closure<*>) =
-    mappings(dependency) { project.configure(this, configure) }
-
+fun <T : Dependency> KotlinDependencyHandler.mappings(
+    dependency: T,
+    configure: Closure<*>,
+) = mappings(dependency) { project.configure(this, configure) }
 
 @JvmOverloads
-fun <T : ModuleDependency> T.remapped(arguments: Map<String, Any>, configure: Action<T>? = null) = getRemapped(arguments, configure)
+fun <T : ModuleDependency> T.remapped(
+    arguments: Map<String, Any>,
+    configure: Action<T>? = null,
+) = getRemapped(arguments, configure)
 
 fun SelfResolvingDependency.remapped(arguments: Map<String, Any>) = getRemapped(arguments)
 
 fun <T : ModuleDependency> T.remapped(
-    sourceNamespace: Any? = null,
+    sourceNamespace: Any? = "",
     targetNamespace: Any = MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE,
-    mappingsConfiguration: String? = null,
-    configure: Action<T>? = null
+    mappingsConfiguration: String = "",
+    configure: Action<T>? = null,
 ) = getRemapped(sourceNamespace, targetNamespace, mappingsConfiguration, configure)
 
 fun SelfResolvingDependency.remapped(
     sourceNamespace: Any? = null,
     targetNamespace: Any = MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE,
-    mappingsConfiguration: String? = null
+    mappingsConfiguration: String? = null,
 ) = getRemapped(sourceNamespace, targetNamespace, mappingsConfiguration)
 
 @JvmOverloads
-fun <T : ModuleDependency> T.getRemapped(arguments: Map<String, Any>, configure: Action<T>? = null) =
+fun <T : ModuleDependency> T.getRemapped(
+    arguments: Map<String, Any>,
+    configure: Action<T>? = null,
+) = getRemapped(
+    arguments["sourceNamespace"],
+    arguments.getOrDefault("targetNamespace", MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE),
+    arguments["mappingsConfiguration"]?.toString().orEmpty(),
+    configure,
+)
+
+fun SelfResolvingDependency.getRemapped(arguments: Map<String, Any>) =
     getRemapped(
         arguments["sourceNamespace"],
         arguments.getOrDefault("targetNamespace", MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE),
         arguments["mappingsConfiguration"]?.toString(),
-        configure
     )
-
-fun SelfResolvingDependency.getRemapped(arguments: Map<String, Any>) =
-    getRemapped(arguments["sourceNamespace"], arguments.getOrDefault("targetNamespace", MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE), arguments["mappingsConfiguration"]?.toString())
 
 @Suppress("UNCHECKED_CAST")
 fun <T : ModuleDependency> T.getRemapped(
-    sourceNamespace: Any? = null,
+    sourceNamespace: Any? = "",
     targetNamespace: Any = MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE,
-    mappingsConfiguration: String? = null,
-    configure: Action<T>? = null
-): RemappedDependency<T> = RemappedDependency(copy() as T, sourceNamespace?.toString(), targetNamespace.toString(), mappingsConfiguration).apply {
-    configure?.execute(sourceDependency)
-}
+    mappingsConfiguration: String = "",
+    configure: Action<T>? = null,
+): RemappedDependency<T> =
+    RemappedDependency(copy() as T, sourceNamespace?.toString().orEmpty(), targetNamespace.toString(), mappingsConfiguration).apply {
+        configure?.execute(sourceDependency)
+    }
 
 fun SelfResolvingDependency.getRemapped(
     sourceNamespace: Any? = null,
     targetNamespace: Any = MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE,
-    mappingsConfiguration: String? = null
+    mappingsConfiguration: String? = null,
 ): SelfResolvingDependency = TODO("Not yet implemented")

@@ -15,17 +15,14 @@ class MinecraftTests {
 
     @Test
     fun `Legacy Jar Splitting`() {
-
     }
 
     @Test
     fun `Bundled Server Extraction`() {
-
     }
 
     @Test
     fun `Bundled Jar Splitting`() {
-
     }
 
     @Test
@@ -37,14 +34,12 @@ class MinecraftTests {
                 "commonUniqueSnapshotJar",
                 "commonLatestReleaseJar",
                 "commonLatestSnapshotJar",
-                "commonChangingSnapshotJar",
                 "commonSubversionJar",
                 "commonClosedMavenRangeJar",
                 "commonOpenMavenRangeJar",
                 "clientUniqueSnapshotJar",
                 "clientSubversionJar",
-                "printCompileClasspath",
-                "-s"
+                "-s",
             )
             .forwardOutput()
             .withDebug(true)

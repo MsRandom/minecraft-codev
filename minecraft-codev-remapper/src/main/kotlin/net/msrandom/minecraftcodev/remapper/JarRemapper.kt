@@ -25,121 +25,166 @@ object JarRemapper {
         sourceNamespace: String,
         targetNamespace: String,
         input: Path,
-        classpath: Iterable<File>
+        classpath: Iterable<File>,
     ): Path {
         val output = Files.createTempFile("remapped", ".tmp.jar")
 
-        val remapper = TinyRemapper
-            .newRemapper()
-            .ignoreFieldDesc(true)
-            .renameInvalidLocals(true)
-            .resolveMissing(true)
-            .rebuildSourceFilenames(true)
+        val remapper =
+            TinyRemapper
+                .newRemapper()
+                .ignoreFieldDesc(true)
+                .renameInvalidLocals(true)
+                // .resolveMissing(true)
+                .rebuildSourceFilenames(true)
+                .extraRemapper(
+                    InnerClassRemapper(mappings, mappings.getNamespaceId(sourceNamespace), mappings.getNamespaceId(targetNamespace)),
+                )
+                .extraRemapper(
+                    object : Remapper() {
+                        private val sourceNamespaceId = mappings.getNamespaceId(sourceNamespace)
+                        private val targetNamespaceId = mappings.getNamespaceId(targetNamespace)
 
-            .extraRemapper(InnerClassRemapper(mappings, mappings.getNamespaceId(sourceNamespace), mappings.getNamespaceId(targetNamespace)))
+                        override fun mapMethodName(
+                            owner: String,
+                            name: String,
+                            descriptor: String,
+                        ) = mappings
+                            .getMethod(owner, name, descriptor, sourceNamespaceId)
+                            ?.getName(targetNamespaceId)
+                            ?: super.mapMethodName(owner, name, descriptor)
 
-            .extraRemapper(object : Remapper() {
-                private val sourceNamespaceId = mappings.getNamespaceId(sourceNamespace)
-                private val targetNamespaceId = mappings.getNamespaceId(targetNamespace)
+                        override fun mapFieldName(
+                            owner: String,
+                            name: String,
+                            descriptor: String,
+                        ) = mappings
+                            .getField(owner, name, descriptor, sourceNamespaceId)
+                            ?.getName(targetNamespaceId)
+                            ?: super.mapMethodName(owner, name, descriptor)
+                    },
+                )
+                .withMappings {
+                    val rebuild = mappings.srcNamespace != sourceNamespace
 
-                override fun mapMethodName(owner: String, name: String, descriptor: String) = mappings
-                    .getMethod(owner, name, descriptor, sourceNamespaceId)
-                    ?.getName(targetNamespaceId)
-                    ?: super.mapMethodName(owner, name, descriptor)
+                    val tree =
+                        if (rebuild) {
+                            val newTree = MemoryMappingTree()
 
-                override fun mapFieldName(owner: String, name: String, descriptor: String) = mappings
-                    .getField(owner, name, descriptor, sourceNamespaceId)
-                    ?.getName(targetNamespaceId)
-                    ?: super.mapMethodName(owner, name, descriptor)
-            })
+                            mappings.accept(MappingSourceNsSwitch(newTree, sourceNamespace))
 
-            .withMappings {
-                val rebuild = mappings.srcNamespace != sourceNamespace
-
-                val tree = if (rebuild) {
-                    val newTree = MemoryMappingTree()
-
-                    mappings.accept(MappingSourceNsSwitch(newTree, sourceNamespace))
-
-                    newTree
-                } else {
-                    mappings
-                }
-
-                tree.accept(object : MappingVisitor {
-                    var targetNamespaceId: Int = MappingTreeView.NULL_NAMESPACE_ID
-
-                    lateinit var currentClass: String
-
-                    lateinit var currentName: String
-                    lateinit var currentDesc: String
-
-                    var currentLvtRowIndex: Int = -1
-                    var currentStartOpIndex: Int = -1
-                    var currentLvIndex: Int = -1
-
-                    override fun visitNamespaces(srcNamespace: String, dstNamespaces: List<String>) {
-                        targetNamespaceId = targetNamespace.getNamespaceId(srcNamespace, dstNamespaces)
-                    }
-
-                    override fun visitClass(srcName: String): Boolean {
-                        currentClass = srcName
-
-                        return true
-                    }
-
-                    override fun visitField(srcName: String, srcDesc: String): Boolean {
-                        currentName = srcName
-                        currentDesc = srcDesc
-
-                        return true
-                    }
-
-                    override fun visitMethod(srcName: String, srcDesc: String): Boolean {
-                        currentName = srcName
-                        currentDesc = srcDesc
-
-                        return true
-                    }
-
-                    override fun visitMethodArg(argPosition: Int, lvIndex: Int, srcName: String?): Boolean {
-                        currentLvIndex = lvIndex
-
-                        return true
-                    }
-
-                    override fun visitMethodVar(lvtRowIndex: Int, lvIndex: Int, startOpIdx: Int, srcName: String?): Boolean {
-                        currentLvIndex = lvIndex
-                        currentStartOpIndex = startOpIdx
-                        currentLvtRowIndex = lvtRowIndex
-                        return true
-                    }
-
-                    override fun visitDstName(targetKind: MappedElementKind, namespace: Int, name: String) {
-                        if (namespace != targetNamespaceId) return
-
-                        if (targetKind == MappedElementKind.CLASS) {
-                            return it.acceptClass(currentClass, name)
+                            newTree
+                        } else {
+                            mappings
                         }
 
-                        val member = IMappingProvider.Member(currentClass, currentName, currentDesc)
+                    tree.accept(
+                        object : MappingVisitor {
+                            var targetNamespaceId: Int = MappingTreeView.NULL_NAMESPACE_ID
 
-                        when (targetKind) {
-                            MappedElementKind.FIELD -> it.acceptField(member, name)
-                            MappedElementKind.METHOD -> it.acceptMethod(member, name)
-                            MappedElementKind.METHOD_ARG -> it.acceptMethodArg(member, currentLvIndex, name)
-                            MappedElementKind.METHOD_VAR -> it.acceptMethodVar(member, currentLvIndex, currentStartOpIndex, currentLvtRowIndex, name)
-                            else -> {}
-                        }
+                            lateinit var currentClass: String
+
+                            lateinit var currentName: String
+                            var currentDesc: String? = null
+
+                            var currentLvtRowIndex: Int = -1
+                            var currentStartOpIndex: Int = -1
+                            var currentLvIndex: Int = -1
+
+                            override fun visitNamespaces(
+                                srcNamespace: String,
+                                dstNamespaces: List<String>,
+                            ) {
+                                targetNamespaceId = targetNamespace.getNamespaceId(srcNamespace, dstNamespaces)
+                            }
+
+                            override fun visitClass(srcName: String): Boolean {
+                                currentClass = srcName
+
+                                return true
+                            }
+
+                            override fun visitField(
+                                srcName: String,
+                                srcDesc: String?,
+                            ): Boolean {
+                                currentName = srcName
+                                currentDesc = srcDesc
+
+                                return true
+                            }
+
+                            override fun visitMethod(
+                                srcName: String,
+                                srcDesc: String,
+                            ): Boolean {
+                                currentName = srcName
+                                currentDesc = srcDesc
+
+                                return true
+                            }
+
+                            override fun visitMethodArg(
+                                argPosition: Int,
+                                lvIndex: Int,
+                                srcName: String?,
+                            ): Boolean {
+                                currentLvIndex = lvIndex
+
+                                return true
+                            }
+
+                            override fun visitMethodVar(
+                                lvtRowIndex: Int,
+                                lvIndex: Int,
+                                startOpIdx: Int,
+                                srcName: String?,
+                            ): Boolean {
+                                currentLvIndex = lvIndex
+                                currentStartOpIndex = startOpIdx
+                                currentLvtRowIndex = lvtRowIndex
+                                return true
+                            }
+
+                            override fun visitDstName(
+                                targetKind: MappedElementKind,
+                                namespace: Int,
+                                name: String,
+                            ) {
+                                if (namespace != targetNamespaceId) return
+
+                                if (targetKind == MappedElementKind.CLASS) {
+                                    return it.acceptClass(currentClass, name)
+                                }
+
+                                val member = IMappingProvider.Member(currentClass, currentName, currentDesc)
+
+                                when (targetKind) {
+                                    MappedElementKind.FIELD -> it.acceptField(member, name)
+                                    MappedElementKind.METHOD -> it.acceptMethod(member, name)
+                                    MappedElementKind.METHOD_ARG -> it.acceptMethodArg(member, currentLvIndex, name)
+                                    MappedElementKind.METHOD_VAR ->
+                                        it.acceptMethodVar(
+                                            member,
+                                            currentLvIndex,
+                                            currentStartOpIndex,
+                                            currentLvtRowIndex,
+                                            name,
+                                        )
+                                    else -> {}
+                                }
+                            }
+
+                            override fun visitComment(
+                                targetKind: MappedElementKind,
+                                comment: String,
+                            ) {}
+                        },
+                    )
+
+                    if (rebuild) {
+                        tree.accept(MappingSourceNsSwitch(mappings as MappingVisitor, mappings.srcNamespace))
                     }
-
-                    override fun visitComment(targetKind: MappedElementKind, comment: String) {}
-                })
-
-                if (rebuild) {
-                    tree.accept(MappingSourceNsSwitch(mappings as MappingVisitor, mappings.srcNamespace))
-                }
-            }.build()
+                }.build()
 
         try {
             output.deleteExisting()

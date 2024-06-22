@@ -28,5 +28,4 @@ fun interface ListedFileRule<T : Any> {
 }
 
 @Suppress("UNCHECKED_CAST")
-fun <T : Any> ObjectFactory.listedFileRuleList() =
-    listProperty(ListedFileRule::class.java) as ListProperty<ListedFileRule<T>>
+fun <T : Any> ObjectFactory.listedFileRuleList() = listProperty(ListedFileRule::class.java) as ListProperty<ListedFileRule<T>>

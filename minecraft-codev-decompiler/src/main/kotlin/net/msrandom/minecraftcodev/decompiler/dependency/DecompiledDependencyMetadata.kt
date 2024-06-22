@@ -19,12 +19,14 @@ class DslOriginDecompiledDependencyMetadata(override val delegate: LocalOriginDe
     LocalOriginDependencyMetadata by delegate,
     DslOriginDependencyMetadata,
     DecompiledDependencyMetadata {
-    override fun withTarget(target: ComponentSelector) =
-        DslOriginDecompiledDependencyMetadata(delegate.withTarget(target), source)
+    override fun withTarget(target: ComponentSelector) = DslOriginDecompiledDependencyMetadata(delegate.withTarget(target), source)
 
-    override fun withTargetAndArtifacts(target: ComponentSelector, artifacts: List<IvyArtifactName>) =
-        DslOriginDecompiledDependencyMetadata(delegate.withTargetAndArtifacts(target, artifacts), source)
+    override fun withTargetAndArtifacts(
+        target: ComponentSelector,
+        artifacts: List<IvyArtifactName>,
+    ) = DslOriginDecompiledDependencyMetadata(delegate.withTargetAndArtifacts(target, artifacts), source)
 
     override fun getSource() = source
+
     override fun forced() = DslOriginDecompiledDependencyMetadata(delegate.forced(), source)
 }

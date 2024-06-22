@@ -11,7 +11,10 @@ import java.nio.file.StandardCopyOption
 import kotlin.io.path.*
 
 object JarAccessWidener {
-    fun accessWiden(accessWidener: AccessModifiers, input: Path): Path {
+    fun accessWiden(
+        accessWidener: AccessModifiers,
+        input: Path,
+    ): Path {
         val output = Files.createTempFile("access-widened", ".tmp.jar")
 
         output.deleteExisting()

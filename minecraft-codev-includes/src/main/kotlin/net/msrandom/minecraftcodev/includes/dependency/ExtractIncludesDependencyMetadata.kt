@@ -17,18 +17,19 @@ class ExtractIncludesDependencyMetadataWrapper(override val delegate: Dependency
 
 class DslOriginExtractIncludesDependencyMetadata(
     override val delegate: LocalOriginDependencyMetadata,
-    private val source: Dependency
+    private val source: Dependency,
 ) :
     LocalOriginDependencyMetadata by delegate,
     DslOriginDependencyMetadata,
     ExtractIncludesDependencyMetadata {
+    override fun withTarget(target: ComponentSelector) = DslOriginExtractIncludesDependencyMetadata(delegate.withTarget(target), source)
 
-    override fun withTarget(target: ComponentSelector) =
-        DslOriginExtractIncludesDependencyMetadata(delegate.withTarget(target), source)
-
-    override fun withTargetAndArtifacts(target: ComponentSelector, artifacts: List<IvyArtifactName>) =
-        DslOriginExtractIncludesDependencyMetadata(delegate.withTargetAndArtifacts(target, artifacts), source)
+    override fun withTargetAndArtifacts(
+        target: ComponentSelector,
+        artifacts: List<IvyArtifactName>,
+    ) = DslOriginExtractIncludesDependencyMetadata(delegate.withTargetAndArtifacts(target, artifacts), source)
 
     override fun getSource() = source
+
     override fun forced() = DslOriginExtractIncludesDependencyMetadata(delegate.forced(), source)
 }

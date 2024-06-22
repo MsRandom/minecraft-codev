@@ -11,17 +11,16 @@ import org.jetbrains.kotlin.gradle.plugin.*
 val String.asNamePart
     get() = takeIf { it != SourceSet.MAIN_SOURCE_SET_NAME }.orEmpty()
 
-fun SourceSet.disambiguateName(elementName: String) =
-    lowerCamelCaseName(name.asNamePart, elementName)
+fun SourceSet.disambiguateName(elementName: String) = lowerCamelCaseName(name.asNamePart, elementName)
 
-fun HasKotlinDependencies.disambiguateName(elementName: String) = if (this is KotlinCompilation<*>) {
-    lowerCamelCaseName(target.disambiguationClassifier, name.asNamePart, elementName)
-} else {
-    lowerCamelCaseName((this as Named).name, elementName)
-}
+fun HasKotlinDependencies.disambiguateName(elementName: String) =
+    if (this is KotlinCompilation<*>) {
+        lowerCamelCaseName(target.disambiguationClassifier, name.asNamePart, elementName)
+    } else {
+        lowerCamelCaseName((this as Named).name, elementName)
+    }
 
-fun KotlinTarget.disambiguateName(elementName: String) =
-    lowerCamelCaseName(targetName, elementName)
+fun KotlinTarget.disambiguateName(elementName: String) = lowerCamelCaseName(targetName, elementName)
 
 fun lowerCamelCaseName(vararg nameParts: String?): String {
     val nonEmptyParts = nameParts.mapNotNull { it?.takeIf(String::isNotEmpty) }
@@ -29,7 +28,7 @@ fun lowerCamelCaseName(vararg nameParts: String?): String {
     return nonEmptyParts.drop(1).joinToString(
         separator = "",
         prefix = nonEmptyParts.firstOrNull().orEmpty(),
-        transform = StringUtils::capitalize
+        transform = StringUtils::capitalize,
     )
 }
 
@@ -37,7 +36,7 @@ fun Project.createSourceSetElements(
     sourceSetHandler: (sourceSet: SourceSet) -> Unit,
     kotlinTargetHandler: (target: KotlinTarget) -> Unit,
     kotlinCompilationHandler: (compilation: KotlinCompilation<*>) -> Unit,
-    kotlinSourceSetHandler: (sourceSet: KotlinSourceSet) -> Unit
+    kotlinSourceSetHandler: (sourceSet: KotlinSourceSet) -> Unit,
 ) {
     plugins.withType(JavaPlugin::class.java) {
         extensions.getByType(SourceSetContainer::class.java).all(sourceSetHandler)
@@ -54,11 +53,15 @@ fun Project.createSourceSetElements(
     }
 }
 
-fun Project.createCompilationConfigurations(name: String, transitive: Boolean = false) {
-    fun createConfiguration(name: String) = configurations.maybeCreate(name).apply {
-        isCanBeConsumed = false
-        isTransitive = transitive
-    }
+fun Project.createCompilationConfigurations(
+    name: String,
+    transitive: Boolean = false,
+) {
+    fun createConfiguration(name: String) =
+        configurations.maybeCreate(name).apply {
+            isCanBeConsumed = false
+            isTransitive = transitive
+        }
 
     createSourceSetElements({
         createConfiguration(it.disambiguateName(name))
@@ -69,11 +72,15 @@ fun Project.createCompilationConfigurations(name: String, transitive: Boolean = 
     })
 }
 
-fun Project.createTargetConfigurations(name: String, transitive: Boolean = false) {
-    fun createConfiguration(name: String) = configurations.maybeCreate(name).apply {
-        isCanBeConsumed = false
-        isTransitive = transitive
-    }
+fun Project.createTargetConfigurations(
+    name: String,
+    transitive: Boolean = false,
+) {
+    fun createConfiguration(name: String) =
+        configurations.maybeCreate(name).apply {
+            isCanBeConsumed = false
+            isTransitive = transitive
+        }
 
     createSourceSetElements({
         createConfiguration(it.disambiguateName(name))

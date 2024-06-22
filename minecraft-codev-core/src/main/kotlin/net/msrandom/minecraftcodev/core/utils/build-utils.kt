@@ -28,13 +28,14 @@ fun osVersion(): String {
 fun <R> BuildOperationContext.callWithStatus(action: () -> R): R {
     setStatus("EXECUTING")
 
-    val result = try {
-        action()
-    } catch (failure: Throwable) {
-        setStatus("FAILED")
-        failed(failure)
-        throw failure
-    }
+    val result =
+        try {
+            action()
+        } catch (failure: Throwable) {
+            setStatus("FAILED")
+            failed(failure)
+            throw failure
+        }
 
     setStatus("DONE")
 
@@ -51,9 +52,16 @@ val ModuleComponentArtifactIdentifier.asSerializable: ModuleComponentArtifactIde
         }
     }
 
-fun <T : PluginAware> Plugin<T>.applyPlugin(target: T, action: Project.() -> Unit) = applyPlugin(target, {}, action)
+fun <T : PluginAware> Plugin<T>.applyPlugin(
+    target: T,
+    action: Project.() -> Unit,
+) = applyPlugin(target, {}, action)
 
-fun <T : PluginAware> Plugin<T>.applyPlugin(target: T, gradleSetup: (Gradle) -> Unit, action: Project.() -> Unit) {
+fun <T : PluginAware> Plugin<T>.applyPlugin(
+    target: T,
+    gradleSetup: (Gradle) -> Unit,
+    action: Project.() -> Unit,
+) {
     target.plugins.apply(MinecraftCodevPlugin::class.java)
 
     return when (target) {
@@ -65,9 +73,10 @@ fun <T : PluginAware> Plugin<T>.applyPlugin(target: T, gradleSetup: (Gradle) -> 
             }
         }
 
-        is Settings -> target.gradle.apply {
-            it.plugin(javaClass)
-        }
+        is Settings ->
+            target.gradle.apply {
+                it.plugin(javaClass)
+            }
 
         is Project -> {
             gradleSetup(target.gradle)

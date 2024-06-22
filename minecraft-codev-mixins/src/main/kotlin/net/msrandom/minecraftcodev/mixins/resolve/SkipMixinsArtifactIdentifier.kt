@@ -9,12 +9,16 @@ import org.gradle.internal.serialize.Serializer
 
 data class SkipMixinsArtifactIdentifier(val id: ComponentArtifactIdentifier, private val originalHash: HashCode) {
     object ArtifactSerializer : Serializer<SkipMixinsArtifactIdentifier> {
-        override fun read(decoder: Decoder) = SkipMixinsArtifactIdentifier(
-            artifactIdSerializer.read(decoder),
-            HashCode.fromBytes(decoder.readBinary())
-        )
+        override fun read(decoder: Decoder) =
+            SkipMixinsArtifactIdentifier(
+                artifactIdSerializer.read(decoder),
+                HashCode.fromBytes(decoder.readBinary()),
+            )
 
-        override fun write(encoder: Encoder, value: SkipMixinsArtifactIdentifier) {
+        override fun write(
+            encoder: Encoder,
+            value: SkipMixinsArtifactIdentifier,
+        ) {
             artifactIdSerializer.write(encoder, value.id)
             encoder.writeBinary(value.originalHash.toByteArray())
         }

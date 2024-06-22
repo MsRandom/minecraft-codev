@@ -9,5 +9,9 @@ import java.net.URI
 @Serializer(URI::class)
 object URISerializer : KSerializer<URI> {
     override fun deserialize(decoder: Decoder): URI = URI.create(decoder.decodeString())
-    override fun serialize(encoder: Encoder, value: URI) = encoder.encodeString(value.toString())
+
+    override fun serialize(
+        encoder: Encoder,
+        value: URI,
+    ) = encoder.encodeString(value.toString())
 }

@@ -2,22 +2,16 @@ package net.msrandom.minecraftcodev.forge.task
 
 import net.msrandom.minecraftcodev.core.task.AddClientSideAnnotations
 import net.msrandom.minecraftcodev.core.task.IsClientOnlyAnnotation
-import org.gradle.api.DefaultTask
-import org.gradle.api.file.ConfigurableFileCollection
-import org.gradle.api.file.DirectoryProperty
-import org.gradle.api.tasks.InputDirectory
-import org.gradle.api.tasks.InputFiles
-import org.gradle.api.tasks.OutputDirectory
-import org.gradle.api.tasks.TaskAction
 import org.objectweb.asm.*
-import java.io.File
-import java.net.URLClassLoader
-import kotlin.io.path.createDirectories
 
 class ForgeAnnotationFinderVisitor(visitor: AnnotationVisitor?) : AnnotationVisitor(Opcodes.ASM9, visitor), IsClientOnlyAnnotation {
     override var isClientOnlyAnnotation = false
 
-    override fun visitEnum(name: String, descriptor: String, value: String) {
+    override fun visitEnum(
+        name: String,
+        descriptor: String,
+        value: String,
+    ) {
         if (name == "value" && descriptor == "Lnet/minecraftforge/api/distmarker/Dist;" && value == "CLIENT") {
             isClientOnlyAnnotation = true
         }
@@ -27,7 +21,10 @@ class ForgeAnnotationFinderVisitor(visitor: AnnotationVisitor?) : AnnotationVisi
 }
 
 abstract class AddForgeClientSideAnnotations : AddClientSideAnnotations<ForgeAnnotationFinderVisitor>() {
-    private fun interfaceClientAnnotation(annotationVisitor: AnnotationVisitor?, type: String) {
+    private fun interfaceClientAnnotation(
+        annotationVisitor: AnnotationVisitor?,
+        type: String,
+    ) {
         if (annotationVisitor == null) return
 
         annotationVisitor.visitEnum("value", "Lnet/minecraftforge/api/distmarker/Dist;", "CLIENT")
@@ -35,7 +32,10 @@ abstract class AddForgeClientSideAnnotations : AddClientSideAnnotations<ForgeAnn
         annotationVisitor.visitEnd()
     }
 
-    override fun addClientOnlyAnnotation(visitor: ClassVisitor, interfaces: List<String>) {
+    override fun addClientOnlyAnnotation(
+        visitor: ClassVisitor,
+        interfaces: List<String>,
+    ) {
         if (interfaces.size == 1) {
             interfaceClientAnnotation(visitor.visitAnnotation("Lnet/minecraftforge/api/distmarker/OnlyIn;", true), interfaces.first())
 
@@ -60,7 +60,10 @@ abstract class AddForgeClientSideAnnotations : AddClientSideAnnotations<ForgeAnn
         annotationVisitor.visitEnd()
     }
 
-    override fun getClientOnlyAnnotationVisitor(descriptor: String, visitor: AnnotationVisitor?): ForgeAnnotationFinderVisitor? {
+    override fun getClientOnlyAnnotationVisitor(
+        descriptor: String,
+        visitor: AnnotationVisitor?,
+    ): ForgeAnnotationFinderVisitor? {
         if (descriptor == "Lnet/minecraftforge/api/distmarker/OnlyIn;") {
             return ForgeAnnotationFinderVisitor(visitor)
         }

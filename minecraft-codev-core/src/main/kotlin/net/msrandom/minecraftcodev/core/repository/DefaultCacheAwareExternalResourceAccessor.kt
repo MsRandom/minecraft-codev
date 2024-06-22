@@ -38,7 +38,9 @@ import kotlin.io.path.createDirectories
 import com.google.common.io.Files as GuavaFiles
 
 // Basically copied from Gradle, not finished
-open class DefaultCacheAwareExternalResourceAccessor @Inject constructor(
+open class DefaultCacheAwareExternalResourceAccessor
+@Inject
+constructor(
     private val repository: ExternalResourceRepository,
     cacheProvider: CodevCacheProvider,
     private val timeProvider: BuildCommencedTimeProvider,
@@ -46,22 +48,26 @@ open class DefaultCacheAwareExternalResourceAccessor @Inject constructor(
     startParameterResolutionOverride: StartParameterResolutionOverride,
     private val producerGuard: ProducerGuard<ExternalResourceName>,
     private val fileResourceRepository: FileResourceRepository,
-    private val checksumService: ChecksumService
+    private val checksumService: ChecksumService,
 ) {
-    private val externalResourceCachePolicy = startParameterResolutionOverride.overrideExternalResourceCachePolicy(DefaultExternalResourceCachePolicy())
+    private val externalResourceCachePolicy =
+        startParameterResolutionOverride.overrideExternalResourceCachePolicy(
+            DefaultExternalResourceCachePolicy(),
+        )
 
-    private val cachedExternalResourceIndex = run {
-        val cacheManager = cacheProvider.manager("minecraft")
-        cacheManager.getMetadataCache(Path("resource-at-url"), { BaseSerializerFactory.STRING_SERIALIZER }) {
-            CachedExternalResourceSerializer(cacheManager.rootPath)
-        }.asFile
-    }
+    private val cachedExternalResourceIndex =
+        run {
+            val cacheManager = cacheProvider.manager("minecraft")
+            cacheManager.getMetadataCache(Path("resource-at-url"), { BaseSerializerFactory.STRING_SERIALIZER }) {
+                CachedExternalResourceSerializer(cacheManager.rootPath)
+            }.asFile
+        }
 
     fun getResource(
         location: ExternalResourceName,
         sha1: String?,
         destination: Path,
-        additionalCandidates: LocallyAvailableResourceCandidates?
+        additionalCandidates: LocallyAvailableResourceCandidates?,
     ): LocallyAvailableExternalResource? {
         return producerGuard.guardByKey(location) {
             LOGGER.debug("Constructing external resource: {}", location)
@@ -82,7 +88,10 @@ open class DefaultCacheAwareExternalResourceAccessor @Inject constructor(
 
             // Is the cached version still current?
             if (cached != null) {
-                val isUnchanged = ExternalResourceMetaDataCompare.isDefinitelyUnchanged(cached.externalResourceMetaData) { remoteMetaData }
+                val isUnchanged =
+                    ExternalResourceMetaDataCompare.isDefinitelyUnchanged(
+                        cached.externalResourceMetaData,
+                    ) { remoteMetaData }
                 if (cached.cachedFile?.exists() == true && isUnchanged) {
                     LOGGER.info("Cached resource {} is up-to-date (lastModified: {}).", location, cached.externalLastModified)
                     // Update the cache entry in the index: this resets the age of the cached entry to zero
@@ -100,11 +109,12 @@ open class DefaultCacheAwareExternalResourceAccessor @Inject constructor(
                     val local = additionalCandidates.findByHashValue(remoteChecksum)
                     if (local != null) {
                         LOGGER.info("Found locally available resource with matching checksum: [{}, {}]", location, local.file)
-                        val resource = try {
-                            copyCandidateToCache(location, destination, remoteMetaData, remoteChecksum, local)
-                        } catch (e: IOException) {
-                            throw UncheckedIOException(e)
-                        }
+                        val resource =
+                            try {
+                                copyCandidateToCache(location, destination, remoteMetaData, remoteChecksum, local)
+                            } catch (e: IOException) {
+                                throw UncheckedIOException(e)
+                            }
                         if (resource != null) {
                             return@guardByKey resource
                         }
@@ -119,12 +129,13 @@ open class DefaultCacheAwareExternalResourceAccessor @Inject constructor(
         return try {
             val sha1Location = location.append(".sha1")
             val resource = repository.resource(sha1Location, true)
-            val result = resource.withContentIfPresent { inputStream: InputStream? ->
-                var sha = IOUtils.toString(inputStream, StandardCharsets.US_ASCII)
-                // Servers may return SHA-1 with leading zeros stripped
-                sha = StringUtils.leftPad(sha, Hashing.sha1().hexDigits, '0')
-                HashCode.fromString(sha)
-            }
+            val result =
+                resource.withContentIfPresent { inputStream: InputStream? ->
+                    var sha = IOUtils.toString(inputStream, StandardCharsets.US_ASCII)
+                    // Servers may return SHA-1 with leading zeros stripped
+                    sha = StringUtils.leftPad(sha, Hashing.sha1().hexDigits, '0')
+                    HashCode.fromString(sha)
+                }
             result?.result
         } catch (e: Exception) {
             LOGGER.debug(String.format("Failed to download SHA1 for resource '%s'.", location), e)
@@ -138,7 +149,7 @@ open class DefaultCacheAwareExternalResourceAccessor @Inject constructor(
         destination: Path,
         remoteMetaData: ExternalResourceMetaData,
         remoteChecksum: HashCode,
-        local: LocallyAvailableResource
+        local: LocallyAvailableResource,
     ): LocallyAvailableExternalResource? {
         val temp = temporaryFileProvider.createTemporaryFile("gradle_download", "bin")
         return try {
@@ -146,22 +157,30 @@ open class DefaultCacheAwareExternalResourceAccessor @Inject constructor(
             val localChecksum = checksumService.sha1(temp)
             if (localChecksum != remoteChecksum) {
                 null
-            } else moveIntoCache(source, temp, destination, remoteMetaData)
+            } else {
+                moveIntoCache(source, temp, destination, remoteMetaData)
+            }
         } finally {
             temp.delete()
         }
     }
 
-    private fun copyToCache(source: ExternalResourceName, destination: Path, resource: ExternalResource): LocallyAvailableExternalResource? {
+    private fun copyToCache(
+        source: ExternalResourceName,
+        destination: Path,
+        resource: ExternalResource,
+    ): LocallyAvailableExternalResource? {
         // Download to temporary location
         val downloadAction = DownloadAction(source)
         resource.withContentIfPresent(downloadAction)
         return if (downloadAction.metaData == null) {
             null
-        } else try {
-            moveIntoCache(source, downloadAction.destination, destination, downloadAction.metaData)
-        } finally {
-            downloadAction.destination.delete()
+        } else {
+            try {
+                moveIntoCache(source, downloadAction.destination, destination, downloadAction.metaData)
+            } finally {
+                downloadAction.destination.delete()
+            }
         }
     }
 
@@ -169,7 +188,7 @@ open class DefaultCacheAwareExternalResourceAccessor @Inject constructor(
         source: ExternalResourceName,
         destination: File?,
         output: Path,
-        metaData: ExternalResourceMetaData?
+        metaData: ExternalResourceMetaData?,
     ): LocallyAvailableExternalResource {
         val fileInFileStore = output.toFile()
         output.parent?.createDirectories()
@@ -183,7 +202,10 @@ open class DefaultCacheAwareExternalResourceAccessor @Inject constructor(
         var metaData: ExternalResourceMetaData? = null
 
         @Throws(IOException::class)
-        override fun execute(inputStream: InputStream, metaData: ExternalResourceMetaData): Any? {
+        override fun execute(
+            inputStream: InputStream,
+            metaData: ExternalResourceMetaData,
+        ): Any? {
             destination = temporaryFileProvider.createTemporaryFile("gradle_download", "bin")
             this.metaData = metaData
             LOGGER.info("Downloading {} to {}", source, destination)

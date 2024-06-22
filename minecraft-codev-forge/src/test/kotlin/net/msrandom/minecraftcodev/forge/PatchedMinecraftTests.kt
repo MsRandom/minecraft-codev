@@ -18,5 +18,6 @@ class PatchedMinecraftTests {
     }
 
     @Test fun `Test patched Minecraft`() = test("basic-patched-test")
+
     @Test fun `Test remapped patched Minecraft`() = test("remapped-patched-test")
 }

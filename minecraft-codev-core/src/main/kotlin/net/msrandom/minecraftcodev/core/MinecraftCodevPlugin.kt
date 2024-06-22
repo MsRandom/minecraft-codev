@@ -21,58 +21,70 @@ import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 
 open class MinecraftCodevPlugin<T : PluginAware> : Plugin<T> {
-    private fun applyGradle(gradle: Gradle) = gradle.registerCustomDependency(
-        "minecraft",
-        MinecraftDependencyMetadataConverter::class.java,
-        MinecraftComponentResolvers::class.java
-    )
+    private fun applyGradle(gradle: Gradle) =
+        gradle.registerCustomDependency(
+            "minecraft",
+            MinecraftDependencyMetadataConverter::class.java,
+            MinecraftComponentResolvers::class.java,
+        )
 
-    override fun apply(target: T) = applyPlugin(target, ::applyGradle) {
-        handleCustomQueryResolvers()
+    override fun apply(target: T) =
+        applyPlugin(target, ::applyGradle) {
+            handleCustomQueryResolvers()
 
-        val codev = extensions.create("minecraft", MinecraftCodevExtension::class.java)
+            val codev = extensions.create("minecraft", MinecraftCodevExtension::class.java)
 
-        codev.modInfoDetectionRules.add {
-            if (it.getPath("pack.mcmeta").exists()) {
-                ModInfo(ModInfoType.Platform, "vanilla", 1)
-            } else {
-                null
-            }
-        }
-
-        codev.modInfoDetectionRules.add {
-            val path = it.getPath("META-INF", "MANIFEST.MF")
-
-            if (path.exists()) {
-                val attributes = path.inputStream().use(::Manifest).mainAttributes
-
-                attributes.getValue(CODEV_MAPPING_NAMESPACE_ATTRIBUTE)?.let { namespace -> ModInfo(ModInfoType.Namespace, namespace, 4) }
-            } else {
-                null
-            }
-        }
-
-        dependencies.attributesSchema { schema ->
-            schema.attribute(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE) {
-                it.disambiguationRules.add(OperatingSystemDisambiguationRule::class.java)
+            codev.modInfoDetectionRules.add {
+                if (it.getPath("pack.mcmeta").exists()) {
+                    ModInfo(ModInfoType.Platform, "vanilla", 1)
+                } else {
+                    null
+                }
             }
 
-            schema.attribute(OPERATING_SYSTEM_VERSION_PATTERN_ATTRIBUTE) {
-                it.compatibilityRules.add(VersionPatternCompatibilityRule::class.java)
+            codev.modInfoDetectionRules.add {
+                val path = it.getPath("META-INF", "MANIFEST.MF")
+
+                if (path.exists()) {
+                    val attributes = path.inputStream().use(::Manifest).mainAttributes
+
+                    attributes.getValue(
+                        CODEV_MAPPING_NAMESPACE_ATTRIBUTE,
+                    )?.let { namespace -> ModInfo(ModInfoType.Namespace, namespace, 4) }
+                } else {
+                    null
+                }
+            }
+
+            dependencies.attributesSchema { schema ->
+                schema.attribute(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE) {
+                    it.disambiguationRules.add(OperatingSystemDisambiguationRule::class.java)
+                }
+
+                schema.attribute(OPERATING_SYSTEM_VERSION_PATTERN_ATTRIBUTE) {
+                    it.compatibilityRules.add(VersionPatternCompatibilityRule::class.java)
+                }
+            }
+
+            project.configurations.all { configuration ->
+                configuration.incoming.attributes.attribute(
+                    OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE,
+                    project.objects.named(OperatingSystem.current().familyName),
+                )
             }
         }
-
-        project.configurations.all { configuration ->
-            configuration.incoming.attributes.attribute(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE, project.objects.named(OperatingSystem.current().familyName))
-        }
-    }
 
     companion object {
         @JvmField
-        val OPERATING_SYSTEM_VERSION_PATTERN_ATTRIBUTE: Attribute<String> = Attribute.of("net.msrandom.minecraftcodev.operatingSystemVersionPattern", String::class.java)
+        val OPERATING_SYSTEM_VERSION_PATTERN_ATTRIBUTE: Attribute<String> =
+            Attribute.of(
+                "net.msrandom.minecraftcodev.operatingSystemVersionPattern",
+                String::class.java,
+            )
 
-        val json = Json {
-            ignoreUnknownKeys = true
-        }
+        val json =
+            Json {
+                ignoreUnknownKeys = true
+            }
     }
 }

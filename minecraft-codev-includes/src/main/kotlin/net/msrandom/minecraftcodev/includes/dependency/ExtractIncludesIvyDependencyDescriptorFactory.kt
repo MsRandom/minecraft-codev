@@ -11,13 +11,13 @@ import javax.inject.Inject
 
 open class ExtractIncludesDependencyMetadataConverter @Inject constructor(
     excludeRuleConverter: ExcludeRuleConverter,
-    private val descriptorFactory: DependencyMetadataFactory
+    private val descriptorFactory: DependencyMetadataFactory,
 ) : AbstractDependencyMetadataConverter(excludeRuleConverter) {
     override fun createDependencyMetadata(
         componentId: ComponentIdentifier,
         clientConfiguration: String?,
         attributes: AttributeContainer?,
-        dependency: ModuleDependency
+        dependency: ModuleDependency,
     ): LocalOriginDependencyMetadata {
         val source = (dependency as ExtractIncludesDependency<*>).sourceDependency
         val sourceDescriptor = descriptorFactory.createDependencyMetadata(componentId, clientConfiguration, attributes, source)

@@ -10,44 +10,53 @@ import kotlin.streams.asSequence
 
 private val fileSystemLocks = ConcurrentHashMap<Path, ReentrantLock>()
 
-fun Path.createDeterministicCopy(prefix: String, suffix: String): Path {
+fun Path.createDeterministicCopy(
+    prefix: String,
+    suffix: String,
+): Path {
     val path = Files.createTempFile(prefix, suffix)
     copyTo(path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES)
 
     return path
 }
 
-fun zipFileSystem(file: Path, create: Boolean = false): LockingFileSystem {
+fun zipFileSystem(
+    file: Path,
+    create: Boolean = false,
+): LockingFileSystem {
     val uri = URI.create("jar:${file.toUri()}")
 
-    val lock = fileSystemLocks.computeIfAbsent(file.toAbsolutePath()) {
-        ReentrantLock()
-    }
+    val lock =
+        fileSystemLocks.computeIfAbsent(file.toAbsolutePath()) {
+            ReentrantLock()
+        }
 
     lock.lock()
 
     var owned = true
 
-    val base = if (create) {
-        FileSystems.newFileSystem(uri, mapOf("create" to true.toString()))
-    } else {
-        try {
-            val fileSystem = FileSystems.getFileSystem(uri)
+    val base =
+        if (create) {
+            FileSystems.newFileSystem(uri, mapOf("create" to true.toString()))
+        } else {
+            try {
+                val fileSystem = FileSystems.getFileSystem(uri)
 
-            owned = false
+                owned = false
 
-            fileSystem
-        } catch (exception: FileSystemNotFoundException) {
-            FileSystems.newFileSystem(uri, emptyMap<String, Any>())
+                fileSystem
+            } catch (exception: FileSystemNotFoundException) {
+                FileSystems.newFileSystem(uri, emptyMap<String, Any>())
+            }
         }
-    }
 
     return LockingFileSystem(base, lock, owned)
 }
 
-fun <T> Path.walk(action: Sequence<Path>.() -> T) = Files.walk(this).use {
-    it.asSequence().action()
-}
+fun <T> Path.walk(action: Sequence<Path>.() -> T) =
+    Files.walk(this).use {
+        it.asSequence().action()
+    }
 
 class LockingFileSystem(val base: FileSystem, private val lock: Lock, private val owned: Boolean) : AutoCloseable {
     override fun close() {

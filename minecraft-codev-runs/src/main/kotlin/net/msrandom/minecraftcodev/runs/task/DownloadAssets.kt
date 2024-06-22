@@ -51,9 +51,10 @@ abstract class DownloadAssets : DefaultTask() {
 
     @TaskAction
     fun download() {
-        val assetIndex = assetIndexFile.asFile.get().inputStream().use {
-            Json.decodeFromStream<MinecraftVersionMetadata.AssetIndex>(it)
-        }
+        val assetIndex =
+            assetIndexFile.asFile.get().inputStream().use {
+                Json.decodeFromStream<MinecraftVersionMetadata.AssetIndex>(it)
+            }
 
         val codev = project.extensions.getByType(MinecraftCodevExtension::class.java).extensions.getByType(RunsContainer::class.java)
         val assetsDirectory = codev.assetsDirectory
@@ -61,14 +62,19 @@ abstract class DownloadAssets : DefaultTask() {
         val indexesDirectory = assetsDirectory.dir("indexes").get()
         val objectsDirectory = assetsDirectory.dir("objects").get()
 
-        val resourceAccessor = repositoriesSupplier
-            .get()
-            .filterIsInstance<MinecraftRepositoryImpl>()
-            .map(MinecraftRepositoryImpl::createResolver)
-            .firstOrNull()
-            ?.resourceAccessor ?: throw UnsupportedOperationException("No minecraft repository defined")
+        val resourceAccessor =
+            repositoriesSupplier
+                .get()
+                .filterIsInstance<MinecraftRepositoryImpl>()
+                .map(MinecraftRepositoryImpl::createResolver)
+                .firstOrNull()
+                ?.resourceAccessor ?: throw UnsupportedOperationException("No minecraft repository defined")
 
-        fun downloadFile(url: URI, sha1: String?, output: RegularFile) = resourceAccessor.getResource(
+        fun downloadFile(
+            url: URI,
+            sha1: String?,
+            output: RegularFile,
+        ) = resourceAccessor.getResource(
             ExternalResourceName(url),
             sha1,
             output.asFile.toPath(),
@@ -78,7 +84,7 @@ abstract class DownloadAssets : DefaultTask() {
                 } else {
                     emptyList()
                 }
-            }, checksumService)
+            }, checksumService),
         )!!.file
 
         val assetIndexJson = downloadFile(assetIndex.url, assetIndex.sha1, indexesDirectory.file("${assetIndex.id}.json"))
@@ -89,11 +95,12 @@ abstract class DownloadAssets : DefaultTask() {
             for ((name, asset) in index.objects) {
                 val section = asset.hash.substring(0, 2)
 
-                val file = if (index.mapToResources) {
-                    resourcesDirectory.file(name)
-                } else {
-                    objectsDirectory.dir(section).file(asset.hash)
-                }
+                val file =
+                    if (index.mapToResources) {
+                        resourcesDirectory.file(name)
+                    } else {
+                        objectsDirectory.dir(section).file(asset.hash)
+                    }
 
                 if (file.asFile.exists()) {
                     if (checksumService.sha1(file.asFile).toString() == asset.hash) {
@@ -107,18 +114,19 @@ abstract class DownloadAssets : DefaultTask() {
                     continue
                 }
 
-                it.add(object : RunnableBuildOperation {
-                    override fun description() =
-                        BuildOperationDescriptor.displayName("Download or Check cached $file")
+                it.add(
+                    object : RunnableBuildOperation {
+                        override fun description() = BuildOperationDescriptor.displayName("Download or Check cached $file")
 
-                    override fun run(context: BuildOperationContext) {
-                        downloadFile(
-                            URI("https", "resources.download.minecraft.net", "/$section/${asset.hash}", null),
-                            asset.hash,
-                            file
-                        )
-                    }
-                })
+                        override fun run(context: BuildOperationContext) {
+                            downloadFile(
+                                URI("https", "resources.download.minecraft.net", "/$section/${asset.hash}", null),
+                                asset.hash,
+                                file,
+                            )
+                        }
+                    },
+                )
             }
         }
     }

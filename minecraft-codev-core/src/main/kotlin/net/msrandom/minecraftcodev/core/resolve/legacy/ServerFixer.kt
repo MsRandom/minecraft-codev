@@ -11,19 +11,23 @@ import kotlin.io.path.isRegularFile
 import kotlin.io.path.notExists
 
 object ServerFixer {
-    private val LIBRARY_PATHS = mapOf(
-        "com.mojang:javabridge" to "/com/mojang/bridge",
-        "com.mojang:datafixerupper" to "/com/mojang/datafixers",
-        "net.sf.jopt-simple:jopt-simple" to "/joptsimple",
-        "com.google.code.gson:gson" to "/com/google/gson",
-        "com.google.guava:guava" to "/com/google",
-        "commons-logging:commons-logging" to "/org/apache/commons/logging",
-        "org.apache.commons:commons-lang3" to "/org/apache/commons/lang3",
-        "org.apache.commons:commons-compress" to "/org/apache/commons/compress",
-        "org.apache.logging.log4j:log4j-core" to "/org/apache/logging/log4j/core"
-    )
+    private val LIBRARY_PATHS =
+        mapOf(
+            "com.mojang:javabridge" to "/com/mojang/bridge",
+            "com.mojang:datafixerupper" to "/com/mojang/datafixers",
+            "net.sf.jopt-simple:jopt-simple" to "/joptsimple",
+            "com.google.code.gson:gson" to "/com/google/gson",
+            "com.google.guava:guava" to "/com/google",
+            "commons-logging:commons-logging" to "/org/apache/commons/logging",
+            "org.apache.commons:commons-lang3" to "/org/apache/commons/lang3",
+            "org.apache.commons:commons-compress" to "/org/apache/commons/compress",
+            "org.apache.logging.log4j:log4j-core" to "/org/apache/logging/log4j/core",
+        )
 
-    private fun testLibraryPath(path: Path, entry: Map.Entry<String, MutableList<Pair<String, MinecraftVersionMetadata.Library>>>): MinecraftVersionMetadata.Library? {
+    private fun testLibraryPath(
+        path: Path,
+        entry: Map.Entry<String, MutableList<Pair<String, MinecraftVersionMetadata.Library>>>,
+    ): MinecraftVersionMetadata.Library? {
         if (entry.value.size == 1) {
             if (path.startsWith(entry.key)) {
                 return entry.value[0].second
@@ -35,7 +39,12 @@ object ServerFixer {
         return entry.value.firstOrNull { path.startsWith(it.first) }?.second
     }
 
-    fun removeLibraries(manifest: MinecraftVersionMetadata, newServer: Path, serverFs: FileSystem, client: Path): Collection<ModuleLibraryIdentifier> {
+    fun removeLibraries(
+        manifest: MinecraftVersionMetadata,
+        newServer: Path,
+        serverFs: FileSystem,
+        client: Path,
+    ): Collection<ModuleLibraryIdentifier> {
         val commonLibraries = mutableSetOf<MinecraftVersionMetadata.Library>()
         val libraryGroups = hashMapOf<String, MutableList<Pair<String, MinecraftVersionMetadata.Library>>>()
 

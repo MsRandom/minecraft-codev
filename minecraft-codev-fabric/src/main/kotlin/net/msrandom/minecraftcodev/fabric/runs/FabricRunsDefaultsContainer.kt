@@ -9,7 +9,6 @@ import net.msrandom.minecraftcodev.runs.task.DownloadAssets
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
 import org.gradle.api.Action
 import org.gradle.api.file.Directory
-import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.tasks.SourceSet
 import java.io.File
 import kotlin.io.path.createDirectories
@@ -22,17 +21,20 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
         defaults.builder.action {
             val file = project.layout.buildDirectory.dir("fabricRemapClasspath").get().file("classpath.txt")
 
-            val runtimeClasspath = compilation
-                .map { it.runtimeDependencyFiles }
-                .orElse(sourceSet.map(SourceSet::getRuntimeClasspath))
-                .get()
+            val runtimeClasspath =
+                compilation
+                    .map { it.runtimeDependencyFiles }
+                    .orElse(sourceSet.map(SourceSet::getRuntimeClasspath))
+                    .get()
 
-            jvmArguments.add(project.provider {
-                file.asFile.toPath().parent.createDirectories()
-                file.asFile.writeText(runtimeClasspath.files.joinToString("\n", transform = File::getAbsolutePath))
+            jvmArguments.add(
+                project.provider {
+                    file.asFile.toPath().parent.createDirectories()
+                    file.asFile.writeText(runtimeClasspath.files.joinToString("\n", transform = File::getAbsolutePath))
 
-                MinecraftRunConfiguration.Argument("-Dfabric.remapClasspathFile=", file.asFile)
-            })
+                    MinecraftRunConfiguration.Argument("-Dfabric.remapClasspathFile=", file.asFile)
+                },
+            )
         }
         defaults.builder.jvmArguments()
     }
@@ -43,21 +45,24 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
         defaults.builder.mainClass(KNOT_CLIENT)
 
         defaults.builder.action {
-            val extractNativesTask = project.tasks.withType(ExtractNatives::class.java)
-                .named(compilation.map { it.target.extractNativesTaskName }.orElse(sourceSet.map { it.extractNativesTaskName }).get())
+            val extractNativesTask =
+                project.tasks.withType(ExtractNatives::class.java)
+                    .named(compilation.map { it.target.extractNativesTaskName }.orElse(sourceSet.map { it.extractNativesTaskName }).get())
 
             val codev = project.extensions.getByType(MinecraftCodevExtension::class.java).extensions.getByType(RunsContainer::class.java)
 
-            val downloadAssetsTask = project.tasks.withType(DownloadAssets::class.java)
-                .named(compilation.map { it.target.downloadAssetsTaskName }.orElse(sourceSet.map { it.downloadAssetsTaskName }).get())
+            val downloadAssetsTask =
+                project.tasks.withType(DownloadAssets::class.java)
+                    .named(compilation.map { it.target.downloadAssetsTaskName }.orElse(sourceSet.map { it.downloadAssetsTaskName }).get())
 
             val nativesDirectory = extractNativesTask.flatMap(ExtractNatives::destinationDirectory).map(Directory::getAsFile)
 
-            val assetIndex = downloadAssetsTask.map {
-                it.assetIndexFile.asFile.get().inputStream().use {
-                    Json.decodeFromStream<MinecraftVersionMetadata.AssetIndex>(it)
-                }.id
-            }
+            val assetIndex =
+                downloadAssetsTask.map {
+                    it.assetIndexFile.asFile.get().inputStream().use {
+                        Json.decodeFromStream<MinecraftVersionMetadata.AssetIndex>(it)
+                    }.id
+                }
 
             arguments.add(MinecraftRunConfiguration.Argument("--assetsDir=", codev.assetsDirectory.asFile))
             arguments.add(MinecraftRunConfiguration.Argument("--assetIndex=", assetIndex))
@@ -88,7 +93,9 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
             action.execute(data)
 
             jvmArguments.add(MinecraftRunConfiguration.Argument("-Dfabric-api.datagen"))
-            jvmArguments.add(data.getOutputDirectory(this).map { MinecraftRunConfiguration.Argument("-Dfabric-api.datagen.output-dir=", it) })
+            jvmArguments.add(
+                data.getOutputDirectory(this).map { MinecraftRunConfiguration.Argument("-Dfabric-api.datagen.output-dir=", it) },
+            )
             jvmArguments.add(data.modId.map { MinecraftRunConfiguration.Argument("-Dfabric-api.datagen.modid=", it) })
         }
     }
@@ -103,12 +110,13 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
         defaults.builder.apply {
             jvmArguments(
                 "-Dfabric-api.gametest",
-                "-Dfabric.autoTest"
+                "-Dfabric.autoTest",
             )
         }
     }
 
     fun gameTestServer() = gameTest(false)
+
     fun gameTestClient() = gameTest(true)
 
     private companion object {

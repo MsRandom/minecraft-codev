@@ -35,11 +35,12 @@ fun Project.integrateIdeaRuns() {
                             if (config.compilation.isPresent) {
                                 fun addSourceSetName(moduleName: String) = moduleName + '.' + config.compilation.get().defaultSourceSetName
 
-                                application.moduleName = if (otherProject == project) {
-                                    addSourceSetName(project.name)
-                                } else {
-                                    addSourceSetName(project.name + otherProject.path.replace(':', '.'))
-                                }
+                                application.moduleName =
+                                    if (otherProject == project) {
+                                        addSourceSetName(project.name)
+                                    } else {
+                                        addSourceSetName(project.name + otherProject.path.replace(':', '.'))
+                                    }
                             } else if (config.sourceSet.isPresent) {
                                 application.moduleRef(otherProject, config.sourceSet.get())
                             } else {
@@ -48,11 +49,15 @@ fun Project.integrateIdeaRuns() {
 
                             // TODO Make this transitive
                             for (other in config.dependsOn.get()) {
-                                application.beforeRun.add(objects.newInstance(RunConfigurationBeforeRunTask::class.java, other.name).apply {
-                                    configuration.set(provider {
-                                        "Application.${other.friendlyName}"
-                                    })
-                                })
+                                application.beforeRun.add(
+                                    objects.newInstance(RunConfigurationBeforeRunTask::class.java, other.name).apply {
+                                        configuration.set(
+                                            provider {
+                                                "Application.${other.friendlyName}"
+                                            },
+                                        )
+                                    },
+                                )
                             }
 
                             for (task in config.beforeRun.get()) {
@@ -68,7 +73,9 @@ fun Project.integrateIdeaRuns() {
 }
 
 // Relies on IntelliJ plugin to import
-abstract class RunConfigurationBeforeRunTask @Inject constructor(name: String) : BeforeRunTask() {
+abstract class RunConfigurationBeforeRunTask
+@Inject
+constructor(name: String) : BeforeRunTask() {
     abstract val configuration: Property<String>
 
     init {

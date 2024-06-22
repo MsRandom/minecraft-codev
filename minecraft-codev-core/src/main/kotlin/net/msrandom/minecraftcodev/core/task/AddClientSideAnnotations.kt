@@ -35,15 +35,23 @@ abstract class AddClientSideAnnotations<T> : DefaultTask() where T : AnnotationV
     abstract val classpath: ConfigurableFileCollection
         @InputFiles get
 
-    abstract fun addClientOnlyAnnotation(visitor: ClassVisitor, interfaces: List<String>)
+    abstract fun addClientOnlyAnnotation(
+        visitor: ClassVisitor,
+        interfaces: List<String>,
+    )
+
     abstract fun addClientOnlyAnnotation(visitor: MethodVisitor)
-    abstract fun getClientOnlyAnnotationVisitor(descriptor: String, visitor: AnnotationVisitor?): T?
+
+    abstract fun getClientOnlyAnnotationVisitor(
+        descriptor: String,
+        visitor: AnnotationVisitor?,
+    ): T?
 
     fun getClientOnlyMembers(
         classpath: URLClassLoader,
         type: String,
         cache: MutableMap<String, CachedClientOnlyMembers>,
-        handled: MutableSet<File>
+        handled: MutableSet<File>,
     ): CachedClientOnlyMembers? {
         if (type in cache) {
             return cache.getValue(type)
@@ -54,17 +62,18 @@ abstract class AddClientSideAnnotations<T> : DefaultTask() where T : AnnotationV
 
         val addAnnotations: Boolean
 
-        val stream = if (file.exists()) {
-            addAnnotations = true
+        val stream =
+            if (file.exists()) {
+                addAnnotations = true
 
-            handled.add(file)
+                handled.add(file)
 
-            file.inputStream()
-        } else {
-            addAnnotations = false
+                file.inputStream()
+            } else {
+                addAnnotations = false
 
-            classpath.getResourceAsStream(name)
-        }
+                classpath.getResourceAsStream(name)
+            }
 
         if (stream == null) {
             return null
@@ -73,84 +82,111 @@ abstract class AddClientSideAnnotations<T> : DefaultTask() where T : AnnotationV
         val reader = ClassReader(stream)
         val writer = if (addAnnotations) ClassWriter(0) else null
 
-        val visitor = object : ClassVisitor(Opcodes.ASM9, writer) {
-            val methods = mutableListOf<AnnotationVisitorProvider<T, MethodId>>()
+        val visitor =
+            object : ClassVisitor(Opcodes.ASM9, writer) {
+                val methods = mutableListOf<AnnotationVisitorProvider<T, MethodId>>()
 
-            lateinit var cachedMembers: CachedClientOnlyMembers
-            var annotationVisitor: T? = null
+                lateinit var cachedMembers: CachedClientOnlyMembers
+                var annotationVisitor: T? = null
 
-            override fun visitAnnotation(descriptor: String, visible: Boolean): AnnotationVisitor? {
-                val visitor = super.visitAnnotation(descriptor, visible)
+                override fun visitAnnotation(
+                    descriptor: String,
+                    visible: Boolean,
+                ): AnnotationVisitor? {
+                    val visitor = super.visitAnnotation(descriptor, visible)
 
-                annotationVisitor = getClientOnlyAnnotationVisitor(descriptor, visitor) ?: return visitor
+                    annotationVisitor = getClientOnlyAnnotationVisitor(descriptor, visitor) ?: return visitor
 
-                return annotationVisitor
-            }
+                    return annotationVisitor
+                }
 
-            override fun visit(version: Int, access: Int, name: String, signature: String?, superName: String?, interfaces: Array<out String>?) {
-                val superInterfaces = mutableListOf<String>()
+                override fun visit(
+                    version: Int,
+                    access: Int,
+                    name: String,
+                    signature: String?,
+                    superName: String?,
+                    interfaces: Array<out String>?,
+                ) {
+                    val superInterfaces = mutableListOf<String>()
 
-                val superMethods = superName?.let { getClientOnlyMembers(classpath, it, cache, handled)?.methods } ?: emptyList()
+                    val superMethods = superName?.let { getClientOnlyMembers(classpath, it, cache, handled)?.methods } ?: emptyList()
 
-                val methods = ArrayList(superMethods)
+                    val methods = ArrayList(superMethods)
 
-                if (interfaces != null) {
-                    for (superInterface in interfaces) {
-                        val members = getClientOnlyMembers(classpath, superInterface, cache, handled) ?: continue
+                    if (interfaces != null) {
+                        for (superInterface in interfaces) {
+                            val members = getClientOnlyMembers(classpath, superInterface, cache, handled) ?: continue
 
-                        if (members.isClientOnlyType) {
-                            superInterfaces.add(superInterface)
+                            if (members.isClientOnlyType) {
+                                superInterfaces.add(superInterface)
+                            }
+
+                            methods.addAll(members.methods)
+                        }
+                    }
+
+                    if (superInterfaces.isNotEmpty()) {
+                        addClientOnlyAnnotation(this, superInterfaces)
+                    }
+
+                    cachedMembers = CachedClientOnlyMembers(false, superInterfaces, methods)
+
+                    super.visit(version, access, name, signature, superName, interfaces)
+                }
+
+                override fun visitMethod(
+                    access: Int,
+                    name: String,
+                    descriptor: String,
+                    signature: String?,
+                    exceptions: Array<out String>?,
+                ): MethodVisitor {
+                    val methodId = MethodId(name, descriptor)
+
+                    val visitor =
+                        object :
+                            MethodVisitor(
+                                Opcodes.ASM9,
+                                super.visitMethod(access, name, descriptor, signature, exceptions),
+                            ),
+                            AnnotationVisitorProvider<T, MethodId> {
+                            override val id get() = methodId
+                            override var annotationVisitor: T? = null
+
+                            override fun visitAnnotation(
+                                descriptor: String,
+                                visible: Boolean,
+                            ): AnnotationVisitor? {
+                                val visitor = super.visitAnnotation(descriptor, visible)
+
+                                annotationVisitor = getClientOnlyAnnotationVisitor(descriptor, visitor) ?: return visitor
+
+                                return annotationVisitor
+                            }
                         }
 
-                        methods.addAll(members.methods)
+                    methods.add(visitor)
+
+                    if (addAnnotations && methodId in cachedMembers.methods) {
+                        addClientOnlyAnnotation(visitor)
                     }
+
+                    return visitor
                 }
-
-                if (superInterfaces.isNotEmpty()) {
-                    addClientOnlyAnnotation(this, superInterfaces)
-                }
-
-                cachedMembers = CachedClientOnlyMembers(false, superInterfaces, methods)
-
-                super.visit(version, access, name, signature, superName, interfaces)
             }
-
-            override fun visitMethod(access: Int, name: String, descriptor: String, signature: String?, exceptions: Array<out String>?): MethodVisitor {
-                val methodId = MethodId(name, descriptor)
-
-                val visitor = object : MethodVisitor(Opcodes.ASM9, super.visitMethod(access, name, descriptor, signature, exceptions)), AnnotationVisitorProvider<T, MethodId> {
-                    override val id get() = methodId
-                    override var annotationVisitor: T? = null
-
-                    override fun visitAnnotation(descriptor: String, visible: Boolean): AnnotationVisitor? {
-                        val visitor = super.visitAnnotation(descriptor, visible)
-
-                        annotationVisitor = getClientOnlyAnnotationVisitor(descriptor, visitor) ?: return visitor
-
-                        return annotationVisitor
-                    }
-                }
-
-                methods.add(visitor)
-
-                if (addAnnotations && methodId in cachedMembers.methods) {
-                    addClientOnlyAnnotation(visitor)
-                }
-
-                return visitor
-            }
-        }
 
         reader.accept(visitor, 0)
 
-        val result = CachedClientOnlyMembers(
-            visitor.annotationVisitor?.isClientOnlyAnnotation == true,
-            visitor.cachedMembers.interfaces,
-            visitor.cachedMembers.methods +
+        val result =
+            CachedClientOnlyMembers(
+                visitor.annotationVisitor?.isClientOnlyAnnotation == true,
+                visitor.cachedMembers.interfaces,
+                visitor.cachedMembers.methods +
                     visitor.methods
                         .filter { it.annotationVisitor?.isClientOnlyAnnotation == true }
-                        .map { it.id }
-        )
+                        .map { it.id },
+            )
 
         if (writer != null) {
             val output = destination.file(file.relativeTo(directory.asFile.get()).path).get().asFile

@@ -25,7 +25,7 @@ abstract class MergeAccessWideners : DefaultTask() {
 
     init {
         apply {
-            output.convention(project.layout.dir(project.provider { temporaryDir }).flatMap { accessWidenerName.map { name -> it.file("${name}.accessWidener") } })
+            output.convention(project.layout.dir(project.provider { temporaryDir }).flatMap { accessWidenerName.map { name -> it.file("$name.accessWidener") } })
         }
     }
 
@@ -40,7 +40,6 @@ abstract class MergeAccessWideners : DefaultTask() {
                     // Implies that this is supposed to have specific handling, for example mod Jars to enable transitive Access Wideners in
                     continue
                 }
-
 
                 accessWidener.bufferedReader().use(reader::read)
             }

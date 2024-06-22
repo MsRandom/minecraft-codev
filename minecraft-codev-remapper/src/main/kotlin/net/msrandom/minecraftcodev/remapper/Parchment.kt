@@ -15,7 +15,7 @@ import kotlinx.serialization.json.JsonPrimitive
 data class Parchment(
     val version: String,
     val packages: List<PackageElement>? = null,
-    val classes: List<ClassElement>? = null
+    val classes: List<ClassElement>? = null,
 ) {
     sealed interface Element {
         val name: String
@@ -32,7 +32,7 @@ data class Parchment(
         override val name: String,
         override val javadoc: Javadoc? = null,
         val fields: List<FieldElement>? = null,
-        val methods: List<MethodElement>? = null
+        val methods: List<MethodElement>? = null,
     ) : Element {
         sealed interface DescriptorElement : Element {
             val descriptor: String
@@ -42,7 +42,7 @@ data class Parchment(
         data class FieldElement(
             override val name: String,
             override val javadoc: Javadoc? = null,
-            override val descriptor: String
+            override val descriptor: String,
         ) : DescriptorElement
 
         @Serializable
@@ -50,13 +50,13 @@ data class Parchment(
             override val name: String,
             override val javadoc: Javadoc? = null,
             override val descriptor: String,
-            val parameters: List<ParameterElement>? = null
+            val parameters: List<ParameterElement>? = null,
         ) : DescriptorElement {
             @Serializable
             data class ParameterElement(
                 val index: Int,
                 override val name: String,
-                override val javadoc: Javadoc? = null
+                override val javadoc: Javadoc? = null,
             ) : Element
         }
     }
@@ -75,7 +75,11 @@ data class Parchment(
                 private val base = String.serializer()
 
                 override fun deserialize(decoder: Decoder) = JavadocLine(base.deserialize(decoder))
-                override fun serialize(encoder: Encoder, value: JavadocLine) = base.serialize(encoder, value.line)
+
+                override fun serialize(
+                    encoder: Encoder,
+                    value: JavadocLine,
+                ) = base.serialize(encoder, value.line)
             }
         }
 
@@ -86,7 +90,11 @@ data class Parchment(
                 private val base = ListSerializer(String.serializer())
 
                 override fun deserialize(decoder: Decoder) = JavadocLines(base.deserialize(decoder))
-                override fun serialize(encoder: Encoder, value: JavadocLines) = base.serialize(encoder, value.lines)
+
+                override fun serialize(
+                    encoder: Encoder,
+                    value: JavadocLines,
+                ) = base.serialize(encoder, value.lines)
             }
         }
 

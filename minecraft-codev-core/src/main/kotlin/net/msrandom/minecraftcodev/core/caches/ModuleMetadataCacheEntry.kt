@@ -8,6 +8,7 @@ sealed interface ModuleMetadataCacheEntry {
     val createTimestamp: Long
 
     data class Missing(override val createTimestamp: Long) : ModuleMetadataCacheEntry
+
     data class Present(override val createTimestamp: Long, val isChanging: Boolean) : ModuleMetadataCacheEntry
 
     object Serializer : AbstractSerializer<ModuleMetadataCacheEntry>() {
@@ -19,7 +20,10 @@ sealed interface ModuleMetadataCacheEntry {
             }
         }
 
-        override fun write(encoder: Encoder, value: ModuleMetadataCacheEntry) {
+        override fun write(
+            encoder: Encoder,
+            value: ModuleMetadataCacheEntry,
+        ) {
             if (value is Present) {
                 encoder.writeBoolean(true)
                 encoder.writeLong(value.createTimestamp)

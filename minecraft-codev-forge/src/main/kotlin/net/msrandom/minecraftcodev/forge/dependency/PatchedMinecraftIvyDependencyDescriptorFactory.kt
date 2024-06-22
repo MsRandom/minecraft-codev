@@ -14,57 +14,66 @@ import org.gradle.internal.component.model.LocalComponentDependencyMetadata
 import org.gradle.internal.component.model.LocalOriginDependencyMetadata
 import javax.inject.Inject
 
-open class PatchedMinecraftDependencyMetadataConverter @Inject constructor(excludeRuleConverter: ExcludeRuleConverter) :
+open class PatchedMinecraftDependencyMetadataConverter
+@Inject
+constructor(excludeRuleConverter: ExcludeRuleConverter) :
     AbstractDependencyMetadataConverter(excludeRuleConverter) {
     override fun createDependencyMetadata(
         componentId: ComponentIdentifier,
         clientConfiguration: String?,
         attributes: AttributeContainer?,
-        dependency: ModuleDependency
+        dependency: ModuleDependency,
     ): LocalOriginDependencyMetadata {
         val externalModuleDependency = (dependency as PatchedMinecraftDependency).minecraftDependency
         val force = externalModuleDependency.isForce
         val changing = externalModuleDependency.isChanging
         val transitive = externalModuleDependency.isTransitive
 
-        val selector = DefaultModuleComponentSelector.newSelector(
-            DefaultModuleIdentifier.newId(dependency.group.orEmpty(), dependency.name),
-            (externalModuleDependency.versionConstraint as VersionConstraintInternal).asImmutable(),
-            dependency.getAttributes(),
-            dependency.getRequestedCapabilities()
-        )
+        val selector =
+            DefaultModuleComponentSelector.newSelector(
+                DefaultModuleIdentifier.newId(dependency.group.orEmpty(), dependency.name),
+                (externalModuleDependency.versionConstraint as VersionConstraintInternal).asImmutable(),
+                dependency.getAttributes(),
+                dependency.getRequestedCapabilities(),
+            )
 
         val excludes = convertExcludeRules(dependency.excludeRules)
 
-        val dependencyMetaData = LocalComponentDependencyMetadata(
-            componentId,
-            selector,
-            clientConfiguration,
-            attributes,
-            dependency.attributes,
-            dependency.targetConfiguration,
-            convertArtifacts(dependency.artifacts),
-            excludes,
-            force,
-            changing,
-            transitive,
-            false,
-            dependency.isEndorsingStrictVersions,
-            dependency.reason
-        )
+        val dependencyMetaData =
+            LocalComponentDependencyMetadata(
+                componentId,
+                selector,
+                clientConfiguration,
+                attributes,
+                dependency.attributes,
+                dependency.targetConfiguration,
+                convertArtifacts(dependency.artifacts),
+                excludes,
+                force,
+                changing,
+                transitive,
+                false,
+                dependency.isEndorsingStrictVersions,
+                dependency.reason,
+            )
 
         return DslOriginPatchedMinecraftDependencyMetadata(dependencyMetaData, dependency, dependency.patches)
     }
 
-    override fun canConvert(dependency: ModuleDependency) =
-        dependency is PatchedMinecraftDependency
+    override fun canConvert(dependency: ModuleDependency) = dependency is PatchedMinecraftDependency
 }
 
 class PatchedComponentIdentifier(version: String, val patches: String) : MinecraftComponentIdentifier("forge", version) {
     override val isBase get() = true
+
+    override fun getGroup() = FmlLoaderWrappedComponentIdentifier.MINECRAFT_FORGE_GROUP
+
+    override fun equals(other: Any?) = other is PatchedComponentIdentifier && version == other.version && patches == other.version
+
+    override fun hashCode() = patches.hashCode() + version.hashCode() * 31
 }
 
-class FmlLoaderWrappedComponentIdentifier(val delegate: ModuleComponentIdentifier) : ModuleComponentIdentifier by delegate {
+data class FmlLoaderWrappedComponentIdentifier(val delegate: ModuleComponentIdentifier) : ModuleComponentIdentifier by delegate {
     companion object {
         const val MINECRAFT_FORGE_GROUP = "net.minecraftforge"
         const val NEO_FORGED_GROUP = "net.neoforged.fancymodloader"

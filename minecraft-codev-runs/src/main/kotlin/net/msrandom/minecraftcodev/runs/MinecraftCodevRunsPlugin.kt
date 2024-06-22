@@ -17,86 +17,114 @@ import org.jetbrains.kotlin.gradle.plugin.KotlinCompilation
 import java.nio.file.Path
 import javax.inject.Inject
 
-class MinecraftCodevRunsPlugin<T : PluginAware> @Inject constructor(cacheDir: GlobalCacheDir) : Plugin<T> {
+class MinecraftCodevRunsPlugin<T : PluginAware> @Inject
+constructor(cacheDir: GlobalCacheDir) : Plugin<T> {
     private val cache: Path = cacheDir.dir.toPath().resolve(CodevCacheManager.ROOT_NAME)
 
     // Log4j configs
     val logging: Path = cache.resolve("logging")
 
-    override fun apply(target: T) = applyPlugin(target) {
-        fun addNativesConfiguration(nativesConfigurationName: String) = configurations.maybeCreate(nativesConfigurationName).apply {
-            isCanBeConsumed = false
-        }
-
-        fun addSourceElements(nativesConfigurationName: String, extractNativesTaskName: String, downloadAssetsTaskName: String) {
-            val configuration = addNativesConfiguration(nativesConfigurationName)
-
-            tasks.register(extractNativesTaskName, ExtractNatives::class.java) {
-                it.natives.set(configuration)
-            }
-
-            tasks.register(downloadAssetsTaskName, DownloadAssets::class.java) { task ->
-                val fileName = if (name.isEmpty()) "${SourceSet.MAIN_SOURCE_SET_NAME}.json" else "$name.json"
-
-                task.assetIndexFile.set(layout.buildDirectory.dir("assetIndices").map { it.file(fileName) })
-            }
-        }
-
-        createSourceSetElements(
-            {
-                addSourceElements(it.nativesConfigurationName, it.extractNativesTaskName, it.downloadAssetsTaskName)
-            },
-            {
-                addSourceElements(it.compilations.getByName(KotlinCompilation.MAIN_COMPILATION_NAME).nativesConfigurationName, it.extractNativesTaskName, it.downloadAssetsTaskName)
-            },
-            {
-                addNativesConfiguration(it.nativesConfigurationName)
-            },
-            {
-                addNativesConfiguration(it.nativesConfigurationName)
-            }
-        )
-
-        val runs = extensions
-            .getByType(MinecraftCodevExtension::class.java)
-            .extensions
-            .create(RunsContainer::class.java, "runs", RunsContainerImpl::class.java, cache)
-
-        runs.extensions.create("defaults", RunConfigurationDefaultsContainer::class.java)
-
-        project.integrateIdeaRuns()
-
-        runs.all { builder ->
-            val name = "${ApplicationPlugin.TASK_RUN_NAME}${StringUtils.capitalize(builder.name)}"
-            tasks.register(name, JavaExec::class.java) { javaExec ->
-                val configuration = builder.build()
-
-                javaExec.doFirst { task ->
-                    (task as JavaExec).environment = configuration.environment.get().mapValues { it.value.compile() }
+    override fun apply(target: T) =
+        applyPlugin(target) {
+            fun addNativesConfiguration(nativesConfigurationName: String) =
+                configurations.maybeCreate(nativesConfigurationName).apply {
+                    isCanBeConsumed = false
                 }
 
-                javaExec.argumentProviders.add(configuration.arguments.map { arguments -> arguments.map(MinecraftRunConfiguration.Argument::compile) }::get)
-                javaExec.jvmArgumentProviders.add(configuration.jvmArguments.map { arguments -> arguments.map(MinecraftRunConfiguration.Argument::compile) }::get)
-                javaExec.workingDir(configuration.executableDirectory)
-                javaExec.mainClass.set(configuration.mainClass)
+            fun addSourceElements(
+                nativesConfigurationName: String,
+                extractNativesTaskName: String,
+                downloadAssetsTaskName: String,
+            ) {
+                val configuration = addNativesConfiguration(nativesConfigurationName)
 
-                javaExec.classpath = configuration.compilation
-                    .map { it.runtimeDependencyFiles + it.output.allOutputs }
-                    .orElse(configuration.sourceSet.map(SourceSet::getRuntimeClasspath))
-                    .get()
+                tasks.register(extractNativesTaskName, ExtractNatives::class.java) {
+                    it.natives.set(configuration)
+                }
 
-                javaExec.group = ApplicationPlugin.APPLICATION_GROUP
+                tasks.register(downloadAssetsTaskName, DownloadAssets::class.java) { task ->
+                    val fileName = if (name.isEmpty()) "${SourceSet.MAIN_SOURCE_SET_NAME}.json" else "$name.json"
 
-                javaExec.dependsOn(configuration.beforeRun)
+                    task.assetIndexFile.set(layout.buildDirectory.dir("assetIndices").map { it.file(fileName) })
+                }
+            }
 
-                javaExec.dependsOn(configuration.dependsOn.map {
-                    it.map { other -> "${ApplicationPlugin.TASK_RUN_NAME}${StringUtils.capitalize(other.name)}" }
-                })
+            createSourceSetElements(
+                {
+                    addSourceElements(it.nativesConfigurationName, it.extractNativesTaskName, it.downloadAssetsTaskName)
+                },
+                {
+                    addSourceElements(
+                        it.compilations.getByName(KotlinCompilation.MAIN_COMPILATION_NAME).nativesConfigurationName,
+                        it.extractNativesTaskName,
+                        it.downloadAssetsTaskName,
+                    )
+                },
+                {
+                    addNativesConfiguration(it.nativesConfigurationName)
+                },
+                {
+                    addNativesConfiguration(it.nativesConfigurationName)
+                },
+            )
 
-                javaExec.dependsOn(configuration.compilation.map(KotlinCompilation<*>::compileAllTaskName).orElse(configuration.sourceSet.map(SourceSet::getClassesTaskName)))
+            val runs =
+                extensions
+                    .getByType(MinecraftCodevExtension::class.java)
+                    .extensions
+                    .create(RunsContainer::class.java, "runs", RunsContainerImpl::class.java, cache)
+
+            runs.extensions.create("defaults", RunConfigurationDefaultsContainer::class.java)
+
+            project.integrateIdeaRuns()
+
+            runs.all { builder ->
+                val name = "${ApplicationPlugin.TASK_RUN_NAME}${StringUtils.capitalize(builder.name)}"
+                tasks.register(name, JavaExec::class.java) { javaExec ->
+                    val configuration = builder.build()
+
+                    javaExec.doFirst { task ->
+                        (task as JavaExec).environment = configuration.environment.get().mapValues { it.value.compile() }
+                    }
+
+                    // TODO Set java version
+
+                    javaExec.argumentProviders.add(
+                        configuration.arguments.map { arguments -> arguments.map(MinecraftRunConfiguration.Argument::compile) }::get,
+                    )
+                    javaExec.jvmArgumentProviders.add(
+                        configuration.jvmArguments.map {
+                                arguments ->
+                            arguments.map(MinecraftRunConfiguration.Argument::compile)
+                        }::get,
+                    )
+                    javaExec.workingDir(configuration.executableDirectory)
+                    javaExec.mainClass.set(configuration.mainClass)
+
+                    javaExec.classpath =
+                        configuration.compilation
+                            .map { it.runtimeDependencyFiles + it.output.allOutputs }
+                            .orElse(configuration.sourceSet.map(SourceSet::getRuntimeClasspath))
+                            .get()
+
+                    javaExec.group = ApplicationPlugin.APPLICATION_GROUP
+
+                    javaExec.dependsOn(configuration.beforeRun)
+
+                    javaExec.dependsOn(
+                        configuration.dependsOn.map {
+                            it.map { other -> "${ApplicationPlugin.TASK_RUN_NAME}${StringUtils.capitalize(other.name)}" }
+                        },
+                    )
+
+                    javaExec.dependsOn(
+                        configuration.compilation.map(
+                            KotlinCompilation<*>::compileAllTaskName,
+                        ).orElse(configuration.sourceSet.map(SourceSet::getClassesTaskName)),
+                    )
+                }
             }
         }
-    }
 
     companion object {
         const val NATIVES_CONFIGURATION = "natives"

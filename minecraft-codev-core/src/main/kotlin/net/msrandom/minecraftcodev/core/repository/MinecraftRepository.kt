@@ -52,7 +52,9 @@ interface MinecraftRepository : ArtifactRepository, UrlArtifactRepository, Metad
     }
 }
 
-open class MinecraftRepositoryImpl @Inject constructor(
+open class MinecraftRepositoryImpl
+@Inject
+constructor(
     private val objectFactory: ObjectFactory,
     versionParser: VersionParser,
     private val fileResolver: FileResolver,
@@ -79,105 +81,153 @@ open class MinecraftRepositoryImpl @Inject constructor(
         this.allowInsecureProtocol = allowInsecureProtocol
     }
 
-    override fun createResolver() = Resolver(
-        name,
-        getUrl(),
-        transportFactory.createTransport(
-            getUrl().scheme,
+    override fun createResolver() =
+        Resolver(
+            name,
+            getUrl(),
+            transportFactory.createTransport(
+                getUrl().scheme,
+                name,
+                emptyList(),
+                redirectVerifier(),
+            ),
+            createInjectorForMetadataSuppliers(),
+            gradle,
+            objectFactory,
+        )
+
+    private fun redirectVerifier() =
+        HttpRedirectVerifierFactory.create(
+            getUrl(),
+            isAllowInsecureProtocol,
+            {
+                val switchToAdvice = "Switch Minecraft repository '$displayName' to redirect to a secure protocol (like HTTPS) or allow insecure protocols. "
+
+                val dslMessage =
+                    Documentation
+                        .dslReference(UrlArtifactRepository::class.java, "allowInsecureProtocol")
+                        .consultDocumentationMessage() + " "
+
+                throw InvalidUserCodeException(
+                    "Using insecure protocols with repositories, without explicit opt-in, is unsupported. $switchToAdvice$dslMessage",
+                )
+            },
+            {
+                val contextualAdvice = "'${getUrl()}' is redirecting to '$it'. "
+                val switchToAdvice = "Switch Minecraft repository '$displayName' to redirect to a secure protocol (like HTTPS) or allow insecure protocols. "
+
+                val dslMessage =
+                    Documentation
+                        .dslReference(UrlArtifactRepository::class.java, "allowInsecureProtocol")
+                        .consultDocumentationMessage() + " "
+
+                throw InvalidUserCodeException(
+                    "Redirecting from secure protocol to insecure protocol, without explicit opt-in, is unsupported. $contextualAdvice$switchToAdvice$dslMessage",
+                )
+            },
+        )
+
+    override fun getDescriptor() =
+        FlatDirRepositoryDescriptor(
             name,
             emptyList(),
-            redirectVerifier()
-        ),
-        createInjectorForMetadataSuppliers(),
-        gradle,
-        objectFactory
-    )
-
-    private fun redirectVerifier() = HttpRedirectVerifierFactory.create(
-        getUrl(),
-        isAllowInsecureProtocol,
-        {
-            val switchToAdvice = "Switch Minecraft repository '${displayName}' to redirect to a secure protocol (like HTTPS) or allow insecure protocols. "
-
-            val dslMessage = Documentation
-                .dslReference(UrlArtifactRepository::class.java, "allowInsecureProtocol")
-                .consultDocumentationMessage() + " "
-
-            throw InvalidUserCodeException("Using insecure protocols with repositories, without explicit opt-in, is unsupported. $switchToAdvice$dslMessage")
-        },
-        {
-            val contextualAdvice = "'${getUrl()}' is redirecting to '$it'. "
-            val switchToAdvice = "Switch Minecraft repository '$displayName' to redirect to a secure protocol (like HTTPS) or allow insecure protocols. "
-
-            val dslMessage = Documentation
-                .dslReference(UrlArtifactRepository::class.java, "allowInsecureProtocol")
-                .consultDocumentationMessage() + " "
-
-            throw InvalidUserCodeException("Redirecting from secure protocol to insecure protocol, without explicit opt-in, is unsupported. $contextualAdvice$switchToAdvice$dslMessage")
-        }
-    )
-
-    override fun getDescriptor() = FlatDirRepositoryDescriptor(
-        name,
-        emptyList(),
-        IvyRepositoryDescriptor.Builder(name, null)
-            .setM2Compatible(false)
-            .setLayoutType("Unknown")
-            .setMetadataSources(emptyList())
-            .setAuthenticated(false)
-            .setAuthenticationSchemes(emptyList())
-            .create()
-    )
+            IvyRepositoryDescriptor.Builder(name, null)
+                .setM2Compatible(false)
+                .setLayoutType("Unknown")
+                .setMetadataSources(emptyList())
+                .setAuthenticated(false)
+                .setAuthenticationSchemes(emptyList())
+                .create(),
+        )
 
     private fun createInjectorForMetadataSuppliers(): ImplicitInputsCapturingInstantiator {
-        val registry = DefaultServiceRegistry().apply {
-            addProvider(object {
-                fun createResourceAccessor(): RepositoryResourceAccessor = NoOpRepositoryResourceAccessor()
-            })
+        val registry =
+            DefaultServiceRegistry().apply {
+                addProvider(
+                    object {
+                        fun createResourceAccessor(): RepositoryResourceAccessor = NoOpRepositoryResourceAccessor()
+                    },
+                )
 
-            add(ObjectFactory::class.java, objectFactory)
-        }
+                add(ObjectFactory::class.java, objectFactory)
+            }
 
         return ImplicitInputsCapturingInstantiator(registry, instantiatorFactory)
     }
 
-    override fun createRepositoryAccessor(transport: RepositoryTransport, rootUri: URI, externalResourcesFileStore: FileStore<String>): RepositoryResourceAccessor =
-        NoOpRepositoryResourceAccessor()
+    override fun createRepositoryAccessor(
+        transport: RepositoryTransport,
+        rootUri: URI,
+        externalResourcesFileStore: FileStore<String>,
+    ): RepositoryResourceAccessor = NoOpRepositoryResourceAccessor()
 
     private class NoOpRepositoryResourceAccessor : RepositoryResourceAccessor, ImplicitInputsProvidingService<String, Long, RepositoryResourceAccessor> {
-        override fun withResource(relativePath: String, action: Action<in InputStream>) = Unit
+        override fun withResource(
+            relativePath: String,
+            action: Action<in InputStream>,
+        ) = Unit
+
         override fun withImplicitInputRecorder(registrar: ImplicitInputRecorder) = this
-        override fun isUpToDate(s: String, oldValue: Long?) = true
+
+        override fun isUpToDate(
+            s: String,
+            oldValue: Long?,
+        ) = true
     }
 
     class Resolver(private val name: String, val url: URI, transport: RepositoryTransport, private val injector: Instantiator, gradle: Gradle, objectFactory: ObjectFactory) : ConfiguredModuleComponentRepository {
-        val resourceAccessor: DefaultCacheAwareExternalResourceAccessor = objectFactory.newInstance(DefaultCacheAwareExternalResourceAccessor::class.java, transport.repository, getCacheProvider(gradle))
+        val resourceAccessor: DefaultCacheAwareExternalResourceAccessor =
+            objectFactory.newInstance(
+                DefaultCacheAwareExternalResourceAccessor::class.java,
+                transport.repository,
+                getCacheProvider(gradle),
+            )
 
         private val access = NoOpAccess()
 
         override fun getId() = "minecraft"
+
         override fun getName() = name
+
         override fun getLocalAccess() = access
+
         override fun getRemoteAccess() = access
+
         override fun getArtifactCache() = throw UnsupportedOperationException()
+
         override fun getComponentMetadataSupplier(): InstantiatingAction<ComponentMetadataSupplierDetails>? = null
+
         override fun isDynamicResolveMode() = false
+
         override fun isLocal() = false
+
         override fun setComponentResolvers(resolver: ComponentResolvers) = Unit
+
         override fun getComponentMetadataInstantiator() = injector
 
         class NoOpAccess : ModuleComponentRepositoryAccess<ModuleComponentResolveMetadata> {
-            override fun listModuleVersions(dependency: ModuleDependencyMetadata, result: BuildableModuleVersionListingResolveResult) = Unit
+            override fun listModuleVersions(
+                dependency: ModuleDependencyMetadata,
+                result: BuildableModuleVersionListingResolveResult,
+            ) = Unit
 
             override fun resolveComponentMetaData(
                 moduleComponentIdentifier: ModuleComponentIdentifier,
                 requestMetaData: ComponentOverrideMetadata,
-                result: BuildableModuleComponentMetaDataResolveResult<ModuleComponentResolveMetadata>
+                result: BuildableModuleComponentMetaDataResolveResult<ModuleComponentResolveMetadata>,
             ) = result.missing()
 
-            override fun resolveArtifactsWithType(component: ComponentResolveMetadata, artifactType: ArtifactType, result: BuildableArtifactSetResolveResult) = Unit
+            override fun resolveArtifactsWithType(
+                component: ComponentResolveMetadata,
+                artifactType: ArtifactType,
+                result: BuildableArtifactSetResolveResult,
+            ) = Unit
 
-            override fun resolveArtifact(artifact: ComponentArtifactMetadata, moduleSources: ModuleSources, result: BuildableArtifactFileResolveResult) {
+            override fun resolveArtifact(
+                artifact: ComponentArtifactMetadata,
+                moduleSources: ModuleSources,
+                result: BuildableArtifactFileResolveResult,
+            ) {
                 result.notFound(artifact.id)
             }
 
