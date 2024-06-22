@@ -124,27 +124,29 @@ constructor(
                     dependency.relatedConfiguration.takeUnless(String::isEmpty) ?: MinecraftCodevForgePlugin.PATCHES_CONFIGURATION,
                 )
             }
-        } else if (dependency is ModuleDependencyMetadata && result !is WrappedDependencyComponentIdResult) {
-            if ((dependency.selector.group != FmlLoaderWrappedComponentIdentifier.MINECRAFT_FORGE_GROUP || dependency.selector.module != FmlLoaderWrappedComponentIdentifier.FML_LOADER_MODULE) &&
-                (dependency.selector.group != FmlLoaderWrappedComponentIdentifier.NEO_FORGED_GROUP || dependency.selector.module != FmlLoaderWrappedComponentIdentifier.NEO_FORGED_LOADER_MODULE)
-            ) {
-                return
-            }
+            return
+        }
+        if (dependency !is ModuleDependencyMetadata || result is WrappedDependencyComponentIdResult) return
 
-            val idResult = WrappedDependencyComponentIdResult()
-            resolvers.get().componentIdResolver.resolve(dependency, acceptor, rejector, idResult)
+        if ((dependency.selector.group != FmlLoaderWrappedComponentIdentifier.MINECRAFT_FORGE_GROUP || dependency.selector.module != FmlLoaderWrappedComponentIdentifier.FML_LOADER_MODULE) &&
+            (dependency.selector.group != FmlLoaderWrappedComponentIdentifier.NEO_FORGED_GROUP || dependency.selector.module != FmlLoaderWrappedComponentIdentifier.NEO_FORGED_LOADER_MODULE)
+        ) {
+            return
+        }
 
-            if (idResult.hasResult() && idResult.failure == null) {
-                val id = FmlLoaderWrappedComponentIdentifier(idResult.id as ModuleComponentIdentifier)
+        val idResult = WrappedDependencyComponentIdResult()
+        resolvers.get().componentIdResolver.resolve(dependency, acceptor, rejector, idResult)
 
-                if (idResult.state == null) {
-                    result.resolved(id, idResult.moduleVersionId)
-                } else {
-                    result.resolved(
-                        wrapComponentMetadata(idResult.state!!, FmlLoaderComponentMetadataDelegate(id), resolvers, objectFactory),
-                    )
-                }
-            }
+        if (!idResult.hasResult() || idResult.failure != null) return
+
+        val id = FmlLoaderWrappedComponentIdentifier(idResult.id as ModuleComponentIdentifier)
+
+        if (idResult.state == null) {
+            result.resolved(id, idResult.moduleVersionId)
+        } else {
+            result.resolved(
+                wrapComponentMetadata(idResult.state!!, FmlLoaderComponentMetadataDelegate(id), resolvers, objectFactory),
+            )
         }
     }
 

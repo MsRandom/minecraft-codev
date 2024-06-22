@@ -86,33 +86,33 @@ constructor(
         rejector: VersionSelector?,
         result: BuildableComponentIdResolveResult,
     ) {
-        if (dependency is MixinDependencyMetadata) {
-            resolvers.get().componentIdResolver.resolve(dependency.delegate, acceptor, rejector, result)
+        if (dependency !is MixinDependencyMetadata) return
 
-            if (result.hasResult() && result.failure == null) {
-                val metadata = result.state
+        resolvers.get().componentIdResolver.resolve(dependency.delegate, acceptor, rejector, result)
 
-                if (result.id is ModuleComponentIdentifier) {
-                    val mixinsConfiguration =
-                        dependency.relatedConfiguration.takeUnless(
-                            String::isEmpty,
-                        ) ?: MinecraftCodevMixinsPlugin.MIXINS_CONFIGURATION
-                    val id = MixinComponentIdentifier(result.id as ModuleComponentIdentifier, mixinsConfiguration)
+        if (!result.hasResult() || result.failure != null) return
 
-                    if (metadata == null) {
-                        result.resolved(id, result.moduleVersionId)
-                    } else {
-                        result.resolved(
-                            CodevGradleLinkageLoader.wrapComponentMetadata(
-                                metadata,
-                                MixinComponentMetadataDelegate(id, project),
-                                resolvers,
-                                objects,
-                            ),
-                        )
-                    }
-                }
-            }
+        val metadata = result.state
+
+        if (result.id !is ModuleComponentIdentifier) return
+
+        val mixinsConfiguration =
+            dependency.relatedConfiguration.takeUnless(
+                String::isEmpty,
+            ) ?: MinecraftCodevMixinsPlugin.MIXINS_CONFIGURATION
+        val id = MixinComponentIdentifier(result.id as ModuleComponentIdentifier, mixinsConfiguration)
+
+        if (metadata == null) {
+            result.resolved(id, result.moduleVersionId)
+        } else {
+            result.resolved(
+                CodevGradleLinkageLoader.wrapComponentMetadata(
+                    metadata,
+                    MixinComponentMetadataDelegate(id, project),
+                    resolvers,
+                    objects,
+                ),
+            )
         }
     }
 
@@ -121,20 +121,20 @@ constructor(
         componentOverrideMetadata: ComponentOverrideMetadata,
         result: BuildableComponentResolveResult,
     ) {
-        if (identifier is MixinComponentIdentifier) {
-            resolvers.get().componentResolver.resolve(identifier.original, componentOverrideMetadata, result)
+        if (identifier !is MixinComponentIdentifier) return
 
-            if (result.hasResult() && result.failure == null) {
-                result.resolved(
-                    CodevGradleLinkageLoader.wrapComponentMetadata(
-                        result.state,
-                        MixinComponentMetadataDelegate(identifier, project),
-                        resolvers,
-                        objects,
-                    ),
-                )
-            }
-        }
+        resolvers.get().componentResolver.resolve(identifier.original, componentOverrideMetadata, result)
+
+        if (!result.hasResult() || result.failure != null) return
+
+        result.resolved(
+            CodevGradleLinkageLoader.wrapComponentMetadata(
+                result.state,
+                MixinComponentMetadataDelegate(identifier, project),
+                resolvers,
+                objects,
+            ),
+        )
     }
 
     override fun isFetchingMetadataCheap(identifier: ComponentIdentifier) =
@@ -171,137 +171,140 @@ constructor(
         artifact: ComponentArtifactMetadata,
         result: BuildableArtifactResolveResult,
     ) {
-        if (artifact is MixinComponentArtifactMetadata) {
-            resolvers.get().artifactResolver.resolveArtifact(component, artifact.delegate, result)
+        if (artifact !is MixinComponentArtifactMetadata) {
+            if (artifact is PassthroughArtifactMetadata) {
+                resolvers.get().artifactResolver.resolveArtifact(component, artifact.original, result)
+            }
 
-            if (result.hasResult() && result.failure == null) {
-                val id = artifact.componentId
-                val mixinsConfiguration = project.configurations.getByName(id.mixinsConfiguration)
-                val base = result.result
+            return
+        }
 
-                val files = mutableListOf<Supplier<File>>()
-                project.visitConfigurationFiles(resolvers, mixinsConfiguration, null, files::add)
+        resolvers.get().artifactResolver.resolveArtifact(component, artifact.delegate, result)
 
-                val urlId =
-                    MixinArtifactIdentifier(
-                        artifact.id.asSerializable,
-                        HashCode.fromBytes(
-                            files.map { checksumService.sha1(it.get()).toByteArray() }.reduce {
-                                    a,
-                                    b,
-                                ->
-                                ByteArray(min(a.size, b.size)) { (a[it] + b[it]).toByte() }
-                            },
-                        ),
-                        checksumService.sha1(base.file),
-                    )
+        if (!result.hasResult() || result.failure != null) return
 
-                MinecraftArtifactResolver.getOrResolve(
-                    component,
-                    artifact,
-                    calculatedValueContainerFactory,
-                    urlId,
-                    artifactCache,
-                    cachePolicy,
-                    timeProvider,
-                    result,
-                ) {
-                    val rules =
-                        project.extensions
-                            .getByType(MinecraftCodevExtension::class.java).extensions
-                            .getByType(MixinsExtension::class.java)
-                            .rules
+        val id = artifact.componentId
+        val mixinsConfiguration = project.configurations.getByName(id.mixinsConfiguration)
+        val base = result.result
 
-                    buildOperationExecutor.call(
-                        object : CallableBuildOperation<File?> {
-                            override fun description() =
-                                BuildOperationDescriptor
-                                    .displayName("Mixing $base")
-                                    .progressDisplayName("Applying Mixins")
-                                    .metadata(BuildOperationCategory.TASK)
+        val files = mutableListOf<Supplier<File>>()
+        project.visitConfigurationFiles(resolvers, mixinsConfiguration, null, files::add)
 
-                            @Suppress("WRONG_NULLABILITY_FOR_JAVA_OVERRIDE")
-                            override fun call(context: BuildOperationContext) =
-                                context.callWithStatus {
-                                    val file = base.file.toPath().createDeterministicCopy("mixin", ".tmp.jar")
+        val urlId =
+            MixinArtifactIdentifier(
+                artifact.id.asSerializable,
+                HashCode.fromBytes(
+                    files
+                        .map { checksumService.sha1(it.get()).toByteArray() }
+                        .reduce { a, b ->
+                            ByteArray(min(a.size, b.size)) { (a[it] + b[it]).toByte() }
+                        },
+                ),
+                checksumService.sha1(base.file),
+            )
 
-                                    val fileIterable =
-                                        Iterable {
-                                            iterator<File> {
-                                                yield(base.file)
-                                                yieldAll(files.map(Supplier<File>::get))
-                                            }
-                                        }
+        MinecraftArtifactResolver.getOrResolve(
+            component,
+            artifact,
+            calculatedValueContainerFactory,
+            urlId,
+            artifactCache,
+            cachePolicy,
+            timeProvider,
+            result,
+        ) {
+            val rules =
+                project.extensions
+                    .getByType(MinecraftCodevExtension::class.java).extensions
+                    .getByType(MixinsExtension::class.java)
+                    .rules
 
-                                    (MixinService.getService() as GradleMixinService).use(fileIterable, artifact.componentId.module) {
-                                        for (mixinFile in files) {
-                                            val handler =
-                                                zipFileSystem(mixinFile.get().toPath()).use {
-                                                    val path = it.base.getPath("/")
+            buildOperationExecutor.call(
+                object : CallableBuildOperation<File?> {
+                    override fun description() =
+                        BuildOperationDescriptor
+                            .displayName("Mixing $base")
+                            .progressDisplayName("Applying Mixins")
+                            .metadata(BuildOperationCategory.TASK)
 
-                                                    rules.get().firstNotNullOfOrNull { rule ->
-                                                        rule.load(path)
-                                                    }
-                                                }
+                    @Suppress("WRONG_NULLABILITY_FOR_JAVA_OVERRIDE")
+                    override fun call(context: BuildOperationContext) =
+                        context.callWithStatus {
+                            val file = base.file.toPath().createDeterministicCopy("mixin", ".tmp.jar")
 
-                                            if (handler == null) {
-                                                result.failed(
-                                                    ArtifactResolveException(
-                                                        artifact.id,
-                                                        UnsupportedOperationException(
-                                                            "Couldn't find mixin configs for ${result.result}, unsupported format.\n" +
-                                                                "You can register new mixin loading rules with minecraft.mixins.rules",
-                                                        ),
-                                                    ),
-                                                )
-
-                                                return@use null
-                                            } else {
-                                                zipFileSystem(mixinFile.get().toPath()).use {
-                                                    val root = it.base.getPath("/")
-                                                    Mixins.addConfigurations(*handler.list(root).toTypedArray())
-                                                }
-                                            }
-                                        }
-
-                                        zipFileSystem(file).use {
-                                            val root = it.base.getPath("/")
-
-                                            root.walk {
-                                                for (path in filter(Path::isRegularFile).filter { path ->
-                                                    path.toString().endsWith(".class")
-                                                }) {
-                                                    val pathName = root.relativize(path).toString()
-                                                    val name =
-                                                        pathName.substring(
-                                                            0,
-                                                            pathName.length - ".class".length,
-                                                        ).replace(File.separatorChar, '.')
-                                                    path.writeBytes(transformer.transformClassBytes(name, name, path.readBytes()))
-                                                }
-                                            }
-                                        }
-
-                                        val output =
-                                            cacheManager.fileStoreDirectory
-                                                .resolve(id.group)
-                                                .resolve(id.module)
-                                                .resolve(id.version)
-                                                .resolve(checksumService.sha1(file.toFile()).toString())
-                                                .resolve("${base.file.nameWithoutExtension}-mixin.${base.file.extension}")
-
-                                        output.parent.createDirectories()
-                                        file.copyTo(output, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES)
-
-                                        output.toFile()
+                            val fileIterable =
+                                Iterable {
+                                    iterator<File> {
+                                        yield(base.file)
+                                        yieldAll(files.map(Supplier<File>::get))
                                     }
                                 }
-                        },
-                    )
-                }
-            }
-        } else if (artifact is PassthroughArtifactMetadata) {
-            resolvers.get().artifactResolver.resolveArtifact(component, artifact.original, result)
+
+                            (MixinService.getService() as GradleMixinService).use(fileIterable, artifact.componentId.module) {
+                                for (mixinFile in files) {
+                                    val handler =
+                                        zipFileSystem(mixinFile.get().toPath()).use {
+                                            val path = it.base.getPath("/")
+
+                                            rules.get().firstNotNullOfOrNull { rule ->
+                                                rule.load(path)
+                                            }
+                                        }
+
+                                    if (handler == null) {
+                                        result.failed(
+                                            ArtifactResolveException(
+                                                artifact.id,
+                                                UnsupportedOperationException(
+                                                    "Couldn't find mixin configs for ${result.result}, unsupported format.\n" +
+                                                        "You can register new mixin loading rules with minecraft.mixins.rules",
+                                                ),
+                                            ),
+                                        )
+
+                                        return@use null
+                                    } else {
+                                        zipFileSystem(mixinFile.get().toPath()).use {
+                                            val root = it.base.getPath("/")
+                                            Mixins.addConfigurations(*handler.list(root).toTypedArray())
+                                        }
+                                    }
+                                }
+
+                                zipFileSystem(file).use {
+                                    val root = it.base.getPath("/")
+
+                                    root.walk {
+                                        for (path in filter(Path::isRegularFile).filter { path ->
+                                            path.toString().endsWith(".class")
+                                        }) {
+                                            val pathName = root.relativize(path).toString()
+                                            val name =
+                                                pathName.substring(
+                                                    0,
+                                                    pathName.length - ".class".length,
+                                                ).replace(File.separatorChar, '.')
+                                            path.writeBytes(transformer.transformClassBytes(name, name, path.readBytes()))
+                                        }
+                                    }
+                                }
+
+                                val output =
+                                    cacheManager.fileStoreDirectory
+                                        .resolve(id.group)
+                                        .resolve(id.module)
+                                        .resolve(id.version)
+                                        .resolve(checksumService.sha1(file.toFile()).toString())
+                                        .resolve("${base.file.nameWithoutExtension}-mixin.${base.file.extension}")
+
+                                output.parent.createDirectories()
+                                file.copyTo(output, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES)
+
+                                output.toFile()
+                            }
+                        }
+                },
+            )
         }
     }
 }

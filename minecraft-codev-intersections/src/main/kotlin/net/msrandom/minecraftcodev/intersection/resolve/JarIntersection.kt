@@ -16,7 +16,7 @@ import kotlin.math.min
 import kotlin.streams.asSequence
 
 object JarIntersection {
-    private const val VISIBILITY_MASK = 0x7
+    private const val VISIBILITY_MASK = Opcodes.ACC_PUBLIC or Opcodes.ACC_PRIVATE or Opcodes.ACC_PROTECTED
 
     // Choose lower visibility of the two
     private fun accessIntersection(

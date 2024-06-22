@@ -99,34 +99,35 @@ constructor(
         rejector: VersionSelector?,
         result: BuildableComponentIdResolveResult,
     ) {
-        if (dependency is RemappedDependencyMetadata) {
-            resolvers.get().componentIdResolver.resolve(dependency.delegate, acceptor, rejector, result)
-            if (result.hasResult() && result.failure == null) {
-                val metadata = result.state
-                val mappingsConfiguration =
-                    dependency.relatedConfiguration.takeUnless(
-                        String::isEmpty,
-                    ) ?: MinecraftCodevRemapperPlugin.MAPPINGS_CONFIGURATION
+        if (dependency !is RemappedDependencyMetadata) return
 
-                if (result.id is ModuleComponentIdentifier) {
-                    val id =
-                        RemappedComponentIdentifier(
-                            result.id as ModuleComponentIdentifier,
-                            dependency.sourceNamespace,
-                            dependency.targetNamespace,
-                            mappingsConfiguration,
-                            dependency is LocalOriginDependencyMetadata,
-                        )
+        resolvers.get().componentIdResolver.resolve(dependency.delegate, acceptor, rejector, result)
 
-                    if (metadata == null) {
-                        result.resolved(id, result.moduleVersionId)
-                    } else {
-                        result.resolved(
-                            CodevGradleLinkageLoader.wrapComponentMetadata(metadata, metadataDelegate(id), resolvers, objects),
-                        )
-                    }
-                }
-            }
+        if (!result.hasResult() || result.failure != null) return
+
+        val metadata = result.state
+        val mappingsConfiguration =
+            dependency.relatedConfiguration.takeUnless(
+                String::isEmpty,
+            ) ?: MinecraftCodevRemapperPlugin.MAPPINGS_CONFIGURATION
+
+        if (result.id !is ModuleComponentIdentifier) return
+
+        val id =
+            RemappedComponentIdentifier(
+                result.id as ModuleComponentIdentifier,
+                dependency.sourceNamespace,
+                dependency.targetNamespace,
+                mappingsConfiguration,
+                dependency is LocalOriginDependencyMetadata,
+            )
+
+        if (metadata == null) {
+            result.resolved(id, result.moduleVersionId)
+        } else {
+            result.resolved(
+                CodevGradleLinkageLoader.wrapComponentMetadata(metadata, metadataDelegate(id), resolvers, objects),
+            )
         }
     }
 
@@ -135,15 +136,15 @@ constructor(
         componentOverrideMetadata: ComponentOverrideMetadata,
         result: BuildableComponentResolveResult,
     ) {
-        if (identifier is RemappedComponentIdentifier) {
-            resolvers.get().componentResolver.resolve(identifier.original, componentOverrideMetadata, result)
+        if (identifier !is RemappedComponentIdentifier) return
 
-            if (result.hasResult() && result.failure == null) {
-                result.resolved(
-                    CodevGradleLinkageLoader.wrapComponentMetadata(result.state, metadataDelegate(identifier), resolvers, objects),
-                )
-            }
-        }
+        resolvers.get().componentResolver.resolve(identifier.original, componentOverrideMetadata, result)
+
+        if (!result.hasResult() || result.failure != null) return
+
+        result.resolved(
+            CodevGradleLinkageLoader.wrapComponentMetadata(result.state, metadataDelegate(identifier), resolvers, objects),
+        )
     }
 
     override fun isFetchingMetadataCheap(identifier: ComponentIdentifier) = false
@@ -179,283 +180,286 @@ constructor(
         artifact: ComponentArtifactMetadata,
         result: BuildableArtifactResolveResult,
     ) {
-        if (artifact is RemapperArtifact) {
-            val mappingFiles = project.configurations.getByName(artifact.mappingsConfiguration)
+        if (artifact !is RemapperArtifact) {
+            if (artifact is PassthroughArtifactMetadata) {
+                resolvers.get().artifactResolver.resolveArtifact(component, artifact.original, result)
+            }
+            return
+        }
 
-            val remapper =
-                project.extensions
-                    .getByType(MinecraftCodevExtension::class.java)
-                    .extensions
-                    .getByType(RemapperExtension::class.java)
+        val mappingFiles = project.configurations.getByName(artifact.mappingsConfiguration)
 
-            val mappings = remapper.loadMappings(mappingFiles, objects, false)
+        val remapper =
+            project.extensions
+                .getByType(MinecraftCodevExtension::class.java)
+                .extensions
+                .getByType(RemapperExtension::class.java)
 
-            when (artifact) {
-                is RemappedComponentArtifactMetadata -> {
-                    val componentId = component.id as ModuleComponentIdentifier
-                    val artifactId = artifact.componentId
+        val mappings = remapper.loadMappings(mappingFiles, objects, false)
 
-                    resolvers.get().artifactResolver.resolveArtifact(component, artifact.delegate, result)
+        when (artifact) {
+            is RemappedComponentArtifactMetadata -> {
+                val componentId = component.id as ModuleComponentIdentifier
+                val artifactId = artifact.componentId
 
-                    if (mappings.tree.dstNamespaces == null) {
-                        // No mappings
+                resolvers.get().artifactResolver.resolveArtifact(component, artifact.delegate, result)
+
+                if (mappings.tree.dstNamespaces == null) {
+                    // No mappings
+                    return
+                }
+
+                if (result.isSuccessful) {
+                    val (platforms, versions, namespaces) =
+                        project.extensions.getByType(
+                            MinecraftCodevExtension::class.java,
+                        ).detectModInfo(result.result.file.toPath())
+
+                    if (!artifactId.requested && platforms.isEmpty() && versions.isEmpty() && namespaces.isEmpty()) {
                         return
                     }
 
-                    if (result.isSuccessful) {
-                        val (platforms, versions, namespaces) =
-                            project.extensions.getByType(
-                                MinecraftCodevExtension::class.java,
-                            ).detectModInfo(result.result.file.toPath())
+                    val sourceNamespace =
+                        namespaces
+                            .firstOrNull { mappings.tree.getNamespaceId(it) != MappingTreeView.NULL_NAMESPACE_ID }
+                            ?: artifactId.sourceNamespace.takeUnless(String::isEmpty)
+                            ?: artifact.namespace.takeUnless(String::isEmpty)
+                            ?: MappingsNamespace.OBF
 
-                        if (!artifactId.requested && platforms.isEmpty() && versions.isEmpty() && namespaces.isEmpty()) {
-                            return
-                        }
+                    val base = result.result
 
-                        val sourceNamespace =
-                            namespaces
-                                .firstOrNull { mappings.tree.getNamespaceId(it) != MappingTreeView.NULL_NAMESPACE_ID }
-                                ?: artifactId.sourceNamespace.takeUnless(String::isEmpty)
-                                ?: artifact.namespace.takeUnless(String::isEmpty)
-                                ?: MappingsNamespace.OBF
+                    val urlId =
+                        RemappedArtifactIdentifier(
+                            artifact.id.asSerializable,
+                            artifactId.targetNamespace,
+                            mappings.hash,
+                            checksumService.sha1(base.file),
+                        )
 
-                        val base = result.result
+                    val classpath = mutableSetOf<Supplier<File>>()
 
-                        val urlId =
-                            RemappedArtifactIdentifier(
-                                artifact.id.asSerializable,
-                                artifactId.targetNamespace,
-                                mappings.hash,
-                                checksumService.sha1(base.file),
-                            )
+                    val minecraftVersion = versions.firstOrNull()
 
-                        val classpath = mutableSetOf<Supplier<File>>()
+                    if (minecraftVersion != null) {
+                        val extraClasspathDependencies =
+                            project
+                                .extension<MinecraftCodevExtension>()
+                                .extension<RemapperExtension>()
+                                .remapClasspathRules
+                                .get()
+                                .flatMap {
+                                    it(
+                                        sourceNamespace,
+                                        artifactId.targetNamespace,
+                                        minecraftVersion,
+                                        artifactId.mappingsConfiguration,
+                                    )
+                                }
 
-                        val minecraftVersion = versions.firstOrNull()
-
-                        if (minecraftVersion != null) {
-                            val extraClasspathDependencies =
-                                project
-                                    .extension<MinecraftCodevExtension>()
-                                    .extension<RemapperExtension>()
-                                    .remapClasspathRules
-                                    .get()
-                                    .flatMap {
-                                        it(
-                                            sourceNamespace,
-                                            artifactId.targetNamespace,
-                                            minecraftVersion,
-                                            artifactId.mappingsConfiguration,
+                        for (extraClasspathDependency in extraClasspathDependencies) {
+                            val dependency =
+                                dependencyDescriptorFactories.get().firstNotNullOfOrNull {
+                                    if (it.canConvert(extraClasspathDependency)) {
+                                        it.createDependencyMetadata(
+                                            artifactId,
+                                            configuration.name,
+                                            configuration.attributes,
+                                            extraClasspathDependency,
                                         )
+                                    } else {
+                                        null
                                     }
+                                } ?: continue
 
-                            for (extraClasspathDependency in extraClasspathDependencies) {
-                                val dependency =
-                                    dependencyDescriptorFactories.get().firstNotNullOfOrNull {
-                                        if (it.canConvert(extraClasspathDependency)) {
-                                            it.createDependencyMetadata(
-                                                artifactId,
-                                                configuration.name,
-                                                configuration.attributes,
-                                                extraClasspathDependency,
-                                            )
-                                        } else {
-                                            null
-                                        }
-                                    } ?: continue
+                            project.visitDependencyArtifacts(resolvers, configuration, dependency, true, visit = classpath::add)
+                        }
+                    }
 
-                                project.visitDependencyArtifacts(resolvers, configuration, dependency, true, visit = classpath::add)
-                            }
+                    // If we're here, the configuration graph is resolved, so we get it to get the dependencies of this component
+                    //  TODO One problem here is it relies on the real configuration
+                    //   So, removing transitive dependencies can break the output. And adding dependencies may change it, which is not ideal.
+                    val getResultsForBuildDependencies =
+                        DefaultConfiguration::class.java.getDeclaredMethod(
+                            "getResultsForBuildDependencies",
+                        ).apply {
+                            isAccessible = true
                         }
 
-                        // If we're here, the configuration graph is resolved, so we get it to get the dependencies of this component
-                        //  TODO One problem here is it relies on the real configuration
-                        //   So, removing transitive dependencies can break the output. And adding dependencies may change it, which is not ideal.
-                        val getResultsForBuildDependencies =
-                            DefaultConfiguration::class.java.getDeclaredMethod(
-                                "getResultsForBuildDependencies",
-                            ).apply {
-                                isAccessible = true
-                            }
+                    val resolverResults = getResultsForBuildDependencies(configuration) as ResolverResults
+                    val artifactResults =
+                        DefaultLenientConfiguration::class.java.getDeclaredField("artifactResults").apply {
+                            isAccessible = true
+                        }[resolverResults.visitedArtifacts] as VisitedArtifactsResults
 
-                        val resolverResults = getResultsForBuildDependencies(configuration) as ResolverResults
-                        val artifactResults =
-                            DefaultLenientConfiguration::class.java.getDeclaredField("artifactResults").apply {
-                                isAccessible = true
-                            }[resolverResults.visitedArtifacts] as VisitedArtifactsResults
+                    val moduleId =
+                        DefaultModuleComponentIdentifier.newId(
+                            componentId.moduleIdentifier,
+                            componentId.version,
+                        ).toString()
 
-                        val moduleId =
-                            DefaultModuleComponentIdentifier.newId(
-                                componentId.moduleIdentifier,
-                                componentId.version,
-                            ).toString()
-
-                        val resolvedComponentResult =
-                            resolverResults.resolutionResult.allComponents.first {
-                                it.id.toString() == moduleId
-                            }
-
-                        fun handleDependencies(
-                            dependencies: Collection<DependencyResult>,
-                            out: MutableSet<ComponentIdentifier>,
-                        ) {
-                            for (dependency in dependencies.filterIsInstance<ResolvedDependencyResult>()) {
-                                out.add(dependency.selected.id)
-
-                                handleDependencies(dependency.selected.getDependenciesForVariant(dependency.resolvedVariant), out)
-                            }
+                    val resolvedComponentResult =
+                        resolverResults.resolutionResult.allComponents.first {
+                            it.id.toString() == moduleId
                         }
 
-                        val dependencies =
-                            buildSet {
-                                handleDependencies(resolvedComponentResult.dependencies, this)
-                            }
+                    fun handleDependencies(
+                        dependencies: Collection<DependencyResult>,
+                        out: MutableSet<ComponentIdentifier>,
+                    ) {
+                        for (dependency in dependencies.filterIsInstance<ResolvedDependencyResult>()) {
+                            out.add(dependency.selected.id)
 
-                        val artifacts =
-                            artifactResults.selectLenient(
-                                {
-                                    it is ModuleComponentIdentifier && DefaultModuleComponentIdentifier.newId(
-                                        it.moduleIdentifier,
-                                        it.version,
-                                    ) in dependencies
-                                },
-                                object : VariantSelector {
-                                    override fun getRequestedAttributes() =
-                                        (configuration.incoming.attributes as AttributeContainerInternal).asImmutable()
+                            handleDependencies(dependency.selected.getDependenciesForVariant(dependency.resolvedVariant), out)
+                        }
+                    }
 
-                                    override fun select(
-                                        candidates: ResolvedVariantSet,
-                                        factory: VariantSelector.Factory,
-                                    ): ResolvedArtifactSet {
-                                        val matcher =
-                                            (project.dependencies.attributesSchema as AttributesSchemaInternal).withProducer(
-                                                candidates.schema,
-                                            )
-                                        val attributes =
-                                            attributesFactory.concat(
-                                                requestedAttributes,
-                                                candidates.overriddenAttributes,
-                                            )
-                                        val explanationBuilder = AttributeMatchingExplanationBuilder.logging()
+                    val dependencies =
+                        buildSet {
+                            handleDependencies(resolvedComponentResult.dependencies, this)
+                        }
 
-                                        val match = matcher.matches(candidates.variants, attributes, explanationBuilder)
+                    val artifacts =
+                        artifactResults.selectLenient(
+                            {
+                                it is ModuleComponentIdentifier && DefaultModuleComponentIdentifier.newId(
+                                    it.moduleIdentifier,
+                                    it.version,
+                                ) in dependencies
+                            },
+                            object : VariantSelector {
+                                override fun getRequestedAttributes() =
+                                    (configuration.incoming.attributes as AttributeContainerInternal).asImmutable()
 
-                                        require(match.size == 1)
+                                override fun select(
+                                    candidates: ResolvedVariantSet,
+                                    factory: VariantSelector.Factory,
+                                ): ResolvedArtifactSet {
+                                    val matcher =
+                                        (project.dependencies.attributesSchema as AttributesSchemaInternal).withProducer(
+                                            candidates.schema,
+                                        )
+                                    val attributes =
+                                        attributesFactory.concat(
+                                            requestedAttributes,
+                                            candidates.overriddenAttributes,
+                                        )
+                                    val explanationBuilder = AttributeMatchingExplanationBuilder.logging()
 
-                                        return match.first().artifacts
-                                    }
-                                },
-                            )
+                                    val match = matcher.matches(candidates.variants, attributes, explanationBuilder)
 
-                        visitDependencyResultArtifacts(artifacts, classpath::add)
+                                    require(match.size == 1)
 
-                        getOrResolve(
-                            component,
-                            artifact,
-                            calculatedValueContainerFactory,
-                            urlId,
-                            artifactCache,
-                            cachePolicy,
-                            timeProvider,
-                            result,
-                        ) {
-                            try {
-                                val file =
-                                    buildOperationExecutor.call(
-                                        object : CallableBuildOperation<Path> {
-                                            override fun description() =
-                                                BuildOperationDescriptor
-                                                    .displayName(
-                                                        "Remapping $base from $sourceNamespace to ${artifactId.targetNamespace}",
-                                                    )
-                                                    .progressDisplayName("Mappings: $mappingFiles")
-                                                    .metadata(BuildOperationCategory.TASK)
+                                    return match.first().artifacts
+                                }
+                            },
+                        )
 
-                                            override fun call(context: BuildOperationContext) =
-                                                context.callWithStatus {
-                                                    JarRemapper.remap(
-                                                        remapper,
-                                                        mappings.tree,
-                                                        sourceNamespace,
-                                                        artifactId.targetNamespace,
-                                                        base.file.toPath(),
-                                                        classpath.map(Supplier<File>::get),
-                                                    )
-                                                }
-                                        },
+                    visitDependencyResultArtifacts(artifacts, classpath::add)
+
+                    getOrResolve(
+                        component,
+                        artifact,
+                        calculatedValueContainerFactory,
+                        urlId,
+                        artifactCache,
+                        cachePolicy,
+                        timeProvider,
+                        result,
+                    ) {
+                        try {
+                            val file =
+                                buildOperationExecutor.call(
+                                    object : CallableBuildOperation<Path> {
+                                        override fun description() =
+                                            BuildOperationDescriptor
+                                                .displayName(
+                                                    "Remapping $base from $sourceNamespace to ${artifactId.targetNamespace}",
+                                                )
+                                                .progressDisplayName("Mappings: $mappingFiles")
+                                                .metadata(BuildOperationCategory.TASK)
+
+                                        override fun call(context: BuildOperationContext) =
+                                            context.callWithStatus {
+                                                JarRemapper.remap(
+                                                    remapper,
+                                                    mappings.tree,
+                                                    sourceNamespace,
+                                                    artifactId.targetNamespace,
+                                                    base.file.toPath(),
+                                                    classpath.map(Supplier<File>::get),
+                                                )
+                                            }
+                                    },
+                                )
+
+                            val output =
+                                cacheManager.fileStoreDirectory
+                                    .resolve(mappings.hash.toString())
+                                    .resolve(artifactId.group)
+                                    .resolve(artifactId.module)
+                                    .resolve(artifactId.version)
+                                    .resolve(checksumService.sha1(file.toFile()).toString())
+                                    .resolve(
+                                        "${base.file.nameWithoutExtension}-${artifactId.targetNamespace}.${base.file.extension}",
                                     )
 
-                                val output =
-                                    cacheManager.fileStoreDirectory
-                                        .resolve(mappings.hash.toString())
-                                        .resolve(artifactId.group)
-                                        .resolve(artifactId.module)
-                                        .resolve(artifactId.version)
-                                        .resolve(checksumService.sha1(file.toFile()).toString())
-                                        .resolve(
-                                            "${base.file.nameWithoutExtension}-${artifactId.targetNamespace}.${base.file.extension}",
-                                        )
+                            output.parent.createDirectories()
+                            file.copyTo(output)
 
-                                output.parent.createDirectories()
-                                file.copyTo(output)
+                            output.toFile()
+                        } catch (e: Exception) {
+                            project.logger.error(e.toString())
+                            e.printStackTrace()
+                            throw e
+                        }
+                    }
+                }
+            }
 
-                                output.toFile()
-                            } catch (e: Exception) {
-                                project.logger.error(e.toString())
-                                e.printStackTrace()
-                                throw e
-                            }
+            is MappingsArtifact -> {
+                val output =
+                    cacheManager.fileStoreDirectory
+                        .resolve(mappings.hash.toString())
+                        .resolve("mappings.${ArtifactTypeDefinition.ZIP_TYPE}")
+
+                if (output.notExists()) {
+                    output.parent.createDirectories()
+
+                    zipFileSystem(output, true).use {
+                        val directory = it.base.getPath("mappings")
+                        directory.createDirectory()
+
+                        directory.resolve("mappings.tiny").writer().use { writer ->
+                            val visitor =
+                                MappingNsRenamer(
+                                    FieldAddDescVisitor(Tiny2Writer(writer, false)),
+                                    /*
+                                     * To allow it to be used directly in the Fabric Loader, we rename our 'obf' to what fabric expects, which is 'official'
+                                     * This isn't really great design, since the remapper shouldn't cater to something so Fabric specific, but it beats overcomplicating it
+                                     */
+                                    mapOf(MappingsNamespace.OBF to "official"),
+                                )
+
+                            mappings.tree.accept(visitor)
                         }
                     }
                 }
 
-                is MappingsArtifact -> {
-                    val output =
-                        cacheManager.fileStoreDirectory
-                            .resolve(mappings.hash.toString())
-                            .resolve("mappings.${ArtifactTypeDefinition.ZIP_TYPE}")
-
-                    if (output.notExists()) {
-                        output.parent.createDirectories()
-
-                        zipFileSystem(output, true).use {
-                            val directory = it.base.getPath("mappings")
-                            directory.createDirectory()
-
-                            directory.resolve("mappings.tiny").writer().use { writer ->
-                                val visitor =
-                                    MappingNsRenamer(
-                                        FieldAddDescVisitor(Tiny2Writer(writer, false)),
-                                        /*
-                                         * To allow it to be used directly in the Fabric Loader, we rename our 'obf' to what fabric expects, which is 'official'
-                                         * This isn't really great design, since the remapper shouldn't cater to something so Fabric specific, but it beats overcomplicating it
-                                         */
-                                        mapOf(MappingsNamespace.OBF to "official"),
-                                    )
-
-                                mappings.tree.accept(visitor)
-                            }
-                        }
-                    }
-
-                    result.resolved(
-                        DefaultResolvableArtifact(
-                            component.moduleVersionId,
-                            artifact.name,
-                            artifact.id,
-                            artifact.buildDependencies,
-                            calculatedValueContainerFactory.create(Describables.of(artifact.id), output::toFile),
-                            calculatedValueContainerFactory,
-                        ),
-                    )
-                }
+                result.resolved(
+                    DefaultResolvableArtifact(
+                        component.moduleVersionId,
+                        artifact.name,
+                        artifact.id,
+                        artifact.buildDependencies,
+                        calculatedValueContainerFactory.create(Describables.of(artifact.id), output::toFile),
+                        calculatedValueContainerFactory,
+                    ),
+                )
             }
+        }
 
-            if (!result.hasResult()) {
-                result.notFound(artifact.id)
-            }
-        } else if (artifact is PassthroughArtifactMetadata) {
-            resolvers.get().artifactResolver.resolveArtifact(component, artifact.original, result)
+        if (!result.hasResult()) {
+            result.notFound(artifact.id)
         }
     }
 }

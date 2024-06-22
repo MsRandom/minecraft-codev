@@ -98,24 +98,24 @@ constructor(
         rejector: VersionSelector?,
         result: BuildableComponentIdResolveResult,
     ) {
-        if (dependency is DecompiledDependencyMetadata) {
-            resolvers.get().componentIdResolver.resolve(dependency.delegate, acceptor, rejector, result)
+        if (dependency !is DecompiledDependencyMetadata) return
 
-            if (result.hasResult() && result.failure == null) {
-                val metadata = result.state
+        resolvers.get().componentIdResolver.resolve(dependency.delegate, acceptor, rejector, result)
 
-                if (result.id is ModuleComponentIdentifier) {
-                    val id = DecompiledComponentIdentifier(result.id as ModuleComponentIdentifier)
+        if (!result.hasResult() || result.failure != null) return
 
-                    if (metadata == null) {
-                        result.resolved(id, result.moduleVersionId)
-                    } else {
-                        result.resolved(
-                            CodevGradleLinkageLoader.wrapComponentMetadata(metadata, metadataDelegate(id), resolvers, objects),
-                        )
-                    }
-                }
-            }
+        val metadata = result.state
+
+        if (result.id !is ModuleComponentIdentifier) return
+
+        val id = DecompiledComponentIdentifier(result.id as ModuleComponentIdentifier)
+
+        if (metadata == null) {
+            result.resolved(id, result.moduleVersionId)
+        } else {
+            result.resolved(
+                CodevGradleLinkageLoader.wrapComponentMetadata(metadata, metadataDelegate(id), resolvers, objects),
+            )
         }
     }
 
@@ -124,15 +124,15 @@ constructor(
         componentOverrideMetadata: ComponentOverrideMetadata,
         result: BuildableComponentResolveResult,
     ) {
-        if (identifier is DecompiledComponentIdentifier) {
-            resolvers.get().componentResolver.resolve(identifier.original, componentOverrideMetadata, result)
+        if (identifier !is DecompiledComponentIdentifier) return
 
-            if (result.hasResult() && result.failure == null) {
-                result.resolved(
-                    CodevGradleLinkageLoader.wrapComponentMetadata(result.state, metadataDelegate(identifier), resolvers, objects),
-                )
-            }
-        }
+        resolvers.get().componentResolver.resolve(identifier.original, componentOverrideMetadata, result)
+
+        if (!result.hasResult() || result.failure != null) return
+
+        result.resolved(
+            CodevGradleLinkageLoader.wrapComponentMetadata(result.state, metadataDelegate(identifier), resolvers, objects),
+        )
     }
 
     override fun isFetchingMetadataCheap(identifier: ComponentIdentifier) = false
@@ -191,137 +191,140 @@ constructor(
         artifact: ComponentArtifactMetadata,
         result: BuildableArtifactResolveResult,
     ) {
-        if (artifact is DecompiledComponentArtifactMetadata) {
-            val id = artifact.componentId
+        if (artifact !is DecompiledComponentArtifactMetadata) {
+            if (artifact is PassthroughArtifactMetadata) {
+                resolvers.get().artifactResolver.resolveArtifact(component, artifact.original, result)
+            }
+            return
+        }
 
-            resolvers.get().artifactResolver.resolveArtifact(component, artifact.delegate, result)
+        val id = artifact.componentId
 
-            if (result.isSuccessful) {
-                val base = result.result
+        resolvers.get().artifactResolver.resolveArtifact(component, artifact.delegate, result)
 
-                val urlId =
-                    DecompiledArtifactIdentifier(
-                        artifact.id.asSerializable,
-                        checksumService.sha1(base.file),
-                    )
+        if (result.isSuccessful) {
+            val base = result.result
 
-                val classpath = mutableSetOf<Supplier<File>>()
+            val urlId =
+                DecompiledArtifactIdentifier(
+                    artifact.id.asSerializable,
+                    checksumService.sha1(base.file),
+                )
 
-                val getResultsForBuildDependencies =
-                    DefaultConfiguration::class.java.getDeclaredMethod(
-                        "getResultsForBuildDependencies",
-                    ).apply {
-                        isAccessible = true
-                    }
-                val resolverResults = getResultsForBuildDependencies(configuration) as ResolverResults
-                val artifactResults =
-                    DefaultLenientConfiguration::class.java.getDeclaredField("artifactResults").apply {
-                        isAccessible = true
-                    }[resolverResults.visitedArtifacts] as VisitedArtifactsResults
+            val classpath = mutableSetOf<Supplier<File>>()
 
-                val moduleId = DefaultModuleComponentIdentifier.newId(id.moduleIdentifier, id.version)
+            val getResultsForBuildDependencies =
+                DefaultConfiguration::class.java.getDeclaredMethod(
+                    "getResultsForBuildDependencies",
+                ).apply {
+                    isAccessible = true
+                }
+            val resolverResults = getResultsForBuildDependencies(configuration) as ResolverResults
+            val artifactResults =
+                DefaultLenientConfiguration::class.java.getDeclaredField("artifactResults").apply {
+                    isAccessible = true
+                }[resolverResults.visitedArtifacts] as VisitedArtifactsResults
 
-                val resolvedComponentResult =
-                    resolverResults.resolutionResult.allComponents.first {
-                        it.id == moduleId
-                    }
+            val moduleId = DefaultModuleComponentIdentifier.newId(id.moduleIdentifier, id.version)
 
-                fun handleDependencies(
-                    dependencies: Collection<DependencyResult>,
-                    out: MutableSet<ComponentIdentifier>,
-                ) {
-                    for (dependency in dependencies.filterIsInstance<ResolvedDependencyResult>()) {
-                        out.add(dependency.selected.id)
-
-                        handleDependencies(dependency.selected.getDependenciesForVariant(dependency.resolvedVariant), out)
-                    }
+            val resolvedComponentResult =
+                resolverResults.resolutionResult.allComponents.first {
+                    it.id == moduleId
                 }
 
-                val dependencies =
-                    buildSet {
-                        handleDependencies(resolvedComponentResult.dependencies, this)
-                    }
+            fun handleDependencies(
+                dependencies: Collection<DependencyResult>,
+                out: MutableSet<ComponentIdentifier>,
+            ) {
+                for (dependency in dependencies.filterIsInstance<ResolvedDependencyResult>()) {
+                    out.add(dependency.selected.id)
 
-                val artifacts =
-                    artifactResults.selectLenient(
-                        {
-                            it is ModuleComponentIdentifier && DefaultModuleComponentIdentifier.newId(
-                                it.moduleIdentifier,
-                                it.version,
-                            ) in dependencies
-                        },
-                        object : VariantSelector {
-                            override fun getRequestedAttributes() =
-                                (configuration.incoming.attributes as AttributeContainerInternal).asImmutable()
-
-                            override fun select(
-                                candidates: ResolvedVariantSet,
-                                factory: VariantSelector.Factory,
-                            ): ResolvedArtifactSet {
-                                val matcher =
-                                    (project.dependencies.attributesSchema as AttributesSchemaInternal).withProducer(
-                                        candidates.schema,
-                                    )
-                                val attributes = attributesFactory.concat(requestedAttributes, candidates.overriddenAttributes)
-                                val explanationBuilder = AttributeMatchingExplanationBuilder.logging()
-
-                                val match = matcher.matches(candidates.variants, attributes, explanationBuilder)
-
-                                require(match.size == 1)
-
-                                return match.first().artifacts
-                            }
-                        },
-                    )
-
-                visitDependencyResultArtifacts(artifacts, classpath::add)
-
-                getOrResolve(
-                    component,
-                    artifact,
-                    calculatedValueContainerFactory,
-                    urlId,
-                    artifactCache,
-                    cachePolicy,
-                    timeProvider,
-                    result,
-                ) {
-                    val file =
-                        buildOperationExecutor.call(
-                            object : CallableBuildOperation<Path> {
-                                override fun description() =
-                                    BuildOperationDescriptor
-                                        .displayName("Decompiling ${result.result}")
-                                        .progressDisplayName("Generating Sources")
-                                        .metadata(BuildOperationCategory.TASK)
-
-                                override fun call(context: BuildOperationContext) =
-                                    context.callWithStatus {
-                                        SourcesGenerator.decompile(base.file.toPath(), classpath.map { it.get().toPath() })
-                                    }
-                            },
-                        )
-
-                    val output =
-                        cacheManager.fileStoreDirectory
-                            .resolve(id.group)
-                            .resolve(id.module)
-                            .resolve(id.version)
-                            .resolve(checksumService.sha1(file.toFile()).toString())
-                            .resolve("${base.file.nameWithoutExtension}-sources.${base.file.extension}")
-
-                    output.parent.createDirectories()
-                    file.copyTo(output)
-
-                    output.toFile()
+                    handleDependencies(dependency.selected.getDependenciesForVariant(dependency.resolvedVariant), out)
                 }
             }
 
-            if (!result.hasResult()) {
-                result.notFound(artifact.id)
+            val dependencies =
+                buildSet {
+                    handleDependencies(resolvedComponentResult.dependencies, this)
+                }
+
+            val artifacts =
+                artifactResults.selectLenient(
+                    {
+                        it is ModuleComponentIdentifier && DefaultModuleComponentIdentifier.newId(
+                            it.moduleIdentifier,
+                            it.version,
+                        ) in dependencies
+                    },
+                    object : VariantSelector {
+                        override fun getRequestedAttributes() =
+                            (configuration.incoming.attributes as AttributeContainerInternal).asImmutable()
+
+                        override fun select(
+                            candidates: ResolvedVariantSet,
+                            factory: VariantSelector.Factory,
+                        ): ResolvedArtifactSet {
+                            val matcher =
+                                (project.dependencies.attributesSchema as AttributesSchemaInternal).withProducer(
+                                    candidates.schema,
+                                )
+                            val attributes = attributesFactory.concat(requestedAttributes, candidates.overriddenAttributes)
+                            val explanationBuilder = AttributeMatchingExplanationBuilder.logging()
+
+                            val match = matcher.matches(candidates.variants, attributes, explanationBuilder)
+
+                            require(match.size == 1)
+
+                            return match.first().artifacts
+                        }
+                    },
+                )
+
+            visitDependencyResultArtifacts(artifacts, classpath::add)
+
+            getOrResolve(
+                component,
+                artifact,
+                calculatedValueContainerFactory,
+                urlId,
+                artifactCache,
+                cachePolicy,
+                timeProvider,
+                result,
+            ) {
+                val file =
+                    buildOperationExecutor.call(
+                        object : CallableBuildOperation<Path> {
+                            override fun description() =
+                                BuildOperationDescriptor
+                                    .displayName("Decompiling ${result.result}")
+                                    .progressDisplayName("Generating Sources")
+                                    .metadata(BuildOperationCategory.TASK)
+
+                            override fun call(context: BuildOperationContext) =
+                                context.callWithStatus {
+                                    SourcesGenerator.decompile(base.file.toPath(), classpath.map { it.get().toPath() })
+                                }
+                        },
+                    )
+
+                val output =
+                    cacheManager.fileStoreDirectory
+                        .resolve(id.group)
+                        .resolve(id.module)
+                        .resolve(id.version)
+                        .resolve(checksumService.sha1(file.toFile()).toString())
+                        .resolve("${base.file.nameWithoutExtension}-sources.${base.file.extension}")
+
+                output.parent.createDirectories()
+                file.copyTo(output)
+
+                output.toFile()
             }
-        } else if (artifact is PassthroughArtifactMetadata) {
-            resolvers.get().artifactResolver.resolveArtifact(component, artifact.original, result)
+        }
+
+        if (!result.hasResult()) {
+            result.notFound(artifact.id)
         }
     }
 }

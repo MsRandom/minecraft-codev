@@ -178,85 +178,88 @@ constructor(
         artifact: ComponentArtifactMetadata,
         result: BuildableArtifactResolveResult,
     ) {
-        if (artifact is ExtractIncludesComponentArtifactMetadata) {
-            resolvers.get().artifactResolver.resolveArtifact(component, artifact.delegate, result)
-
-            if (result.isSuccessful) {
-                val includeRules =
-                    project.extensions.getByType(
-                        MinecraftCodevExtension::class.java,
-                    ).extensions.getByType(IncludesExtension::class.java).rules
-
-                val base = result.result
-
-                val handler =
-                    zipFileSystem(base.file.toPath()).use {
-                        val root = it.base.getPath("/")
-
-                        includeRules.get().firstNotNullOfOrNull { rule ->
-                            rule.load(root)
-                        }
-                    } ?: return
-
-                val id = artifact.componentId
-
-                getOrResolve(
-                    component,
-                    artifact as ModuleComponentArtifactMetadata,
-                    calculatedValueContainerFactory,
-                    artifact.id.asSerializable,
-                    artifactCache,
-                    cachePolicy,
-                    timeProvider,
-                    result,
-                ) {
-                    buildOperationExecutor.call(
-                        object : CallableBuildOperation<Path> {
-                            override fun description() =
-                                BuildOperationDescriptor
-                                    .displayName("Removing includes from ${result.result}")
-                                    .progressDisplayName("Removing extracted includes")
-                                    .metadata(BuildOperationCategory.TASK)
-
-                            override fun call(context: BuildOperationContext) =
-                                context.callWithStatus {
-                                    val file = Files.createTempFile("includes-extracted", ".jar")
-
-                                    base.file.toPath().copyTo(file, true)
-
-                                    zipFileSystem(file).use {
-                                        val root = it.base.getPath("/")
-
-                                        for (jar in handler.list(root)) {
-                                            it.base.getPath(jar.path).deleteExisting()
-                                        }
-
-                                        handler.remove(root)
-                                    }
-
-                                    val output =
-                                        cacheManager.fileStoreDirectory
-                                            .resolve(id.group)
-                                            .resolve(id.module)
-                                            .resolve(id.version)
-                                            .resolve(checksumService.sha1(file.toFile()).toString())
-                                            .resolve("${base.file.nameWithoutExtension}-without-includes.${base.file.extension}")
-
-                                    output.parent.createDirectories()
-                                    file.copyTo(output)
-
-                                    output
-                                }
-                        },
-                    ).toFile()
-                }
-
-                if (!result.hasResult()) {
-                    result.notFound(artifact.id)
-                }
+        if (artifact !is ExtractIncludesComponentArtifactMetadata) {
+            if (artifact is PassthroughArtifactMetadata) {
+                resolvers.get().artifactResolver.resolveArtifact(component, artifact.original, result)
             }
-        } else if (artifact is PassthroughArtifactMetadata) {
-            resolvers.get().artifactResolver.resolveArtifact(component, artifact.original, result)
+            return
+        }
+
+        resolvers.get().artifactResolver.resolveArtifact(component, artifact.delegate, result)
+
+        if (!result.isSuccessful) return
+
+        val includeRules =
+            project.extensions.getByType(
+                MinecraftCodevExtension::class.java,
+            ).extensions.getByType(IncludesExtension::class.java).rules
+
+        val base = result.result
+
+        val handler =
+            zipFileSystem(base.file.toPath()).use {
+                val root = it.base.getPath("/")
+
+                includeRules.get().firstNotNullOfOrNull { rule ->
+                    rule.load(root)
+                }
+            } ?: return
+
+        val id = artifact.componentId
+
+        getOrResolve(
+            component,
+            artifact as ModuleComponentArtifactMetadata,
+            calculatedValueContainerFactory,
+            artifact.id.asSerializable,
+            artifactCache,
+            cachePolicy,
+            timeProvider,
+            result,
+        ) {
+            buildOperationExecutor.call(
+                object : CallableBuildOperation<Path> {
+                    override fun description() =
+                        BuildOperationDescriptor
+                            .displayName("Removing includes from ${result.result}")
+                            .progressDisplayName("Removing extracted includes")
+                            .metadata(BuildOperationCategory.TASK)
+
+                    override fun call(context: BuildOperationContext) =
+                        context.callWithStatus {
+                            val file = Files.createTempFile("includes-extracted", ".jar")
+
+                            base.file.toPath().copyTo(file, true)
+
+                            zipFileSystem(file).use {
+                                val root = it.base.getPath("/")
+
+                                for (jar in handler.list(root)) {
+                                    it.base.getPath(jar.path).deleteExisting()
+                                }
+
+                                handler.remove(root)
+                            }
+
+                            val output =
+                                cacheManager.fileStoreDirectory
+                                    .resolve(id.group)
+                                    .resolve(id.module)
+                                    .resolve(id.version)
+                                    .resolve(checksumService.sha1(file.toFile()).toString())
+                                    .resolve("${base.file.nameWithoutExtension}-without-includes.${base.file.extension}")
+
+                            output.parent.createDirectories()
+                            file.copyTo(output)
+
+                            output
+                        }
+                },
+            ).toFile()
+        }
+
+        if (!result.hasResult()) {
+            result.notFound(artifact.id)
         }
     }
 }

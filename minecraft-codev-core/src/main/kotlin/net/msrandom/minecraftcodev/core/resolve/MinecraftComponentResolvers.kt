@@ -70,40 +70,60 @@ constructor(
         componentOverrideMetadata: ComponentOverrideMetadata,
         result: BuildableComponentResolveResult,
     ) {
-        if (identifier::class == MinecraftComponentIdentifier::class) {
-            identifier as MinecraftComponentIdentifier
+        if (identifier::class != MinecraftComponentIdentifier::class) return
 
-            var versionList: MinecraftVersionList? = null
+        identifier as MinecraftComponentIdentifier
 
-            for (repository in repositories) {
-                versionList =
-                    MinecraftMetadataGenerator.getVersionList(
-                        identifier,
-                        null,
-                        repository.url,
-                        cacheManager,
-                        cachePolicy,
-                        repository.resourceAccessor,
-                        checksumService,
-                        timeProvider,
-                        null,
+        var versionList: MinecraftVersionList? = null
+
+        for (repository in repositories) {
+            versionList =
+                MinecraftMetadataGenerator.getVersionList(
+                    identifier,
+                    null,
+                    repository.url,
+                    cacheManager,
+                    cachePolicy,
+                    repository.resourceAccessor,
+                    checksumService,
+                    timeProvider,
+                    null,
+                )
+
+            if (versionList != null) {
+                break
+            }
+        }
+
+        if (versionList == null) {
+            return
+        }
+
+        var isChanging = false
+        val id =
+            if (identifier.version.endsWith("-SNAPSHOT")) {
+                val snapshot = versionList.snapshot(identifier.version.substring(0, identifier.version.length - "-SNAPSHOT".length))
+
+                if (snapshot == null) {
+                    result.notFound(
+                        DefaultModuleComponentIdentifier.newId(
+                            DefaultModuleIdentifier.newId(GROUP, identifier.module),
+                            identifier.version,
+                        ),
                     )
-
-                if (versionList != null) {
-                    break
+                    return
                 }
-            }
 
-            if (versionList == null) {
-                return
-            }
+                isChanging = true
+                MinecraftComponentIdentifier(identifier.module, snapshot)
+            } else {
+                val match = UNIQUE_VERSION_ID.find(identifier.version)?.groups?.get(1)?.value
 
-            var isChanging = false
-            val id =
-                if (identifier.version.endsWith("-SNAPSHOT")) {
-                    val snapshot = versionList.snapshot(identifier.version.substring(0, identifier.version.length - "-SNAPSHOT".length))
-
-                    if (snapshot == null) {
+                if (match == null) {
+                    identifier
+                } else {
+                    val version = versionList.snapshotTimestamps[match]
+                    if (version == null) {
                         result.notFound(
                             DefaultModuleComponentIdentifier.newId(
                                 DefaultModuleIdentifier.newId(GROUP, identifier.module),
@@ -113,47 +133,27 @@ constructor(
                         return
                     }
 
-                    isChanging = true
-                    MinecraftComponentIdentifier(identifier.module, snapshot)
-                } else {
-                    val match = UNIQUE_VERSION_ID.find(identifier.version)?.groups?.get(1)?.value
-
-                    if (match == null) {
-                        identifier
-                    } else {
-                        val version = versionList.snapshotTimestamps[match]
-                        if (version == null) {
-                            result.notFound(
-                                DefaultModuleComponentIdentifier.newId(
-                                    DefaultModuleIdentifier.newId(GROUP, identifier.module),
-                                    identifier.version,
-                                ),
-                            )
-                            return
-                        }
-
-                        MinecraftComponentIdentifier(identifier.module, version)
-                    }
+                    MinecraftComponentIdentifier(identifier.module, version)
                 }
+            }
 
-            val metadataGenerator = objects.newInstance(MinecraftMetadataGenerator::class.java, cacheManager)
+        val metadataGenerator = objects.newInstance(MinecraftMetadataGenerator::class.java, cacheManager)
 
-            for (repository in repositories) {
-                val metadata =
-                    metadataGenerator.resolveMetadata(
-                        repository,
-                        repository.resourceAccessor,
-                        id,
-                        isChanging,
-                        componentOverrideMetadata,
-                        result::attempted,
-                    )
+        for (repository in repositories) {
+            val metadata =
+                metadataGenerator.resolveMetadata(
+                    repository,
+                    repository.resourceAccessor,
+                    id,
+                    isChanging,
+                    componentOverrideMetadata,
+                    result::attempted,
+                )
 
-                if (metadata != null) {
-                    result.resolved(wrapComponentMetadata(metadata, objects))
+            if (metadata != null) {
+                result.resolved(wrapComponentMetadata(metadata, objects))
 
-                    break
-                }
+                break
             }
         }
     }

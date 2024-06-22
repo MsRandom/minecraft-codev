@@ -83,29 +83,29 @@ constructor(
         rejector: VersionSelector?,
         result: BuildableComponentIdResolveResult,
     ) {
-        if (dependency is SkipMixinDependencyMetadata) {
-            resolvers.get().componentIdResolver.resolve(dependency.delegate, acceptor, rejector, result)
+        if (dependency !is SkipMixinDependencyMetadata) return
 
-            if (result.hasResult() && result.failure == null) {
-                val metadata = result.state
+        resolvers.get().componentIdResolver.resolve(dependency.delegate, acceptor, rejector, result)
 
-                if (result.id is ModuleComponentIdentifier) {
-                    val id = SkipMixinsComponentIdentifier(result.id as ModuleComponentIdentifier)
+        if (!result.hasResult() || result.failure != null) return
 
-                    if (metadata == null) {
-                        result.resolved(id, result.moduleVersionId)
-                    } else {
-                        result.resolved(
-                            CodevGradleLinkageLoader.wrapComponentMetadata(
-                                metadata,
-                                SkipMixinsComponentMetadataDelegate(id),
-                                resolvers,
-                                objects,
-                            ),
-                        )
-                    }
-                }
-            }
+        val metadata = result.state
+
+        if (result.id !is ModuleComponentIdentifier) return
+
+        val id = SkipMixinsComponentIdentifier(result.id as ModuleComponentIdentifier)
+
+        if (metadata == null) {
+            result.resolved(id, result.moduleVersionId)
+        } else {
+            result.resolved(
+                CodevGradleLinkageLoader.wrapComponentMetadata(
+                    metadata,
+                    SkipMixinsComponentMetadataDelegate(id),
+                    resolvers,
+                    objects,
+                ),
+            )
         }
     }
 
@@ -114,20 +114,20 @@ constructor(
         componentOverrideMetadata: ComponentOverrideMetadata,
         result: BuildableComponentResolveResult,
     ) {
-        if (identifier is SkipMixinsComponentIdentifier) {
-            resolvers.get().componentResolver.resolve(identifier.original, componentOverrideMetadata, result)
+        if (identifier !is SkipMixinsComponentIdentifier) return
 
-            if (result.hasResult() && result.failure == null) {
-                result.resolved(
-                    CodevGradleLinkageLoader.wrapComponentMetadata(
-                        result.state,
-                        SkipMixinsComponentMetadataDelegate(identifier),
-                        resolvers,
-                        objects,
-                    ),
-                )
-            }
-        }
+        resolvers.get().componentResolver.resolve(identifier.original, componentOverrideMetadata, result)
+
+        if (!result.hasResult() || result.failure != null) return
+
+        result.resolved(
+            CodevGradleLinkageLoader.wrapComponentMetadata(
+                result.state,
+                SkipMixinsComponentMetadataDelegate(identifier),
+                resolvers,
+                objects,
+            ),
+        )
     }
 
     override fun isFetchingMetadataCheap(identifier: ComponentIdentifier) =
@@ -164,94 +164,94 @@ constructor(
         artifact: ComponentArtifactMetadata,
         result: BuildableArtifactResolveResult,
     ) {
-        if (artifact is SkipMixinsComponentArtifactMetadata) {
-            resolvers.get().artifactResolver.resolveArtifact(component, artifact.delegate, result)
+        if (artifact !is SkipMixinsComponentArtifactMetadata) return
 
-            if (result.hasResult() && result.failure == null) {
-                val base = result.result
+        resolvers.get().artifactResolver.resolveArtifact(component, artifact.delegate, result)
 
-                val urlId =
-                    SkipMixinsArtifactIdentifier(
-                        artifact.id.asSerializable,
-                        checksumService.sha1(base.file),
-                    )
+        if (!result.hasResult() || result.failure != null) return
 
-                getOrResolve(
-                    component,
-                    artifact,
-                    calculatedValueContainerFactory,
-                    urlId,
-                    artifactCache,
-                    cachePolicy,
-                    timeProvider,
-                    result,
-                ) {
-                    val rules =
-                        project.extensions
-                            .getByType(MinecraftCodevExtension::class.java).extensions
-                            .getByType(MixinsExtension::class.java)
-                            .rules
+        val base = result.result
 
-                    buildOperationExecutor.call(
-                        object : CallableBuildOperation<File?> {
-                            override fun description() =
-                                BuildOperationDescriptor
-                                    .displayName("Removing ${result.result} mixins")
-                                    .progressDisplayName("Stripping Mixins")
-                                    .metadata(BuildOperationCategory.TASK)
+        val urlId =
+            SkipMixinsArtifactIdentifier(
+                artifact.id.asSerializable,
+                checksumService.sha1(base.file),
+            )
 
-                            @Suppress("WRONG_NULLABILITY_FOR_JAVA_OVERRIDE")
-                            override fun call(context: BuildOperationContext) =
-                                context.callWithStatus {
-                                    val handler =
-                                        zipFileSystem(base.file.toPath()).use {
-                                            val path = it.base.getPath("/")
+        getOrResolve(
+            component,
+            artifact,
+            calculatedValueContainerFactory,
+            urlId,
+            artifactCache,
+            cachePolicy,
+            timeProvider,
+            result,
+        ) {
+            val rules =
+                project.extensions
+                    .getByType(MinecraftCodevExtension::class.java).extensions
+                    .getByType(MixinsExtension::class.java)
+                    .rules
 
-                                            rules.get().firstNotNullOfOrNull { rule ->
-                                                rule.load(path)
-                                            }
-                                        }
+            buildOperationExecutor.call(
+                object : CallableBuildOperation<File?> {
+                    override fun description() =
+                        BuildOperationDescriptor
+                            .displayName("Removing ${result.result} mixins")
+                            .progressDisplayName("Stripping Mixins")
+                            .metadata(BuildOperationCategory.TASK)
 
-                                    if (handler == null) {
-                                        result.failed(
-                                            ArtifactResolveException(
-                                                artifact.id,
-                                                UnsupportedOperationException(
-                                                    "Couldn't find mixin configs for $base, unsupported format.\n" +
-                                                        "You can register new mixin loading rules with minecraft.mixins.rules",
-                                                ),
-                                            ),
-                                        )
+                    @Suppress("WRONG_NULLABILITY_FOR_JAVA_OVERRIDE")
+                    override fun call(context: BuildOperationContext) =
+                        context.callWithStatus {
+                            val handler =
+                                zipFileSystem(base.file.toPath()).use {
+                                    val path = it.base.getPath("/")
 
-                                        null
-                                    } else {
-                                        val id = artifact.componentId
-                                        val file = base.file.toPath().createDeterministicCopy("mixins-skipped", ".tmp.jar")
-
-                                        zipFileSystem(file).use {
-                                            val root = it.base.getPath("/")
-                                            handler.list(root).forEach { path -> root.resolve(path).deleteExisting() }
-                                            handler.remove(root)
-                                        }
-
-                                        val output =
-                                            cacheManager.fileStoreDirectory
-                                                .resolve(id.group)
-                                                .resolve(id.module)
-                                                .resolve(id.version)
-                                                .resolve(checksumService.sha1(file.toFile()).toString())
-                                                .resolve("${base.file.nameWithoutExtension}-mixins-skipped.${base.file.extension}")
-
-                                        output.parent.createDirectories()
-                                        file.copyTo(output, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES)
-
-                                        output.toFile()
+                                    rules.get().firstNotNullOfOrNull { rule ->
+                                        rule.load(path)
                                     }
                                 }
-                        },
-                    )
-                }
-            }
+
+                            if (handler == null) {
+                                result.failed(
+                                    ArtifactResolveException(
+                                        artifact.id,
+                                        UnsupportedOperationException(
+                                            "Couldn't find mixin configs for $base, unsupported format.\n" +
+                                                "You can register new mixin loading rules with minecraft.mixins.rules",
+                                        ),
+                                    ),
+                                )
+
+                                null
+                            } else {
+                                val id = artifact.componentId
+                                val file = base.file.toPath().createDeterministicCopy("mixins-skipped", ".tmp.jar")
+
+                                zipFileSystem(file).use {
+                                    val root = it.base.getPath("/")
+                                    handler.list(root).forEach { path -> root.resolve(path).deleteExisting() }
+                                    handler.remove(root)
+                                }
+
+                                val output =
+                                    cacheManager.fileStoreDirectory
+                                        .resolve(id.group)
+                                        .resolve(id.module)
+                                        .resolve(id.version)
+                                        .resolve(checksumService.sha1(file.toFile()).toString())
+                                        .resolve("${base.file.nameWithoutExtension}-mixins-skipped.${base.file.extension}")
+
+                                output.parent.createDirectories()
+                                file.copyTo(output, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES)
+
+                                output.toFile()
+                            }
+                        }
+                },
+            )
         }
     }
 }
