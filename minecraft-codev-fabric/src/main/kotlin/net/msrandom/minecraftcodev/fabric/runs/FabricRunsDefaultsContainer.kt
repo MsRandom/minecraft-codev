@@ -9,7 +9,6 @@ import net.msrandom.minecraftcodev.runs.task.DownloadAssets
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
 import org.gradle.api.Action
 import org.gradle.api.file.Directory
-import org.gradle.api.tasks.SourceSet
 import java.io.File
 import kotlin.io.path.createDirectories
 
@@ -21,11 +20,7 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
         defaults.builder.action {
             val file = project.layout.buildDirectory.dir("fabricRemapClasspath").get().file("classpath.txt")
 
-            val runtimeClasspath =
-                compilation
-                    .map { it.runtimeDependencyFiles }
-                    .orElse(sourceSet.map(SourceSet::getRuntimeClasspath))
-                    .get()
+            val runtimeClasspath = sourceSet.get().runtimeClasspath
 
             jvmArguments.add(
                 project.provider {
@@ -46,14 +41,16 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
 
         defaults.builder.action {
             val extractNativesTask =
-                project.tasks.withType(ExtractNatives::class.java)
-                    .named(compilation.map { it.target.extractNativesTaskName }.orElse(sourceSet.map { it.extractNativesTaskName }).get())
+                sourceSet.flatMap {
+                    project.tasks.withType(ExtractNatives::class.java)
+                        .named(it.extractNativesTaskName)
+                }
 
             val codev = project.extensions.getByType(MinecraftCodevExtension::class.java).extensions.getByType(RunsContainer::class.java)
 
             val downloadAssetsTask =
                 project.tasks.withType(DownloadAssets::class.java)
-                    .named(compilation.map { it.target.downloadAssetsTaskName }.orElse(sourceSet.map { it.downloadAssetsTaskName }).get())
+                    .named(sourceSet.get().downloadAssetsTaskName)
 
             val nativesDirectory = extractNativesTask.flatMap(ExtractNatives::destinationDirectory).map(Directory::getAsFile)
 

@@ -7,7 +7,6 @@ import org.gradle.api.Task
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
-import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinJvmCompilation
 import javax.inject.Inject
 
 abstract class MinecraftRunConfigurationBuilder
@@ -67,16 +66,6 @@ constructor(val project: Project, private val name: String, private val runsCont
     fun sourceSet(sourceSet: SourceSet) =
         apply {
             setup { this.sourceSet.set(sourceSet) }
-        }
-
-    fun compilation(compilation: Provider<KotlinJvmCompilation>) =
-        apply {
-            setup { this.compilation.set(compilation) }
-        }
-
-    fun compilation(compilation: KotlinJvmCompilation) =
-        apply {
-            setup { this.compilation.set(compilation) }
         }
 
     fun beforeRun(task: Provider<Task>) =

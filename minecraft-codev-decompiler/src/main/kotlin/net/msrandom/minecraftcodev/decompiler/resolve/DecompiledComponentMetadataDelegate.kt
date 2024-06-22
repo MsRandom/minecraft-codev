@@ -68,9 +68,9 @@ constructor(
         }
     }
 
-    override fun extraVariants(variants: List<VariantMetadataHolder>): List<VariantMetadata> {
+    override fun extraVariants(existing: List<VariantMetadataHolder>): List<VariantMetadata> {
         val configurationsByArtifact =
-            variants.flatMap { configuration -> configuration.artifacts.map { it to configuration } }
+            existing.flatMap { configuration -> configuration.artifacts.map { it to configuration } }
                 .filter { (artifact) -> artifact.componentId is ModuleComponentIdentifier }
                 .groupBy { (artifact) -> artifact.name }
                 .filterKeys { it.type == ArtifactTypeDefinition.JAR_TYPE }

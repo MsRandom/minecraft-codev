@@ -2,7 +2,6 @@
 A Gradle plugin that allows using Minecraft as a dependency with modules that allow mod development in Forge, Fabric, Quilt with any mappings.
 
 ## Features
-- Supports the Java and Kotlin Multiplatform plugins, with support for using it standalone.
 - Supports applying mixins directly to dependencies to give a better debugging and development experience.
 - Supports custom Gradle version selectors like `1.16+`, `[1.16, 1.18]`, `1.19.3-SNAPSHOT`
 
@@ -13,7 +12,6 @@ This project is currently heavily WIP, so many of the planned features are yet n
 ### Simple Minecraft Example
 ```kotlin
 plugins {
-  java
   id("minecraft-codev-remapper") version "1.0"
 }
 
@@ -38,7 +36,6 @@ dependencies {
 ### Forge Patched Minecraft Example
 ```kotlin
 plugins {
-  java
   id("minecraft-codev-forge") version "1.0"
   id("minecraft-codev-remapper") version "1.0"
 }
@@ -65,7 +62,6 @@ dependencies {
 ### Multiversion Example
 ```kotlin
 plugins {
-  java
   id("minecraft-codev-remapper") version "1.0"
 }
 
@@ -93,7 +89,6 @@ dependencies {
 ### Split source sets Example
 ```kotlin
 plugins {
-  java
   id("minecraft-codev-remapper") version "1.0"
 }
 

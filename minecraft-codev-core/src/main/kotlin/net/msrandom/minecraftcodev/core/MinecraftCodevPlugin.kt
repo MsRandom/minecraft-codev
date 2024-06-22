@@ -13,6 +13,7 @@ import net.msrandom.minecraftcodev.core.utils.named
 import org.gradle.api.Plugin
 import org.gradle.api.attributes.Attribute
 import org.gradle.api.invocation.Gradle
+import org.gradle.api.plugins.JavaPlugin
 import org.gradle.api.plugins.PluginAware
 import org.gradle.internal.os.OperatingSystem
 import org.gradle.nativeplatform.OperatingSystemFamily
@@ -30,6 +31,8 @@ open class MinecraftCodevPlugin<T : PluginAware> : Plugin<T> {
 
     override fun apply(target: T) =
         applyPlugin(target, ::applyGradle) {
+            plugins.apply(JavaPlugin::class.java)
+
             handleCustomQueryResolvers()
 
             val codev = extensions.create("minecraft", MinecraftCodevExtension::class.java)

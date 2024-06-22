@@ -5,7 +5,7 @@ import net.msrandom.minecraftcodev.accesswidener.resolve.AccessWidenedComponentR
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.dependency.registerCustomDependency
 import net.msrandom.minecraftcodev.core.utils.applyPlugin
-import net.msrandom.minecraftcodev.core.utils.createCompilationConfigurations
+import net.msrandom.minecraftcodev.core.utils.createSourceSetConfigurations
 import org.gradle.api.Plugin
 import org.gradle.api.invocation.Gradle
 import org.gradle.api.plugins.PluginAware
@@ -20,7 +20,7 @@ class MinecraftCodevAccessWidenerPlugin<T : PluginAware> : Plugin<T> {
 
     override fun apply(target: T) =
         applyPlugin(target, ::applyGradle) {
-            createCompilationConfigurations(ACCESS_WIDENERS_CONFIGURATION)
+            createSourceSetConfigurations(ACCESS_WIDENERS_CONFIGURATION)
 
             extensions.getByType(MinecraftCodevExtension::class.java).extensions.create("accessWidener", AccessWidenerExtension::class.java)
         }

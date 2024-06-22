@@ -1,56 +1,19 @@
 package net.msrandom.minecraftcodev.remapper.dependency
 
-import groovy.lang.Closure
 import net.msrandom.minecraftcodev.core.utils.disambiguateName
 import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
 import org.gradle.api.Action
-import org.gradle.api.artifacts.Dependency
-import org.gradle.api.artifacts.ExternalModuleDependency
 import org.gradle.api.artifacts.ModuleDependency
 import org.gradle.api.artifacts.SelfResolvingDependency
 import org.gradle.api.tasks.SourceSet
-import org.jetbrains.kotlin.gradle.plugin.HasKotlinDependencies
-import org.jetbrains.kotlin.gradle.plugin.KotlinDependencyHandler
-import org.jetbrains.kotlin.gradle.plugin.KotlinTarget
-import org.jetbrains.kotlin.gradle.plugin.mpp.DefaultKotlinDependencyHandler
 
 val SourceSet.mappingsConfigurationName get() = disambiguateName(MinecraftCodevRemapperPlugin.MAPPINGS_CONFIGURATION)
-val HasKotlinDependencies.mappingsConfigurationName get() = disambiguateName(MinecraftCodevRemapperPlugin.MAPPINGS_CONFIGURATION)
-val KotlinTarget.mappingsConfigurationName get() = disambiguateName(MinecraftCodevRemapperPlugin.MAPPINGS_CONFIGURATION)
 
 val <T : ModuleDependency> T.remapped
     get() = remapped()
 
 val SelfResolvingDependency.remapped
     get() = remapped()
-
-fun KotlinDependencyHandler.mappings(dependencyNotation: Any) =
-    (this as DefaultKotlinDependencyHandler).let {
-        it.project.dependencies.add(it.parent.mappingsConfigurationName, dependencyNotation)
-    }
-
-fun KotlinDependencyHandler.mappings(
-    dependencyNotation: String,
-    configure: ExternalModuleDependency.() -> Unit,
-) = (mappings(dependencyNotation) as ExternalModuleDependency).also(configure)
-
-fun <T : Dependency> KotlinDependencyHandler.mappings(
-    dependency: T,
-    configure: T.() -> Unit,
-) = (this as DefaultKotlinDependencyHandler).let {
-    configure(dependency)
-    it.project.dependencies.add(it.parent.mappingsConfigurationName, dependency)
-}
-
-fun KotlinDependencyHandler.mappings(
-    dependencyNotation: String,
-    configure: Closure<*>,
-) = mappings(dependencyNotation) { project.configure(this, configure) }
-
-fun <T : Dependency> KotlinDependencyHandler.mappings(
-    dependency: T,
-    configure: Closure<*>,
-) = mappings(dependency) { project.configure(this, configure) }
 
 @JvmOverloads
 fun <T : ModuleDependency> T.remapped(

@@ -49,14 +49,14 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
             val manifest = getManifest(configuration, artifact)
 
             val extractNativesTask =
-                project.tasks.withType(ExtractNatives::class.java)
-                    .named(compilation.map { it.target.extractNativesTaskName }.orElse(sourceSet.map { it.extractNativesTaskName }).get())
+                sourceSet.flatMap {
+                    project.tasks.withType(ExtractNatives::class.java)
+                        .named(it.extractNativesTaskName)
+                }
 
             val downloadAssetsTask =
                 project.tasks.withType(DownloadAssets::class.java)
-                    .getByName(
-                        compilation.map { it.target.downloadAssetsTaskName }.orElse(sourceSet.map { it.downloadAssetsTaskName }).get(),
-                    )
+                    .getByName(sourceSet.get().downloadAssetsTaskName)
 
             beforeRun.add(extractNativesTask)
             beforeRun.add(downloadAssetsTask)
@@ -238,10 +238,7 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
         private const val WRONG_SIDE_ERROR = "There is no Minecraft %s dependency for defaults.%s to work"
 
         fun MinecraftRunConfiguration.getConfiguration() =
-            compilation
-                .map { it.runtimeDependencyConfigurationName }
-                .orElse(sourceSet.map { it.runtimeClasspathConfigurationName })
-                .flatMap(project.configurations::named)
+            sourceSet.map { it.runtimeClasspathConfigurationName }.flatMap(project.configurations::named)
 
         fun Provider<Configuration>.findMinecraft(
             type: String,
@@ -297,10 +294,7 @@ interface DatagenRunConfigurationData {
         get
 
     fun getOutputDirectory(runConfiguration: MinecraftRunConfiguration): Provider<Directory> {
-        val moduleName =
-            runConfiguration.compilation.map {
-                lowerCamelCaseName(it.target.disambiguationClassifier, it.name.asNamePart)
-            }.orElse(runConfiguration.sourceSet.map(SourceSet::getName))
+        val moduleName = runConfiguration.sourceSet.map(SourceSet::getName)
 
         return outputDirectory.orElse(
             runConfiguration.project.layout.buildDirectory.dir("generatedResources").flatMap { moduleName.map(it::dir) },

@@ -10,7 +10,6 @@ import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
-import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinJvmCompilation
 import java.io.File
 import java.nio.file.Path
 import javax.inject.Inject
@@ -27,10 +26,6 @@ constructor(val project: Project) {
         get
 
     abstract val sourceSet: Property<SourceSet>
-        @Input
-        get
-
-    abstract val compilation: Property<KotlinJvmCompilation>
         @Input
         get
 

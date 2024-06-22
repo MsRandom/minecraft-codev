@@ -3,7 +3,7 @@ package net.msrandom.minecraftcodev.mixins
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.dependency.registerCustomDependency
 import net.msrandom.minecraftcodev.core.utils.applyPlugin
-import net.msrandom.minecraftcodev.core.utils.createCompilationConfigurations
+import net.msrandom.minecraftcodev.core.utils.createSourceSetConfigurations
 import net.msrandom.minecraftcodev.mixins.dependency.MixinDependencyMetadataConverter
 import net.msrandom.minecraftcodev.mixins.dependency.SKipMixinsDependencyMetadataConverter
 import net.msrandom.minecraftcodev.mixins.mixin.GradleMixinService
@@ -31,14 +31,15 @@ class MinecraftCodevMixinsPlugin<T : PluginAware> : Plugin<T> {
         )
     }
 
-    override fun apply(target: T) = applyPlugin(target, ::applyGradle) {
-        createCompilationConfigurations(MIXINS_CONFIGURATION, true)
+    override fun apply(target: T) =
+        applyPlugin(target, ::applyGradle) {
+            createSourceSetConfigurations(MIXINS_CONFIGURATION, true)
 
-        extensions.getByType(MinecraftCodevExtension::class.java).extensions.create("mixins", MixinsExtension::class.java)
+            extensions.getByType(MinecraftCodevExtension::class.java).extensions.create("mixins", MixinsExtension::class.java)
 
-        MixinBootstrap.init()
-        (MixinService.getService() as GradleMixinService).phaseConsumer.accept(MixinEnvironment.Phase.DEFAULT)
-    }
+            MixinBootstrap.init()
+            (MixinService.getService() as GradleMixinService).phaseConsumer.accept(MixinEnvironment.Phase.DEFAULT)
+        }
 
     companion object {
         const val MIXINS_CONFIGURATION = "mixins"

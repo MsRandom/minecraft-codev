@@ -13,7 +13,6 @@ import org.gradle.api.plugins.PluginAware
 import org.gradle.api.tasks.JavaExec
 import org.gradle.api.tasks.SourceSet
 import org.gradle.initialization.layout.GlobalCacheDir
-import org.jetbrains.kotlin.gradle.plugin.KotlinCompilation
 import java.nio.file.Path
 import javax.inject.Inject
 
@@ -49,24 +48,9 @@ constructor(cacheDir: GlobalCacheDir) : Plugin<T> {
                 }
             }
 
-            createSourceSetElements(
-                {
-                    addSourceElements(it.nativesConfigurationName, it.extractNativesTaskName, it.downloadAssetsTaskName)
-                },
-                {
-                    addSourceElements(
-                        it.compilations.getByName(KotlinCompilation.MAIN_COMPILATION_NAME).nativesConfigurationName,
-                        it.extractNativesTaskName,
-                        it.downloadAssetsTaskName,
-                    )
-                },
-                {
-                    addNativesConfiguration(it.nativesConfigurationName)
-                },
-                {
-                    addNativesConfiguration(it.nativesConfigurationName)
-                },
-            )
+            createSourceSetElements {
+                addSourceElements(it.nativesConfigurationName, it.extractNativesTaskName, it.downloadAssetsTaskName)
+            }
 
             val runs =
                 extensions
@@ -101,11 +85,7 @@ constructor(cacheDir: GlobalCacheDir) : Plugin<T> {
                     javaExec.workingDir(configuration.executableDirectory)
                     javaExec.mainClass.set(configuration.mainClass)
 
-                    javaExec.classpath =
-                        configuration.compilation
-                            .map { it.runtimeDependencyFiles + it.output.allOutputs }
-                            .orElse(configuration.sourceSet.map(SourceSet::getRuntimeClasspath))
-                            .get()
+                    javaExec.classpath = configuration.sourceSet.get().runtimeClasspath
 
                     javaExec.group = ApplicationPlugin.APPLICATION_GROUP
 
@@ -117,11 +97,7 @@ constructor(cacheDir: GlobalCacheDir) : Plugin<T> {
                         },
                     )
 
-                    javaExec.dependsOn(
-                        configuration.compilation.map(
-                            KotlinCompilation<*>::compileAllTaskName,
-                        ).orElse(configuration.sourceSet.map(SourceSet::getClassesTaskName)),
-                    )
+                    javaExec.dependsOn(configuration.sourceSet.map(SourceSet::getClassesTaskName))
                 }
             }
         }

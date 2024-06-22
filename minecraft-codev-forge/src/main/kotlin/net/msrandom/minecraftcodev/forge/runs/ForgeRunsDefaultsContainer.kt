@@ -11,7 +11,7 @@ import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin
 import net.msrandom.minecraftcodev.forge.UserdevConfig
 import net.msrandom.minecraftcodev.forge.dependency.FmlLoaderWrappedComponentIdentifier
-import net.msrandom.minecraftcodev.forge.dependency.patchesConfigurationName
+import net.msrandom.minecraftcodev.forge.patchesConfigurationName
 import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
 import net.msrandom.minecraftcodev.runs.*
 import net.msrandom.minecraftcodev.runs.RunConfigurationDefaultsContainer.Companion.findMinecraft
@@ -31,7 +31,6 @@ import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
-import org.jetbrains.kotlin.gradle.plugin.KotlinCompilation
 import java.io.File
 import kotlin.io.path.createDirectories
 import kotlin.io.path.reader
@@ -40,13 +39,9 @@ import kotlin.io.path.writeLines
 open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefaultsContainer) {
     private fun MinecraftRunConfiguration.getUserdevData(patchesConfiguration: Provider<Configuration>?): Provider<UserdevConfig> {
         val provider =
-            patchesConfiguration ?: compilation.flatMap {
-                project.configurations.named(it.target.patchesConfigurationName)
-            }.orElse(
-                sourceSet.flatMap {
-                    project.configurations.named(it.patchesConfigurationName)
-                },
-            )
+            patchesConfiguration ?: sourceSet.flatMap {
+                project.configurations.named(it.patchesConfigurationName)
+            }
 
         return provider.map { patches ->
             var config: UserdevConfig? = null
@@ -134,26 +129,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
                                 project.files(sourceSet.output.resourcesDir, sourceSet.output.classesDirs)
                             }
 
-                        fun compilationToFiles(compilation: KotlinCompilation<*>) =
-                            project.files(
-                                compilation.output.resourcesDir,
-                                compilation.output.classesDirs,
-                            )
-
-                        if (compilation.isPresent) {
-                            val compilation = compilation.get()
-
-                            if (compilation.name == KotlinCompilation.MAIN_COMPILATION_NAME) {
-                                mapOf(null to compilationToFiles(compilation))
-                            } else {
-                                val main =
-                                    compilation.target
-                                        .compilations
-                                        .getByName(KotlinCompilation.MAIN_COMPILATION_NAME)
-
-                                mapOf(null to compilationToFiles(compilation) + compilationToFiles(main))
-                            }
-                        } else {
+                        run {
                             val sourceSet = sourceSet.get()
                             if (SourceSet.isMain(sourceSet)) {
                                 mapOf(null to sourceToFiles(sourceSet))
@@ -271,14 +247,8 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
     ) {
         val configProvider = getUserdevData(data.patchesConfiguration.takeIf(Property<*>::isPresent))
 
-        val extractNativesTaskName =
-            compilation.map { it.target.extractNativesTaskName }.orElse(
-                sourceSet.map { it.extractNativesTaskName },
-            ).get()
-        val downloadAssetsTaskName =
-            compilation.map { it.target.downloadAssetsTaskName }.orElse(
-                sourceSet.map { it.downloadAssetsTaskName },
-            ).get()
+        val extractNativesTaskName = sourceSet.get().extractNativesTaskName
+        val downloadAssetsTaskName = sourceSet.get().downloadAssetsTaskName
 
         val getRun: UserdevConfig.() -> UserdevConfig.Run = {
             runType(runs) ?: throw UnsupportedOperationException("Attempted to use $caller run configuration which doesn't exist.")
@@ -419,7 +389,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
 
             addData(UserdevConfig.Runs::data.name, data, UserdevConfig.Runs::data)
 
-            val resources = compilation.map { it.output.resourcesDir }.orElse(sourceSet.map { it.output.resourcesDir })
+            val resources = sourceSet.map { it.output.resourcesDir!! }
 
             arguments.add(MinecraftRunConfiguration.Argument("--mod=", data.modId.map(MinecraftRunConfiguration::Argument)))
             arguments.add(MinecraftRunConfiguration.Argument("--all"))

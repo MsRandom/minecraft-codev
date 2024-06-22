@@ -29,19 +29,18 @@ fun Project.integrateIdeaRuns() {
                             application.mainClass = config.mainClass.get()
                             application.workingDirectory = config.executableDirectory.get().asFile.absolutePath
                             application.envs = config.environment.get().mapValues { it.value.compile() }
-                            application.programParameters = config.arguments.get().joinToString(" ", transform = MinecraftRunConfiguration.Argument::compile)
-                            application.jvmArgs = config.jvmArguments.get().joinToString(" ", transform = MinecraftRunConfiguration.Argument::compile)
+                            application.programParameters =
+                                config.arguments.get().joinToString(
+                                    " ",
+                                    transform = MinecraftRunConfiguration.Argument::compile,
+                                )
+                            application.jvmArgs =
+                                config.jvmArguments.get().joinToString(
+                                    " ",
+                                    transform = MinecraftRunConfiguration.Argument::compile,
+                                )
 
-                            if (config.compilation.isPresent) {
-                                fun addSourceSetName(moduleName: String) = moduleName + '.' + config.compilation.get().defaultSourceSetName
-
-                                application.moduleName =
-                                    if (otherProject == project) {
-                                        addSourceSetName(project.name)
-                                    } else {
-                                        addSourceSetName(project.name + otherProject.path.replace(':', '.'))
-                                    }
-                            } else if (config.sourceSet.isPresent) {
+                            if (config.sourceSet.isPresent) {
                                 application.moduleRef(otherProject, config.sourceSet.get())
                             } else {
                                 application.moduleRef(otherProject)
