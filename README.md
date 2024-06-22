@@ -2,6 +2,8 @@
 A Gradle plugin that allows using Minecraft as a dependency with modules that allow mod development in Forge, Fabric, Quilt with any mappings.
 
 ## Features
+- Allows using customized Minecraft Jars in any configuration, rather than being implicitly added to existing configurations like implementation
+- Allows Jar intersections to have common source sets between different versions and platforms
 - Supports applying mixins directly to dependencies to give a better debugging and development experience.
 - Supports custom Gradle version selectors like `1.16+`, `[1.16, 1.18]`, `1.19.3-SNAPSHOT`
 
