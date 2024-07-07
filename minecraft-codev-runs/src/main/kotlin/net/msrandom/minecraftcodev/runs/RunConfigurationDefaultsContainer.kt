@@ -1,19 +1,13 @@
 package net.msrandom.minecraftcodev.runs
 
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
-import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
 import net.msrandom.minecraftcodev.core.resolve.*
 import net.msrandom.minecraftcodev.core.utils.*
 import net.msrandom.minecraftcodev.runs.task.DownloadAssets
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
 import org.apache.commons.lang3.SystemUtils
-import org.gradle.api.artifacts.Configuration
-import org.gradle.api.artifacts.ResolvedArtifact
-import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.file.Directory
 import org.gradle.api.file.DirectoryProperty
-import org.gradle.api.internal.artifacts.RepositoriesSupplier
-import org.gradle.api.internal.artifacts.configurations.ResolutionStrategyInternal
 import org.gradle.api.plugins.ExtensionAware
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
@@ -21,7 +15,6 @@ import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.SourceSet
-import org.gradle.configurationcache.extensions.serviceOf
 import org.gradle.internal.os.OperatingSystem
 import java.util.jar.Attributes
 import java.util.jar.JarFile
@@ -42,11 +35,9 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
         return true
     }
 
-    fun client() {
+    fun client(minecraftVersion: Provider<String>) {
         builder.action {
-            val configuration = getConfiguration()
-            val artifact = configuration.findMinecraft(MinecraftComponentResolvers.CLIENT_MODULE, ::client.name)
-            val manifest = getManifest(configuration, artifact)
+            val manifest = getManifest(minecraftVersion)
 
             val extractNativesTask =
                 sourceSet.flatMap {
@@ -81,9 +72,7 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
                             for (value in argument.value) {
                                 if (value.startsWith("\${") && value.endsWith("}")) {
                                     val runs =
-                                        project.extensions.getByType(
-                                            MinecraftCodevExtension::class.java,
-                                        ).extensions.getByType(RunsContainer::class.java)
+                                        project.extension<MinecraftCodevExtension>().extension<RunsContainer>()
 
                                     when (value.subSequence(2, value.length - 1)) {
                                         "version_name" -> fixedArguments.add(MinecraftRunConfiguration.Argument(it.id))
@@ -192,11 +181,9 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
         }
     }
 
-    fun server() {
+    fun server(minecraftVersion: Provider<String>) {
         builder.action {
-            val configurationProvider = getConfiguration()
-            val artifactProvider = configurationProvider.findMinecraft(MinecraftComponentResolvers.COMMON_MODULE, ::server.name)
-            val manifestProvider = getManifest(configurationProvider, artifactProvider)
+            val manifestProvider = getManifest(minecraftVersion)
 
             arguments.add(MinecraftRunConfiguration.Argument("nogui"))
 
@@ -204,20 +191,13 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
                 manifestProvider
                     .map { manifest ->
                         val serverJar =
-                            project.serviceOf<RepositoriesSupplier>().get()
-                                .filterIsInstance<MinecraftRepositoryImpl>()
-                                .map(MinecraftRepositoryImpl::createResolver)
-                                .firstNotNullOfOrNull { repository ->
-                                    MinecraftArtifactResolver.resolveMojangFile(
-                                        manifest,
-                                        getCacheProvider(project.gradle).manager("minecraft"),
-                                        project.serviceOf(),
-                                        repository,
-                                        MinecraftComponentResolvers.SERVER_DOWNLOAD,
-                                    )
-                                } ?: throw UnsupportedOperationException("Version $artifactProvider does not have a server.")
+                            downloadMinecraftFile(
+                                project,
+                                manifest,
+                                MinecraftDownloadVariant.Server,
+                            ) ?: throw UnsupportedOperationException("Version ${manifest.id} does not have a server.")
 
-                        zipFileSystem(serverJar.toPath()).use {
+                        zipFileSystem(serverJar).use {
                             val mainPath = it.base.getPath("META-INF/main-class")
                             if (mainPath.exists()) {
                                 String(mainPath.readBytes())
@@ -235,50 +215,12 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
     }
 
     companion object {
-        private const val WRONG_SIDE_ERROR = "There is no Minecraft %s dependency for defaults.%s to work"
-
-        fun MinecraftRunConfiguration.getConfiguration() =
-            sourceSet.map { it.runtimeClasspathConfigurationName }.flatMap(project.configurations::named)
-
-        fun Provider<Configuration>.findMinecraft(
-            type: String,
-            caller: String,
-            group: String = MinecraftComponentResolvers.GROUP,
-        ) = map {
-            it.resolvedConfiguration.resolvedArtifacts.firstOrNull { artifact ->
-                artifact.moduleVersion.id.group == group && artifact.moduleVersion.id.name == type
-            } ?: throw UnsupportedOperationException(WRONG_SIDE_ERROR.format(type, caller))
-        }
-
-        fun MinecraftRunConfiguration.getManifest(
-            configurationProvider: Provider<Configuration>,
-            artifactProvider: Provider<ResolvedArtifact>,
-        ) = artifactProvider
-            .zip(configurationProvider) { artifact, configuration -> artifact to configuration }
-            .map { (artifact, configuration) ->
-                val repositories =
-                    project.serviceOf<RepositoriesSupplier>().get()
-                        .filterIsInstance<MinecraftRepositoryImpl>()
-                        .map(MinecraftRepositoryImpl::createResolver)
-
-                val id = artifact.id.componentIdentifier as ModuleComponentIdentifier
-
-                repositories.firstNotNullOfOrNull { repository ->
-                    val cachePolicy = (configuration.resolutionStrategy as ResolutionStrategyInternal).cachePolicy
-
-                    MinecraftMetadataGenerator.getVersionManifest(
-                        MinecraftComponentIdentifier(id.module, id.version),
-                        repository.url,
-                        getCacheProvider(project.gradle).manager("minecraft"),
-                        cachePolicy,
-                        repository.resourceAccessor,
-                        project.serviceOf(),
-                        project.serviceOf(),
-                        null,
-                    )
-                } ?: throw UnsupportedOperationException(
-                    "Game resolved with version ${id.version} but no metadata found for said version, this should not be possible.",
-                )
+        fun MinecraftRunConfiguration.getManifest(minecraftVersion: Provider<String>) =
+            minecraftVersion.map {
+                project
+                    .extension<MinecraftCodevExtension>()
+                    .versionList
+                    .version(it)
             }
     }
 }

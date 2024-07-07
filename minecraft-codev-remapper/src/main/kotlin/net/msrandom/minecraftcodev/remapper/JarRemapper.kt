@@ -13,7 +13,6 @@ import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.remapper.dependency.getNamespaceId
 import org.objectweb.asm.commons.Remapper
 import java.io.File
-import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.deleteExisting
 
@@ -25,16 +24,14 @@ object JarRemapper {
         sourceNamespace: String,
         targetNamespace: String,
         input: Path,
+        output: Path,
         classpath: Iterable<File>,
-    ): Path {
-        val output = Files.createTempFile("remapped", ".tmp.jar")
-
+    ) {
         val remapper =
             TinyRemapper
                 .newRemapper()
                 .ignoreFieldDesc(true)
                 .renameInvalidLocals(true)
-                // .resolveMissing(true)
                 .rebuildSourceFilenames(true)
                 .extraRemapper(
                     InnerClassRemapper(mappings, mappings.getNamespaceId(sourceNamespace), mappings.getNamespaceId(targetNamespace)),
@@ -204,7 +201,5 @@ object JarRemapper {
         zipFileSystem(output).use {
             remapperExtension.remapFiles(mappings, it.base, sourceNamespace, targetNamespace)
         }
-
-        return output
     }
 }

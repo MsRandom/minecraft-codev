@@ -59,6 +59,8 @@ fun <T> Path.walk(action: Sequence<Path>.() -> T) =
     }
 
 class LockingFileSystem(val base: FileSystem, private val lock: Lock, private val owned: Boolean) : AutoCloseable {
+    operator fun component1() = base
+
     override fun close() {
         if (owned) {
             base.close()

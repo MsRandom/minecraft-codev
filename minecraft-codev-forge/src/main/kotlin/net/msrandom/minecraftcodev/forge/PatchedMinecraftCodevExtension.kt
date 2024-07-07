@@ -1,18 +1,25 @@
 package net.msrandom.minecraftcodev.forge
 
-import net.msrandom.minecraftcodev.core.dependency.MinecraftDependencyImpl
-import net.msrandom.minecraftcodev.forge.dependency.PatchedMinecraftDependency
+import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
+import net.msrandom.minecraftcodev.core.resolve.getClientDependencies
+import net.msrandom.minecraftcodev.core.utils.extension
+import org.gradle.api.Project
+import org.gradle.api.artifacts.Dependency
+import org.gradle.api.file.FileCollection
+import org.gradle.api.provider.Provider
 
-open class PatchedMinecraftCodevExtension {
-    @JvmOverloads
-    operator fun invoke(
-        version: String? = null,
-        patchesConfiguration: String = "",
-    ) = PatchedMinecraftDependency(MinecraftDependencyImpl("forge", version.orEmpty(), null), patchesConfiguration)
+open class PatchedMinecraftCodevExtension(private val project: Project) {
+    fun dependencies(
+        version: String,
+        userdev: FileCollection,
+    ): Provider<List<Dependency>> =
+        project.provider {
+            val versionList =
+                project
+                    .extension<MinecraftCodevExtension>()
+                    .versionList
 
-    @JvmOverloads
-    fun call(
-        version: String? = null,
-        patchesConfiguration: String = "",
-    ) = invoke(version, patchesConfiguration)
+            getClientDependencies(project, versionList.version(version)) +
+                Userdev.fromFile(userdev.singleFile)!!.config.libraries.map(project.dependencies::create)
+        }
 }

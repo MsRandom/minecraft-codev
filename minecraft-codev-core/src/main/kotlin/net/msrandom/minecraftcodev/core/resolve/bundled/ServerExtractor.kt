@@ -1,6 +1,5 @@
 package net.msrandom.minecraftcodev.core.resolve.bundled
 
-import net.msrandom.minecraftcodev.core.ModuleLibraryIdentifier
 import java.nio.file.FileSystem
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
@@ -13,7 +12,7 @@ object ServerExtractor {
         newServer: Path,
         serverFs: FileSystem,
         librariesList: Path,
-    ): Collection<ModuleLibraryIdentifier> {
+    ): List<String> {
         val versions =
             serverFs.getPath("META-INF/versions.list").readLines().associate {
                 val parts = it.split('\t')
@@ -24,6 +23,6 @@ object ServerExtractor {
             "META-INF/versions/${versions.getValue(version)}",
         ).copyTo(newServer, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES)
 
-        return librariesList.readLines().map { ModuleLibraryIdentifier.load(it.split('\t')[1]) }
+        return librariesList.readLines().map { it.split('\t')[1] }
     }
 }

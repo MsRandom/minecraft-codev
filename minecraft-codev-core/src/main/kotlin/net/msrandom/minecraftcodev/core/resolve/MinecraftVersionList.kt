@@ -1,24 +1,49 @@
 package net.msrandom.minecraftcodev.core.resolve
 
-import java.text.SimpleDateFormat
-import java.util.*
+import kotlinx.serialization.json.decodeFromStream
+import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
+import net.msrandom.minecraftcodev.core.utils.download
+import net.msrandom.minecraftcodev.core.utils.getCacheDirectory
+import org.gradle.api.InvalidUserCodeException
+import org.gradle.api.Project
+import java.net.URI
+import kotlin.io.path.inputStream
 
-class MinecraftVersionList(private val manifest: MinecraftVersionManifest) {
-    val versions = manifest.versions.associateBy(MinecraftVersionManifest.VersionInfo::id)
-    val latest = manifest.latest.mapValues { (_, value) -> versions.getValue(value) }
+class MinecraftVersionList(private val project: Project, manifest: MinecraftVersionManifest) {
+    private val versions = manifest.versions.associateBy(MinecraftVersionManifest.VersionInfo::id)
+    private val versionInfoCache = hashMapOf<String, MinecraftVersionMetadata>()
 
-    val snapshotTimestamps =
-        buildMap {
-            for (version in manifest.versions.reversed()) {
-                var i = 1
-                var date: String
-                do {
-                    date = SimpleDateFormat("yyyyMMdd.HHmmss-${i++}").format(Date.from(version.releaseTime.toInstant()))
-                } while (date in this)
+    fun version(version: String) =
+        versionInfoCache.computeIfAbsent(version) {
+            val versionInfo = versions[version] ?: throw InvalidUserCodeException("Minecraft version $version not found")
 
-                put(date, version.id)
-            }
+            val path =
+                getCacheDirectory(project)
+                    .resolve("version-metadata")
+                    .resolve("${versionInfo.id}.json")
+
+            download(
+                project,
+                versionInfo.url,
+                versionInfo.sha1,
+                path,
+            )
+
+            path.inputStream().use(json::decodeFromStream)
         }
 
-    fun snapshot(base: String) = versions[base]?.id ?: manifest.versions.firstOrNull()?.id
+    companion object {
+        fun load(
+            project: Project,
+            metadataUrl: String,
+        ): MinecraftVersionList {
+            val versionMetadataUrl = URI.create(metadataUrl)
+
+            val path = getCacheDirectory(project).resolve("version-manifest.json")
+
+            download(project, versionMetadataUrl, null, path, true)
+
+            return MinecraftVersionList(project, path.inputStream().use(json::decodeFromStream))
+        }
+    }
 }

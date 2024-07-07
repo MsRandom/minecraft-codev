@@ -11,6 +11,7 @@ gradlePlugin {
 }
 
 dependencies {
+    implementation(group = "dev.gradleplugins", name = "gradle-api", version = "8.8")
     implementation(projects.minecraftCodevCore.sideAnnotations)
 
     implementation(api(group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version = "1.3.3"))
@@ -23,14 +24,6 @@ dependencies {
     implementation(api(group = "com.google.guava", name = "guava", version = "31.1-jre"))
     implementation(group = "org.apache.commons", name = "commons-lang3", version = "3.12.0")
     implementation(group = "commons-io", name = "commons-io", version = "2.11.0")
-
-    compileOnly(projects.minecraftCodevGradleLinkage)
-
-    runtimeOnly(projects.minecraftCodevGradleLinkage) {
-        attributes {
-            attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling.SHADOWED))
-        }
-    }
 }
 
 tasks.test {

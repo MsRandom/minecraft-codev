@@ -4,6 +4,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
+import net.msrandom.minecraftcodev.core.utils.extension
 import net.msrandom.minecraftcodev.runs.*
 import net.msrandom.minecraftcodev.runs.task.DownloadAssets
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
@@ -46,7 +47,7 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
                         .named(it.extractNativesTaskName)
                 }
 
-            val codev = project.extensions.getByType(MinecraftCodevExtension::class.java).extensions.getByType(RunsContainer::class.java)
+            val codev = project.extension<MinecraftCodevExtension>().extension<RunsContainer>()
 
             val downloadAssetsTask =
                 project.tasks.withType(DownloadAssets::class.java)

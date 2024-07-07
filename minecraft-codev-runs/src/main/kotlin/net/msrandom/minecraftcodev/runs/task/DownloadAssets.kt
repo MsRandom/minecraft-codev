@@ -5,8 +5,8 @@ import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.encodeToStream
 import net.msrandom.minecraftcodev.core.AssetsIndex
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
-import net.msrandom.minecraftcodev.core.repository.MinecraftRepositoryImpl
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
+import net.msrandom.minecraftcodev.core.utils.extension
 import net.msrandom.minecraftcodev.runs.RunsContainer
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.RegularFile
@@ -19,11 +19,11 @@ import org.gradle.internal.operations.BuildOperationContext
 import org.gradle.internal.operations.BuildOperationDescriptor
 import org.gradle.internal.operations.BuildOperationExecutor
 import org.gradle.internal.operations.RunnableBuildOperation
-import org.gradle.internal.resource.ExternalResourceName
-import org.gradle.internal.resource.local.LazyLocallyAvailableResourceCandidates
 import java.net.URI
+import java.nio.file.Path
 import javax.inject.Inject
 import kotlin.io.path.createDirectories
+import kotlin.io.path.inputStream
 import kotlin.io.path.outputStream
 
 abstract class DownloadAssets : DefaultTask() {
@@ -56,36 +56,28 @@ abstract class DownloadAssets : DefaultTask() {
                 Json.decodeFromStream<MinecraftVersionMetadata.AssetIndex>(it)
             }
 
-        val codev = project.extensions.getByType(MinecraftCodevExtension::class.java).extensions.getByType(RunsContainer::class.java)
+        val codev = project.extension<MinecraftCodevExtension>().extension<RunsContainer>()
         val assetsDirectory = codev.assetsDirectory
         val resourcesDirectory = codev.resourcesDirectory.get()
         val indexesDirectory = assetsDirectory.dir("indexes").get()
         val objectsDirectory = assetsDirectory.dir("objects").get()
 
-        val resourceAccessor =
-            repositoriesSupplier
-                .get()
-                .filterIsInstance<MinecraftRepositoryImpl>()
-                .map(MinecraftRepositoryImpl::createResolver)
-                .firstOrNull()
-                ?.resourceAccessor ?: throw UnsupportedOperationException("No minecraft repository defined")
-
         fun downloadFile(
             url: URI,
             sha1: String?,
             output: RegularFile,
-        ) = resourceAccessor.getResource(
-            ExternalResourceName(url),
-            sha1,
-            output.asFile.toPath(),
-            LazyLocallyAvailableResourceCandidates({
-                if (output.asFile.exists()) {
-                    listOf(output.asFile)
-                } else {
-                    emptyList()
-                }
-            }, checksumService),
-        )!!.file
+        ): Path {
+            val outputPath = output.asFile.toPath()
+
+            net.msrandom.minecraftcodev.core.utils.download(
+                project,
+                url,
+                sha1,
+                outputPath,
+            )
+
+            return outputPath
+        }
 
         val assetIndexJson = downloadFile(assetIndex.url, assetIndex.sha1, indexesDirectory.file("${assetIndex.id}.json"))
 

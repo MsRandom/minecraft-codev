@@ -3,6 +3,7 @@ package net.msrandom.minecraftcodev.core.task
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.tasks.CompileClasspath
 import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.OutputDirectory
@@ -33,7 +34,9 @@ abstract class AddClientSideAnnotations<T> : DefaultTask() where T : AnnotationV
         @OutputDirectory get
 
     abstract val classpath: ConfigurableFileCollection
-        @InputFiles get
+        @CompileClasspath
+        @InputFiles
+        get
 
     abstract fun addClientOnlyAnnotation(
         visitor: ClassVisitor,

@@ -26,8 +26,6 @@ dependencies {
     implementation(group = "org.apache.commons", name = "commons-lang3", version = "3.12.0")
     implementation(group = "org.apache.logging.log4j", name = "log4j-core", version = "2.12.4")
 
-    compileOnly(projects.minecraftCodevGradleLinkage)
-
     implementation(projects.minecraftCodevAccessWidener)
     implementation(projects.minecraftCodevRemapper)
     implementation(projects.minecraftCodevRuns)

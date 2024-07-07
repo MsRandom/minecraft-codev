@@ -4,7 +4,6 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.*
-import net.msrandom.minecraftcodev.core.ModuleLibraryIdentifier
 import net.msrandom.minecraftcodev.core.URISerializer
 import java.net.URI
 
@@ -71,7 +70,7 @@ data class MinecraftVersionMetadata(
     data class Library(
         val downloads: LibraryDownloads,
         val extract: ExtractData? = null,
-        val name: ModuleLibraryIdentifier,
+        val name: String,
         val natives: Map<String, String> = emptyMap(),
         val rules: List<Rule> = emptyList(),
     ) {

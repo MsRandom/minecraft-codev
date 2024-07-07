@@ -4,24 +4,13 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import net.fabricmc.accesswidener.AccessWidenerReader
 import net.msrandom.minecraftcodev.core.ResolutionData
-import net.msrandom.minecraftcodev.core.dependency.resolverFactories
 import net.msrandom.minecraftcodev.core.resolutionRules
-import net.msrandom.minecraftcodev.core.utils.visitConfigurationFiles
 import net.msrandom.minecraftcodev.core.zipResolutionRules
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
-import org.gradle.api.internal.artifacts.GlobalDependencyResolutionRules
-import org.gradle.api.internal.artifacts.RepositoriesSupplier
-import org.gradle.api.internal.artifacts.ResolveContext
-import org.gradle.api.internal.artifacts.configurations.ResolutionStrategyInternal
-import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ComponentResolvers
-import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ResolveIvyFactory
-import org.gradle.api.internal.artifacts.ivyservice.resolveengine.ComponentResolversChain
-import org.gradle.api.internal.attributes.ImmutableAttributes
+import org.gradle.api.file.FileCollection
 import org.gradle.api.model.ObjectFactory
-import org.gradle.configurationcache.extensions.serviceOf
 import org.gradle.internal.hash.HashCode
-import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.inputStream
@@ -70,66 +59,14 @@ open class AccessWidenerExtension(objectFactory: ObjectFactory, private val proj
     }
 
     fun loadAccessWideners(
-        files: Configuration,
-        objects: ObjectFactory,
+        files: FileCollection,
         namespace: String?,
-    ) = accessWidenerCache.computeIfAbsent(files) { configuration ->
+    ): LoadedAccessWideners {
         val widener = AccessModifiers(false, namespace)
 
         val md = MessageDigest.getInstance("SHA1")
 
-        val resolvers by lazy {
-            val detachedConfiguration = project.configurations.detachedConfiguration()
-            val resolutionStrategy = detachedConfiguration.resolutionStrategy
-            val resolvers = mutableListOf<ComponentResolvers>()
-            for (resolverFactory in project.gradle.resolverFactories) {
-                resolverFactory.create(detachedConfiguration as ResolveContext, resolvers)
-            }
-
-            resolvers.add(
-                project.serviceOf<ResolveIvyFactory>().create(
-                    detachedConfiguration.name,
-                    resolutionStrategy as ResolutionStrategyInternal,
-                    project.serviceOf<RepositoriesSupplier>().get(),
-                    project.serviceOf<GlobalDependencyResolutionRules>().componentMetadataProcessorFactory,
-                    ImmutableAttributes.EMPTY,
-                    null,
-                    project.serviceOf(),
-                    project.serviceOf(),
-                ),
-            )
-
-            ComponentResolversChain(resolvers, project.serviceOf(), project.serviceOf(), project.serviceOf())
-        }
-
         val data = AccessModifierResolutionData(widener, md, namespace)
-
-        for (dependency in configuration.allDependencies) {
-            project.visitConfigurationFiles({ resolvers }, configuration, dependency) { supplier ->
-                val file = supplier.get()
-                for (rule in accessWidenerResolution.get()) {
-                    if (rule.load(file.toPath(), file.extension, data)) {
-                        break
-                    }
-                }
-            }
-        }
-
-        LoadedAccessWideners(
-            widener,
-            HashCode.fromBytes(md.digest()),
-        )
-    }
-
-    fun loadAccessWideners(
-        files: Iterable<File>,
-        objects: ObjectFactory,
-    ): LoadedAccessWideners {
-        val widener = AccessModifiers(false, null)
-
-        val md = MessageDigest.getInstance("SHA1")
-
-        val data = AccessModifierResolutionData(widener, md, null)
 
         for (file in files) {
             for (rule in accessWidenerResolution.get()) {

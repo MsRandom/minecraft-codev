@@ -2,6 +2,7 @@ package net.msrandom.minecraftcodev.runs
 
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
+import net.msrandom.minecraftcodev.core.utils.extension
 import org.gradle.api.Project
 import org.gradle.api.provider.Property
 import org.gradle.plugins.ide.idea.model.IdeaModel
@@ -13,15 +14,13 @@ fun Project.integrateIdeaRuns() {
 
     plugins.apply(IdeaExtPlugin::class.java)
 
-    val runConfigurations = extensions.getByType(IdeaModel::class.java).project.settings.runConfigurations
+    val runConfigurations = extension<IdeaModel>().project.settings.runConfigurations
 
     allprojects { otherProject ->
         otherProject.plugins.withType(MinecraftCodevPlugin::class.java) {
             otherProject.plugins.withType(MinecraftCodevRunsPlugin::class.java) {
-                otherProject.extensions
-                    .getByType(MinecraftCodevExtension::class.java)
-                    .extensions
-                    .getByType(RunsContainer::class.java)
+                otherProject.extension<MinecraftCodevExtension>()
+                    .extension<RunsContainer>()
                     .all { builder ->
                         runConfigurations.register(builder.friendlyName, Application::class.java) { application ->
                             val config = builder.build()
@@ -73,14 +72,14 @@ fun Project.integrateIdeaRuns() {
 
 // Relies on IntelliJ plugin to import
 abstract class RunConfigurationBeforeRunTask
-@Inject
-constructor(name: String) : BeforeRunTask() {
-    abstract val configuration: Property<String>
+    @Inject
+    constructor(name: String) : BeforeRunTask() {
+        abstract val configuration: Property<String>
 
-    init {
-        super.name = name
-        type = "runConfiguration"
+        init {
+            super.name = name
+            type = "runConfiguration"
+        }
+
+        override fun toMap() = mapOf(*super.toMap().toList().toTypedArray(), "configuration" to configuration.get())
     }
-
-    override fun toMap() = mapOf(*super.toMap().toList().toTypedArray(), "configuration" to configuration.get())
-}

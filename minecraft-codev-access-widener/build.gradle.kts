@@ -14,8 +14,6 @@ dependencies {
     implementation(api(group = "net.fabricmc", name = "access-widener", version = "2.1.0"))
     implementation(api(group = "org.cadixdev", name = "at", version = "0.1.0-rc1"))
 
-    compileOnly(projects.minecraftCodevGradleLinkage)
-
     implementation(projects.minecraftCodevCore)
 }
 

@@ -8,11 +8,9 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.*
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
-import net.msrandom.minecraftcodev.core.ModuleLibraryIdentifier
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import java.io.File
-import java.util.concurrent.ConcurrentHashMap
-import java.util.function.Supplier
+import java.nio.file.Path
 import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 
@@ -51,7 +49,7 @@ data class UserdevConfig(
     val binpatcher: PatchLibrary,
     val sources: String,
     val universal: String,
-    val libraries: List<ModuleLibraryIdentifier>,
+    val libraries: List<String>,
     val inject: String? = null,
     val runs: Runs,
     val spec: Int,
@@ -77,28 +75,16 @@ data class UserdevConfig(
 
 data class Userdev(val config: UserdevConfig, val source: File) {
     companion object {
-        private val cache = ConcurrentHashMap<File, UserdevConfig?>()
-
-        private fun configFromFile(file: File) =
-            cache.computeIfAbsent(file) {
-                zipFileSystem(it.toPath()).use { fs ->
-                    val path = fs.base.getPath("config.json")
-                    if (path.exists()) {
-                        path.inputStream().use(json::decodeFromStream)
-                    } else {
-                        null
-                    }
-                }
-            }
+        private val cache = hashMapOf<File, UserdevConfig?>()
 
         fun fromFile(file: File) =
-            configFromFile(file)?.let {
-                Userdev(
-                    it,
-                    file,
-                )
-            }
-
-        fun fromFiles(files: Iterable<Supplier<File>>) = files.asSequence().map(Supplier<File>::get).firstNotNullOfOrNull(::fromFile)
+            cache.computeIfAbsent(file) {
+                zipFileSystem(it.toPath()).use { fs ->
+                    fs.base.getPath("config.json")
+                        .takeIf(Path::exists)
+                        ?.inputStream()
+                        ?.use(json::decodeFromStream)
+                }
+            }?.let { Userdev(it, file) }
     }
 }

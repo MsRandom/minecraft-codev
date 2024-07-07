@@ -1,6 +1,5 @@
 package net.msrandom.minecraftcodev.mixins.mixin
 
-import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.tree.ClassNode
 import org.spongepowered.asm.launch.platform.container.IContainerHandle
@@ -41,22 +40,15 @@ class GradleMixinService : MixinServiceAbstract() {
      */
     fun <R> use(
         classpath: Iterable<File>,
-        artifactModule: String,
+        side: Side,
         action: GradleMixinService.() -> R,
     ) = synchronized(this) {
         this.classpath = URLClassLoader(classpath.map { it.toURI().toURL() }.toTypedArray(), javaClass.classLoader)
 
-        val detectedSide =
-            when (artifactModule) {
-                MinecraftComponentResolvers.CLIENT_MODULE -> Side.CLIENT
-                MinecraftComponentResolvers.COMMON_MODULE -> Side.SERVER
-                else -> Side.UNKNOWN
-            }
+        (registeredConfigsField[null] as MutableCollection<*>).clear()
 
-        (registeredConfigs[null] as MutableCollection<*>).clear()
-
-        side[MixinEnvironment.getCurrentEnvironment()] = Side.UNKNOWN
-        MixinEnvironment.getCurrentEnvironment().side = detectedSide
+        sideField[MixinEnvironment.getCurrentEnvironment()] = Side.UNKNOWN
+        MixinEnvironment.getCurrentEnvironment().side = side
 
         @Suppress("DEPRECATION")
         MixinEnvironment.getCurrentEnvironment().mixinConfigs.clear()
@@ -137,7 +129,7 @@ class GradleMixinService : MixinServiceAbstract() {
     }
 
     companion object {
-        private val registeredConfigs = Mixins::class.java.getDeclaredField("registeredConfigs").apply { isAccessible = true }
-        private val side = MixinEnvironment::class.java.getDeclaredField("side").apply { isAccessible = true }
+        private val registeredConfigsField = Mixins::class.java.getDeclaredField("registeredConfigs").apply { isAccessible = true }
+        private val sideField = MixinEnvironment::class.java.getDeclaredField("side").apply { isAccessible = true }
     }
 }

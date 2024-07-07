@@ -7,22 +7,18 @@ import net.minecraftforge.srgutils.IMappingBuilder
 import net.minecraftforge.srgutils.IMappingFile
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
+import net.msrandom.minecraftcodev.core.utils.extension
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin
 import net.msrandom.minecraftcodev.forge.UserdevConfig
-import net.msrandom.minecraftcodev.forge.dependency.FmlLoaderWrappedComponentIdentifier
 import net.msrandom.minecraftcodev.forge.patchesConfigurationName
 import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
 import net.msrandom.minecraftcodev.runs.*
-import net.msrandom.minecraftcodev.runs.RunConfigurationDefaultsContainer.Companion.findMinecraft
-import net.msrandom.minecraftcodev.runs.RunConfigurationDefaultsContainer.Companion.getConfiguration
 import net.msrandom.minecraftcodev.runs.RunConfigurationDefaultsContainer.Companion.getManifest
 import net.msrandom.minecraftcodev.runs.task.DownloadAssets
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
 import org.gradle.api.Action
 import org.gradle.api.artifacts.Configuration
-import org.gradle.api.artifacts.type.ArtifactTypeDefinition
-import org.gradle.api.plugins.JavaPlugin
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
@@ -32,6 +28,7 @@ import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
 import java.io.File
+import java.nio.file.Path
 import kotlin.io.path.createDirectories
 import kotlin.io.path.reader
 import kotlin.io.path.writeLines
@@ -104,9 +101,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
 
                 beforeRun.add(task)
 
-                project.extensions.getByType(
-                    MinecraftCodevExtension::class.java,
-                ).extensions.getByType(RunsContainer::class.java).assetsDirectory.asFile
+                project.extension<MinecraftCodevExtension>().extension<RunsContainer>().assetsDirectory.asFile
             }
 
             "modules" ->
@@ -119,7 +114,6 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
             "source_roots" -> {
                 val sourceRoots = modClasspaths
 
-                @Suppress("UnstableApiUsage")
                 val fixedRoots =
                     if (sourceRoots.isEmpty()) {
                         fun sourceToFiles(sourceSet: SourceSet) =
@@ -129,18 +123,15 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
                                 project.files(sourceSet.output.resourcesDir, sourceSet.output.classesDirs)
                             }
 
-                        run {
-                            val sourceSet = sourceSet.get()
-                            if (SourceSet.isMain(sourceSet)) {
-                                mapOf(null to sourceToFiles(sourceSet))
-                            } else {
-                                val main =
-                                    project.extensions
-                                        .getByType(SourceSetContainer::class.java)
-                                        .getByName(SourceSet.MAIN_SOURCE_SET_NAME)
+                        val sourceSet = sourceSet.get()
+                        if (SourceSet.isMain(sourceSet)) {
+                            mapOf(null to sourceToFiles(sourceSet))
+                        } else {
+                            val main =
+                                project.extension<SourceSetContainer>()
+                                    .getByName(SourceSet.MAIN_SOURCE_SET_NAME)
 
-                                mapOf(null to sourceToFiles(main) + sourceToFiles(sourceSet))
-                            }
+                            mapOf(null to sourceToFiles(main) + sourceToFiles(sourceSet))
                         }
                     } else {
                         sourceRoots
@@ -166,17 +157,17 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
             "mcp_to_srg" -> {
                 val srgMappings = IMappingBuilder.create()
 
-                val mappingsArtifact =
-                    runtimeConfiguration.resolvedConfiguration
-                        .resolvedArtifacts
-                        .firstOrNull {
-                            it.moduleVersion.id.group == FmlLoaderWrappedComponentIdentifier.MINECRAFT_FORGE_GROUP &&
-                                it.moduleVersion.id.name == "forge" &&
-                                it.classifier == "mappings" &&
-                                it.extension == ArtifactTypeDefinition.ZIP_TYPE
-                        }
-                        ?.file
-                        ?.toPath()
+                val mappingsArtifact: Path? = null
+                /*runtimeConfiguration.resolvedConfiguration
+                    .resolvedArtifacts
+                    .firstOrNull {
+                        it.moduleVersion.id.group == FmlLoaderWrappedComponentIdentifier.MINECRAFT_FORGE_GROUP &&
+                            it.moduleVersion.id.name == "forge" &&
+                            it.classifier == "mappings" &&
+                            it.extension == ArtifactTypeDefinition.ZIP_TYPE
+                    }
+                    ?.file
+                    ?.toPath()*/
 
                 if (mappingsArtifact != null) {
                     val mappings = MemoryMappingTree()
@@ -241,6 +232,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
 
     private fun MinecraftRunConfiguration.addData(
         caller: String,
+        minecraftVersion: Provider<String>,
         data: ForgeRunConfigurationData,
         runType: (UserdevConfig.Runs) -> UserdevConfig.Run?,
         addLwjglNatives: Boolean = false,
@@ -254,19 +246,12 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
             runType(runs) ?: throw UnsupportedOperationException("Attempted to use $caller run configuration which doesn't exist.")
         }
 
-        val configuration = getConfiguration()
-        val artifact =
-            configuration.findMinecraft(
-                "forge",
-                "forge.$caller",
-                group = FmlLoaderWrappedComponentIdentifier.MINECRAFT_FORGE_GROUP,
-            )
-        val manifestProvider = getManifest(configuration, artifact)
+        val manifestProvider = getManifest(minecraftVersion)
 
         mainClass.set(configProvider.map { it.getRun().main })
 
         val zipped =
-            configuration
+            sourceSet.map(SourceSet::getRuntimeClasspathConfigurationName).flatMap(project.configurations::named)
                 .zip(manifestProvider) { config, manifest -> config to manifest }
                 .zip(configProvider) { (config, manifest), userdevConfig -> Triple(config, manifest, userdevConfig) }
 
@@ -361,25 +346,34 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
         }
     }
 
-    fun client(action: Action<ForgeRunConfigurationData>? = null): Unit =
+    fun client(
+        minecraftVersion: Provider<String>,
+        action: Action<ForgeRunConfigurationData>? = null,
+    ): Unit =
         defaults.builder.action {
             val data = defaults.builder.project.objects.newInstance(ForgeRunConfigurationData::class.java)
 
             action?.execute(data)
 
-            addData(::client.name, data, UserdevConfig.Runs::client, true)
+            addData(::client.name, minecraftVersion, data, UserdevConfig.Runs::client, true)
         }
 
-    fun server(action: Action<ForgeRunConfigurationData>? = null): Unit =
+    fun server(
+        minecraftVersion: Provider<String>,
+        action: Action<ForgeRunConfigurationData>? = null,
+    ): Unit =
         defaults.builder.action {
             val data = defaults.builder.project.objects.newInstance(ForgeRunConfigurationData::class.java)
 
             action?.execute(data)
 
-            addData(::server.name, data, UserdevConfig.Runs::server)
+            addData(::server.name, minecraftVersion, data, UserdevConfig.Runs::server)
         }
 
-    fun data(action: Action<ForgeDatagenRunConfigurationData>) {
+    fun data(
+        minecraftVersion: Provider<String>,
+        action: Action<ForgeDatagenRunConfigurationData>,
+    ) {
         defaults.builder.action {
             val data = defaults.builder.project.objects.newInstance(ForgeDatagenRunConfigurationData::class.java)
 
@@ -387,7 +381,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
 
             val outputDirectory = data.getOutputDirectory(this).map(MinecraftRunConfiguration::Argument)
 
-            addData(UserdevConfig.Runs::data.name, data, UserdevConfig.Runs::data)
+            addData(UserdevConfig.Runs::data.name, minecraftVersion, data, UserdevConfig.Runs::data)
 
             val resources = sourceSet.map { it.output.resourcesDir!! }
 
@@ -399,11 +393,12 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
         }
     }
 
-    fun gameTestServer(action: Action<ForgeRunConfigurationData>? = null) {
+    fun gameTestServer(
+        minecraftVersion: Provider<String>,
+        action: Action<ForgeRunConfigurationData>? = null,
+    ) {
         defaults.builder.setup {
-            project.plugins.withType(JavaPlugin::class.java) {
-                sourceSet.convention(project.extensions.getByType(SourceSetContainer::class.java).getByName(SourceSet.TEST_SOURCE_SET_NAME))
-            }
+            sourceSet.convention(project.extension<SourceSetContainer>().named(SourceSet.TEST_SOURCE_SET_NAME))
         }
 
         defaults.builder.action {
@@ -411,7 +406,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
 
             action?.execute(data)
 
-            addData(::gameTestServer.name, data, UserdevConfig.Runs::gameTestServer)
+            addData(::gameTestServer.name, minecraftVersion, data, UserdevConfig.Runs::gameTestServer)
         }
     }
 }
