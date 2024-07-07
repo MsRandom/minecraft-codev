@@ -2,19 +2,10 @@ package net.msrandom.minecraftcodev.core.resolve.legacy
 
 import net.msrandom.minecraftcodev.annotations.UnsafeForClient
 import net.msrandom.minecraftcodev.annotations.UnsafeForCommon
-import net.msrandom.minecraftcodev.core.MappingsNamespace
-import net.msrandom.minecraftcodev.core.resolve.JarSplittingResult
-import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
-import net.msrandom.minecraftcodev.core.utils.LockingFileSystem
-import net.msrandom.minecraftcodev.core.utils.addNamespaceManifest
-import net.msrandom.minecraftcodev.core.utils.walk
-import net.msrandom.minecraftcodev.core.utils.zipFileSystem
-import org.gradle.api.artifacts.type.ArtifactTypeDefinition
-import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
-import org.gradle.internal.component.external.model.DefaultModuleComponentArtifactIdentifier
-import org.gradle.internal.component.external.model.DefaultModuleComponentIdentifier
-import org.gradle.internal.component.external.model.ModuleComponentArtifactIdentifier
-import org.gradle.internal.hash.ChecksumService
+import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
+import net.msrandom.minecraftcodev.core.resolve.downloadMinecraftClient
+import net.msrandom.minecraftcodev.core.utils.*
+import org.gradle.api.Project
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassWriter
 import org.objectweb.asm.Handle
@@ -219,15 +210,15 @@ object LegacyJarSplitter {
             }
         }
 
-    fun split(
-        checksumService: ChecksumService,
-        pathFunction: (artifact: ModuleComponentArtifactIdentifier, sha1: String) -> Path,
-        version: String,
-        outputCommon: Path,
-        outputClient: Path,
-        client: Path,
+    suspend fun split(
+        project: Project,
+        metadata: MinecraftVersionMetadata,
         server: Path,
     ): JarSplittingResult {
+        val client = downloadMinecraftClient(project, metadata)
+        val outputCommon = commonJarPath(project, metadata.id)
+        val outputClient = clientJarPath(project, metadata.id)
+
         useFileSystems { handle ->
             val clientFs = zipFileSystem(client).also(handle)
             val serverFs = zipFileSystem(server).also(handle)
@@ -335,35 +326,13 @@ object LegacyJarSplitter {
             }
 
             copyAssets(clientFs.base, serverFs.base, commonFs.base, newClientFs.base)
-            addNamespaceManifest(commonFs.base, MappingsNamespace.OBF)
-            addNamespaceManifest(newClientFs.base, MappingsNamespace.OBF)
         }
 
-        val commonPath =
-            pathFunction(makeId(MinecraftComponentResolvers.COMMON_MODULE, version), checksumService.sha1(outputCommon.toFile()).toString())
-        val clientPath =
-            pathFunction(makeId(MinecraftComponentResolvers.CLIENT_MODULE, version), checksumService.sha1(outputClient.toFile()).toString())
-
-        commonPath.parent.createDirectories()
-        clientPath.parent.createDirectories()
-        outputCommon.copyTo(commonPath, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
-        outputClient.copyTo(clientPath, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
-
         return JarSplittingResult(
-            commonPath,
-            clientPath,
+            outputCommon,
+            outputClient,
         )
     }
-
-    internal fun makeId(
-        name: String,
-        version: String,
-    ) = DefaultModuleComponentArtifactIdentifier(
-        DefaultModuleComponentIdentifier.newId(DefaultModuleIdentifier.newId(MinecraftComponentResolvers.GROUP, name), version),
-        name,
-        ArtifactTypeDefinition.JAR_TYPE,
-        ArtifactTypeDefinition.JAR_TYPE,
-    )
 
     fun copyAssets(
         client: FileSystem,
@@ -393,6 +362,8 @@ object LegacyJarSplitter {
             path.copyTo(newPath, StandardCopyOption.COPY_ATTRIBUTES)
         }
     }
+
+    data class JarSplittingResult(val common: Path, val client: Path)
 
     data class ListMergeResult<T>(val merged: List<T>, val client: List<T>, val server: List<T>)
 }

@@ -1,7 +1,7 @@
 package net.msrandom.minecraftcodev.forge.mappings
 
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
-import net.msrandom.minecraftcodev.forge.resolve.PatchedSetupState
+import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin
 import java.net.JarURLConnection
 import java.nio.file.Path
 import kotlin.io.path.deleteExisting
@@ -17,7 +17,7 @@ fun injectForgeMappingService(file: Path) =
         }
 
         val injectsFolder = "/forge-mapping-injects"
-        val codevInjects = PatchedSetupState::class.java.getResource(injectsFolder) ?: return false
+        val codevInjects = MinecraftCodevForgePlugin::class.java.getResource(injectsFolder) ?: return false
 
         serviceFile.deleteExisting()
 

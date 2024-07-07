@@ -44,15 +44,17 @@ object ServerFixer {
         newServer: Path,
         serverFs: FileSystem,
         client: Path,
-    ): Collection<ModuleLibraryIdentifier> {
+    ): List<String> {
         val commonLibraries = mutableSetOf<MinecraftVersionMetadata.Library>()
         val libraryGroups = hashMapOf<String, MutableList<Pair<String, MinecraftVersionMetadata.Library>>>()
 
         for (library in manifest.libraries) {
-            val groupName = '/' + library.name.group.replace('.', '/')
-            val path = LIBRARY_PATHS["${library.name.group}:${library.name.module}"]
+            val identifier = ModuleLibraryIdentifier.load(library.name)
+
+            val groupName = '/' + identifier.group.replace('.', '/')
+            val path = LIBRARY_PATHS["${identifier.group}:${identifier.module}"]
             if (path == null) {
-                val name = "$groupName/${library.name.module}"
+                val name = "$groupName/${identifier.module}"
 
                 val grouped = libraryGroups.computeIfAbsent(groupName) { mutableListOf() }
                 grouped.add(name to library)

@@ -1,78 +1,58 @@
 package net.msrandom.minecraftcodev.core
 
-import net.msrandom.minecraftcodev.core.dependency.MinecraftDependency
-import net.msrandom.minecraftcodev.core.dependency.MinecraftDependencyImpl
-import net.msrandom.minecraftcodev.core.utils.zipFileSystem
+import kotlinx.coroutines.runBlocking
+import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionList
+import net.msrandom.minecraftcodev.core.resolve.getClientDependencies
+import net.msrandom.minecraftcodev.core.resolve.setupCommon
 import org.gradle.api.Project
-import org.gradle.api.internal.artifacts.dsl.CapabilityNotationParserFactory
-import org.gradle.api.internal.attributes.ImmutableAttributesFactory
+import org.gradle.api.artifacts.Dependency
 import org.gradle.api.plugins.ExtensionAware
-import org.gradle.api.provider.ListProperty
-import java.nio.file.FileSystem
-import java.nio.file.Path
-
-fun interface ModMatchingRule {
-    fun detectModInfo(fileSystem: FileSystem): ModInfo?
-}
+import org.gradle.api.provider.Property
+import org.gradle.api.provider.Provider
 
 @Suppress("unused")
-abstract class MinecraftCodevExtension(
-    private val project: Project,
-    private val attributesFactory: ImmutableAttributesFactory,
-) : ExtensionAware {
-    private val capabilityNotationParser = CapabilityNotationParserFactory(false).create()!!
-
-    val modInfoDetectionRules: ListProperty<ModMatchingRule> = project.objects.listProperty(ModMatchingRule::class.java)
-
-    operator fun invoke(
-        name: Any,
-        version: String?,
-    ): MinecraftDependency =
-        MinecraftDependencyImpl(name.toString(), version.orEmpty(), null).apply {
-            setAttributesFactory(attributesFactory)
-            setCapabilityNotationParser(capabilityNotationParser)
+abstract class MinecraftCodevExtension(private val project: Project) : ExtensionAware {
+    private var versionMetadataUrl: Property<String> =
+        project.objects.property(String::class.java).apply {
+            convention("https://launchermeta.mojang.com/mc/game/version_manifest_v2.json")
         }
 
-    operator fun invoke(name: Any) = invoke(name, null)
+    private var _versionList: MinecraftVersionList? = null
 
-    operator fun invoke(notation: Map<String, Any>) = invoke(notation.getValue("name"), notation["version"]?.toString())
-
-    fun call(
-        name: Any,
-        version: String?,
-    ) = invoke(name, version)
-
-    fun call(name: Any) = invoke(name)
-
-    fun call(notation: Map<String, Any>) = invoke(notation)
-
-    private fun sortDetectedInfo(info: List<ModInfo>) =
-        info
-            .groupBy(ModInfo::type)
-            .mapValues { (_, info) ->
-                info
-                    .asSequence()
-                    .groupBy(ModInfo::info)
-                    .map { (value, values) -> value to values.sumOf(ModInfo::score) }
-                    .sortedByDescending { (_, score) -> score }
-                    .map { (info, _) -> info }
-                    .toList()
+    suspend fun getVersionList() =
+        _versionList ?: run {
+            MinecraftVersionList.load(project, versionMetadataUrl.get()).also {
+                _versionList = it
             }
+        }
 
-    fun detectModInfo(path: Path): DetectedModInfo {
-        val info =
-            zipFileSystem(path).use {
-                modInfoDetectionRules.get().mapNotNull { rule ->
-                    rule.detectModInfo(it.base)
-                }
-            }
+    private fun versionListResolver() =
+        lazy {
+        }
 
-        val sortedInfo = sortDetectedInfo(info)
+    fun versionMetadataUrl(url: String) {
+        versionMetadataUrl.set(url)
 
-        return DetectedModInfo(
-            sortedInfo.getOrDefault(ModInfoType.Platform, emptyList()),
-            sortedInfo.getOrDefault(ModInfoType.Version, emptyList()),
-            sortedInfo.getOrDefault(ModInfoType.Namespace, emptyList()),
-        )
+        _versionList = null
     }
+
+    fun versionMetadataUrl(url: Provider<String>) {
+        versionMetadataUrl.set(url)
+
+        _versionList = null
+    }
+
+    fun commonDependencies(version: String): Provider<List<Dependency>> =
+        project.provider {
+            runBlocking {
+                setupCommon(project, getVersionList().version(version)).map(project.dependencies::create)
+            }
+        }
+
+    fun clientDependencies(version: String): Provider<List<Dependency>> =
+        project.provider {
+            runBlocking {
+                getClientDependencies(project, getVersionList().version(version))
+            }
+        }
 }

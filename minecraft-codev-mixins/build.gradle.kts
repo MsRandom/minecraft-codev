@@ -14,8 +14,6 @@ gradlePlugin {
 dependencies {
     implementation(group = "org.spongepowered", name = "mixin", version = "0.8.5")
 
-    compileOnly(projects.minecraftCodevGradleLinkage)
-
     implementation(projects.minecraftCodevCore)
 }
 

@@ -31,7 +31,6 @@ childProjects.values.forEach { project ->
         }
 
         dependencies {
-            implementation(group = "dev.gradleplugins", name = "gradle-api", version = "8.2")
             implementation(kotlin("stdlib"))
 
             testImplementation(gradleTestKit())

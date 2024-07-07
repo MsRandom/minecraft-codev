@@ -4,6 +4,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromStream
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
+import net.msrandom.minecraftcodev.core.utils.extension
 import net.msrandom.minecraftcodev.fabric.MinecraftCodevFabricPlugin
 import net.msrandom.minecraftcodev.mixins.MinecraftCodevMixinsPlugin
 import net.msrandom.minecraftcodev.mixins.MixinsExtension
@@ -13,7 +14,7 @@ import kotlin.io.path.inputStream
 
 fun Project.setupFabricMixinsIntegration() {
     plugins.withType(MinecraftCodevMixinsPlugin::class.java) {
-        val mixins = extensions.getByType(MinecraftCodevExtension::class.java).extensions.getByType(MixinsExtension::class.java)
+        val mixins = extension<MinecraftCodevExtension>().extension<MixinsExtension>()
 
         mixins.rules.add { root ->
             val mod = root.resolve(MinecraftCodevFabricPlugin.MOD_JSON)

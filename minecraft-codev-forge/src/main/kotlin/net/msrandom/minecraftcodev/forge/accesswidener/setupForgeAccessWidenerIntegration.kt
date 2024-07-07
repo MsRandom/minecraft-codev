@@ -5,6 +5,7 @@ import net.msrandom.minecraftcodev.accesswidener.AccessWidenerExtension
 import net.msrandom.minecraftcodev.accesswidener.MinecraftCodevAccessWidenerPlugin
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
+import net.msrandom.minecraftcodev.core.utils.extension
 import net.msrandom.minecraftcodev.forge.UserdevConfig
 import org.cadixdev.at.io.AccessTransformFormats
 import org.gradle.api.Project
@@ -37,8 +38,8 @@ fun FileSystem.findAccessTransformers(): List<Path> {
 
 fun Project.setupForgeAccessWidenerIntegration() {
     plugins.withType(MinecraftCodevAccessWidenerPlugin::class.java) {
-        val codev = extensions.getByType(MinecraftCodevExtension::class.java)
-        val accessWidener = codev.extensions.getByType(AccessWidenerExtension::class.java)
+        val codev = extension<MinecraftCodevExtension>()
+        val accessWidener = codev.extension<AccessWidenerExtension>()
 
         accessWidener.zipAccessWidenerResolution.add { _, fileSystem, _, data ->
             val accessTransformers = fileSystem.findAccessTransformers()

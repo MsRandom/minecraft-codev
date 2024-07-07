@@ -14,13 +14,11 @@ import net.fabricmc.mappingio.format.Tiny2Reader
 import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
-import net.msrandom.minecraftcodev.core.MinecraftType
 import net.msrandom.minecraftcodev.core.utils.extension
 import net.msrandom.minecraftcodev.fabric.MinecraftCodevFabricPlugin
 import net.msrandom.minecraftcodev.remapper.MappingResolutionData
 import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
 import net.msrandom.minecraftcodev.remapper.RemapperExtension
-import net.msrandom.minecraftcodev.remapper.dependency.remapped
 import org.gradle.api.Project
 import java.nio.file.Path
 import kotlin.io.path.*
@@ -68,7 +66,7 @@ private fun readTiny(
 
 fun Project.setupFabricRemapperIntegration() {
     plugins.withType(MinecraftCodevRemapperPlugin::class.java) {
-        val remapper = extensions.getByType(MinecraftCodevExtension::class.java).extensions.getByType(RemapperExtension::class.java)
+        val remapper = extension<MinecraftCodevExtension>().extension<RemapperExtension>()
 
         remapper.mappingsResolution.add { path, extension, data ->
             if (extension == "tiny") {
@@ -171,20 +169,6 @@ fun Project.setupFabricRemapperIntegration() {
             }
 
             accessWidener.writeText(writer.writeString())
-        }
-
-        remapper.remapClasspathRules.add { sourceNamespace, targetNamespace, version, mappingsConfiguration ->
-            if (
-                sourceNamespace == MinecraftCodevFabricPlugin.INTERMEDIARY_MAPPINGS_NAMESPACE ||
-                targetNamespace == MinecraftCodevFabricPlugin.INTERMEDIARY_MAPPINGS_NAMESPACE
-            ) {
-                listOf(
-                    extension<MinecraftCodevExtension>()(MinecraftType.Client, version)
-                        .remapped(targetNamespace = sourceNamespace, mappingsConfiguration = mappingsConfiguration),
-                )
-            } else {
-                emptyList()
-            }
         }
     }
 }

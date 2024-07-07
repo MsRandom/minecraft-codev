@@ -20,7 +20,6 @@ dependencyResolutionManagement {
     }
 }
 
-include("minecraft-codev-gradle-linkage")
 include("minecraft-codev-core", "minecraft-codev-core:side-annotations")
 include("minecraft-codev-decompiler")
 include("minecraft-codev-remapper")

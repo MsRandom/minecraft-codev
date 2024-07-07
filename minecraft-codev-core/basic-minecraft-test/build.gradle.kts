@@ -10,6 +10,7 @@ repositories {
     maven(url = "https://libraries.minecraft.net/")
     mavenCentral()
     minecraft()
+    mavenLocal()
 }
 
 val legacyPath = layout.projectDirectory.dir("src").dir("1.12")

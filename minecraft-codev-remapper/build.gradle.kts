@@ -15,8 +15,6 @@ dependencies {
 
     api(group = "net.fabricmc", name = "tiny-remapper", version = "0.8.11")
 
-    compileOnly(projects.minecraftCodevGradleLinkage)
-
     implementation(api(projects.minecraftCodevCore)!!)
 }
 

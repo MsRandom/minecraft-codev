@@ -1,12 +1,10 @@
 package net.msrandom.minecraftcodev.intersection
 
-import net.msrandom.minecraftcodev.intersection.resolve.JarIntersection
 import org.gradle.testkit.runner.GradleRunner
 import org.junit.jupiter.api.Test
 import org.junit.platform.commons.annotation.Testable
 import java.io.File
 import java.nio.file.Paths
-import kotlin.io.path.div
 
 @Testable
 class IntersectionTests {
@@ -15,10 +13,13 @@ class IntersectionTests {
         val jarsDirectory = javaClass.getResource("/jars")?.toURI() ?: error("Missing files required for test (/jars)")
         val jarsPath = Paths.get(jarsDirectory)
 
-        JarIntersection.intersection(
-            jarsPath.resolve("a.jar"),
-            jarsPath.resolve("b.jar"),
-        )
+/*        val intersectionJar =
+            JarIntersection.intersection(
+                jarsPath.resolve("common-1.16.5-named.jar"),
+                jarsPath.resolve("forge-1.16.5-36.2.39-named.jar"),
+            )
+
+        intersectionJar.copyTo(Path("/media/sdb1/Projects/Kotlin/minecraft-codev/minecraft-codev-intersections/intersection.jar"))*/
     }
 
     @Test

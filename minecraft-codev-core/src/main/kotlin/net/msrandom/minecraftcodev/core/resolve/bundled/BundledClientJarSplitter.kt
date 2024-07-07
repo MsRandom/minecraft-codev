@@ -1,30 +1,25 @@
 package net.msrandom.minecraftcodev.core.resolve.bundled
 
-import net.msrandom.minecraftcodev.core.MappingsNamespace
-import net.msrandom.minecraftcodev.core.resolve.MinecraftComponentResolvers
-import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter
+import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
+import net.msrandom.minecraftcodev.core.resolve.downloadMinecraftClient
 import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter.useFileSystems
 import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter.withAssets
-import net.msrandom.minecraftcodev.core.utils.addNamespaceManifest
-import net.msrandom.minecraftcodev.core.utils.walk
-import net.msrandom.minecraftcodev.core.utils.zipFileSystem
-import org.gradle.internal.component.external.model.ModuleComponentArtifactIdentifier
-import org.gradle.internal.hash.ChecksumService
+import net.msrandom.minecraftcodev.core.utils.*
+import org.gradle.api.Project
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import kotlin.io.path.*
 
 object BundledClientJarSplitter {
-    fun split(
-        checksumService: ChecksumService,
-        pathFunction: (artifact: ModuleComponentArtifactIdentifier, sha1: String) -> Path,
-        version: String,
-        outputClient: Path,
-        client: Path,
+    suspend fun split(
+        project: Project,
+        metadata: MinecraftVersionMetadata,
         server: Path,
-    ): Path =
+    ): Path {
+        val client = downloadMinecraftClient(project, metadata)
+        val outputClient = clientJarPath(project, metadata.id)
+
         useFileSystems { handle ->
-            outputClient.deleteExisting()
             val clientFs = zipFileSystem(client).also(handle)
             val serverFs = zipFileSystem(server).also(handle)
             val newClientFs = zipFileSystem(outputClient, create = true).also(handle)
@@ -55,18 +50,8 @@ object BundledClientJarSplitter {
                     path.copyTo(newPath, StandardCopyOption.COPY_ATTRIBUTES)
                 }
             }
-
-            addNamespaceManifest(newClientFs.base, MappingsNamespace.OBF)
-
-            outputClient
-        }.let {
-            val path =
-                pathFunction(
-                    LegacyJarSplitter.makeId(MinecraftComponentResolvers.CLIENT_MODULE, version),
-                    checksumService.sha1(it.toFile()).toString(),
-                )
-            path.parent.createDirectories()
-            it.copyTo(path)
-            path
         }
+
+        return outputClient
+    }
 }

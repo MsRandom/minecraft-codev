@@ -11,7 +11,6 @@ gradlePlugin {
 }
 
 dependencies {
-    compileOnly(projects.minecraftCodevGradleLinkage)
     implementation(projects.minecraftCodevCore)
     implementation(projects.minecraftCodevRemapper)
 }

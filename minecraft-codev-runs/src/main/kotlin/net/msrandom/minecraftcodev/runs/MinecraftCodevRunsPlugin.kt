@@ -1,9 +1,10 @@
 package net.msrandom.minecraftcodev.runs
 
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
-import net.msrandom.minecraftcodev.core.caches.CodevCacheManager
 import net.msrandom.minecraftcodev.core.utils.applyPlugin
 import net.msrandom.minecraftcodev.core.utils.createSourceSetElements
+import net.msrandom.minecraftcodev.core.utils.extension
+import net.msrandom.minecraftcodev.core.utils.getCacheDirectory
 import net.msrandom.minecraftcodev.runs.task.DownloadAssets
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
 import org.apache.commons.lang3.StringUtils
@@ -12,19 +13,15 @@ import org.gradle.api.plugins.ApplicationPlugin
 import org.gradle.api.plugins.PluginAware
 import org.gradle.api.tasks.JavaExec
 import org.gradle.api.tasks.SourceSet
-import org.gradle.initialization.layout.GlobalCacheDir
 import java.nio.file.Path
-import javax.inject.Inject
 
-class MinecraftCodevRunsPlugin<T : PluginAware> @Inject
-constructor(cacheDir: GlobalCacheDir) : Plugin<T> {
-    private val cache: Path = cacheDir.dir.toPath().resolve(CodevCacheManager.ROOT_NAME)
-
-    // Log4j configs
-    val logging: Path = cache.resolve("logging")
-
+class MinecraftCodevRunsPlugin<T : PluginAware> : Plugin<T> {
     override fun apply(target: T) =
         applyPlugin(target) {
+            // Log4j configs
+            val cache = getCacheDirectory(this)
+            val logging: Path = cache.resolve("logging")
+
             fun addNativesConfiguration(nativesConfigurationName: String) =
                 configurations.maybeCreate(nativesConfigurationName).apply {
                     isCanBeConsumed = false
@@ -53,8 +50,7 @@ constructor(cacheDir: GlobalCacheDir) : Plugin<T> {
             }
 
             val runs =
-                extensions
-                    .getByType(MinecraftCodevExtension::class.java)
+                extension<MinecraftCodevExtension>()
                     .extensions
                     .create(RunsContainer::class.java, "runs", RunsContainerImpl::class.java, cache)
 
@@ -77,8 +73,7 @@ constructor(cacheDir: GlobalCacheDir) : Plugin<T> {
                         configuration.arguments.map { arguments -> arguments.map(MinecraftRunConfiguration.Argument::compile) }::get,
                     )
                     javaExec.jvmArgumentProviders.add(
-                        configuration.jvmArguments.map {
-                                arguments ->
+                        configuration.jvmArguments.map { arguments ->
                             arguments.map(MinecraftRunConfiguration.Argument::compile)
                         }::get,
                     )

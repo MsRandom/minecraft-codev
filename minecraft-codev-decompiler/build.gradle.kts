@@ -13,7 +13,6 @@ gradlePlugin {
 dependencies {
     implementation(group = "org.vineflower", name = "vineflower", version = "1.9.3")
 
-    compileOnly(projects.minecraftCodevGradleLinkage)
     implementation(projects.minecraftCodevCore)
 }
 

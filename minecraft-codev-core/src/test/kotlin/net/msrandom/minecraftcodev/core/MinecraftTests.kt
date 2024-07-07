@@ -27,22 +27,25 @@ class MinecraftTests {
 
     @Test
     fun `Basic Minecraft Build`() {
-        GradleRunner.create()
-            .withProjectDir(File("basic-minecraft-test"))
-            .withPluginClasspath()
-            .withArguments(
-                "commonUniqueSnapshotJar",
-                "commonLatestReleaseJar",
-                "commonLatestSnapshotJar",
-                "commonSubversionJar",
-                "commonClosedMavenRangeJar",
-                "commonOpenMavenRangeJar",
-                "clientUniqueSnapshotJar",
-                "clientSubversionJar",
-                "-s",
-            )
-            .forwardOutput()
-            .withDebug(true)
-            .build()
+        for (version in listOf("8.2", "8.6", "8.8")) {
+            GradleRunner.create()
+                .withProjectDir(File("basic-minecraft-test"))
+                .withPluginClasspath()
+                .withGradleVersion(version)
+                .withArguments(
+                    "commonUniqueSnapshotJar",
+                    "commonLatestReleaseJar",
+                    "commonLatestSnapshotJar",
+                    "commonSubversionJar",
+                    "commonClosedMavenRangeJar",
+                    "commonOpenMavenRangeJar",
+                    "clientUniqueSnapshotJar",
+                    "clientSubversionJar",
+                    "-s",
+                )
+                .forwardOutput()
+                .withDebug(true)
+                .build()
+        }
     }
 }
