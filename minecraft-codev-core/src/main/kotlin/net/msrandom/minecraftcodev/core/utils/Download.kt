@@ -1,5 +1,7 @@
 package net.msrandom.minecraftcodev.core.utils
 
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.runBlocking
 import org.gradle.api.GradleException
 import org.gradle.api.InvalidUserCodeException
 import org.gradle.api.Project
@@ -18,7 +20,6 @@ import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 
 private val resourceRepositoryCache = hashMapOf<RepositoryTransportFactory, ExternalResourceRepository>()
-private val sha1Hash = MessageDigest.getInstance("SHA-1")
 
 private fun getResourceRepository(transportFactory: RepositoryTransportFactory) =
     resourceRepositoryCache.computeIfAbsent(transportFactory) {
@@ -44,25 +45,41 @@ private fun sha1ToBytes(sha1: String) =
         .map { it.toUByte(16).toByte() }
         .toByteArray()
 
-private fun hashFile(file: Path) =
-    file.inputStream().use { stream ->
-        val buffer = ByteArray(8192)
+private suspend fun hashFile(file: Path): ByteArray =
+    coroutineScope {
+        runBlocking {
+            file.inputStream().use { stream ->
+                val sha1Hash = MessageDigest.getInstance("SHA-1")
 
-        var read: Int
+                val buffer = ByteArray(8192)
 
-        while (stream.read(buffer).also { read = it } > 0) {
-            sha1Hash.update(buffer, 0, read)
+                var read: Int
+
+                while (stream.read(buffer).also { read = it } > 0) {
+                    sha1Hash.update(buffer, 0, read)
+                }
+
+                sha1Hash.digest()
+            }
         }
-
-        sha1Hash.digest()
     }
 
-private fun fetchResource(
+suspend fun checkHash(
+    file: Path,
+    expectedHash: String,
+) = hashFile(file) contentEquals sha1ToBytes(expectedHash)
+
+private suspend fun fetchResource(
     uri: URI,
     repository: ExternalResourceRepository,
-): ExternalResource = repository.resource(ExternalResourceName(uri))
+): ExternalResource =
+    coroutineScope {
+        runBlocking {
+            repository.resource(ExternalResourceName(uri))
+        }
+    }
 
-private fun getCachedResource(
+private suspend fun getCachedResource(
     project: Project,
     uri: URI,
     sha1: String?,
@@ -79,7 +96,7 @@ private fun getCachedResource(
     }
 
     if (sha1 != null) {
-        if (!alwaysRefresh && sha1ToBytes(sha1) contentEquals hashFile(output)) {
+        if (!alwaysRefresh && checkHash(output, sha1)) {
             return null
         }
 
@@ -110,7 +127,7 @@ private fun getCachedResource(
     return externalResource
 }
 
-fun download(
+suspend fun download(
     project: Project,
     uri: URI,
     sha1: String?,

@@ -13,15 +13,12 @@ import net.msrandom.minecraftcodev.core.resolutionRules
 import net.msrandom.minecraftcodev.core.zipResolutionRules
 import org.gradle.api.Action
 import org.gradle.api.Project
-import org.gradle.api.artifacts.Configuration
 import org.gradle.api.file.FileCollection
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.ListProperty
-import org.gradle.internal.hash.HashCode
 import java.nio.file.FileSystem
 import java.nio.file.Path
 import java.security.MessageDigest
-import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import kotlin.io.path.inputStream
 import kotlin.io.path.notExists
@@ -49,7 +46,6 @@ class MappingTreeProvider(val tree: MemoryMappingTree) {
 class MappingResolutionData(
     visitor: MappingTreeProvider,
     messageDigest: MessageDigest,
-    val objectFactory: ObjectFactory,
 ) : ResolutionData<MappingTreeProvider>(visitor, messageDigest)
 
 fun interface ExtraFileRemapper {
@@ -76,8 +72,6 @@ open class RemapperExtension
         val zipMappingsResolution = objectFactory.zipResolutionRules<MappingResolutionData>()
         val mappingsResolution = objectFactory.resolutionRules(zipMappingsResolution)
         val extraFileRemappers: ListProperty<ExtraFileRemapper> = objectFactory.listProperty(ExtraFileRemapper::class.java)
-
-        private val mappingsCache = ConcurrentHashMap<Configuration, Mappings>()
 
         init {
             mappingsResolution.add { path, extension, data ->
@@ -190,14 +184,11 @@ open class RemapperExtension
             }
         }
 
-        fun loadMappings(
-            files: FileCollection,
-            objects: ObjectFactory,
-        ): Mappings {
+        fun loadMappings(files: FileCollection): MappingTreeView {
             val tree = MemoryMappingTree()
             val md = MessageDigest.getInstance("SHA1")
 
-            val data = MappingResolutionData(MappingTreeProvider(tree), md, objects)
+            val data = MappingResolutionData(MappingTreeProvider(tree), md)
 
             for (file in files) {
                 for (rule in mappingsResolution.get()) {
@@ -207,10 +198,7 @@ open class RemapperExtension
                 }
             }
 
-            return Mappings(
-                tree,
-                HashCode.fromBytes(md.digest()),
-            )
+            return tree
         }
 
         fun remapFiles(
@@ -223,6 +211,4 @@ open class RemapperExtension
                 extraMapper(mappings, fileSystem, sourceNamespace, targetNamespace)
             }
         }
-
-        data class Mappings(val tree: MappingTreeView, val hash: HashCode)
     }

@@ -1,5 +1,6 @@
 package net.msrandom.minecraftcodev.core.task
 
+import kotlinx.coroutines.runBlocking
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.resolve.setupCommon
 import net.msrandom.minecraftcodev.core.utils.extension
@@ -29,10 +30,12 @@ abstract class ResolveMinecraftCommon : DefaultTask() {
 
     @TaskAction
     private fun extract() {
-        val versionList = project.extension<MinecraftCodevExtension>().versionList
+        runBlocking {
+            val versionList = project.extension<MinecraftCodevExtension>().getVersionList()
 
-        val version = versionList.version(version.get())
+            val version = versionList.version(version.get())
 
-        setupCommon(project, version, output.asFile.get().toPath())
+            setupCommon(project, version, output.asFile.get().toPath())
+        }
     }
 }

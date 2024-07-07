@@ -210,7 +210,7 @@ object LegacyJarSplitter {
             }
         }
 
-    fun split(
+    suspend fun split(
         project: Project,
         metadata: MinecraftVersionMetadata,
         server: Path,

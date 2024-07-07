@@ -14,7 +14,7 @@ import kotlin.io.path.copyTo
 import kotlin.io.path.exists
 import kotlin.io.path.notExists
 
-fun setupCommon(
+suspend fun setupCommon(
     project: Project,
     metadata: MinecraftVersionMetadata,
     output: Path? = null,
@@ -42,7 +42,7 @@ fun setupCommon(
     }
 }
 
-fun setupClient(
+suspend fun setupClient(
     project: Project,
     output: Path,
     metadata: MinecraftVersionMetadata,

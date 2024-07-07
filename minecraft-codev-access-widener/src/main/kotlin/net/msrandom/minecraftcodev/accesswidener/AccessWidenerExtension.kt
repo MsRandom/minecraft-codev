@@ -7,12 +7,9 @@ import net.msrandom.minecraftcodev.core.ResolutionData
 import net.msrandom.minecraftcodev.core.resolutionRules
 import net.msrandom.minecraftcodev.core.zipResolutionRules
 import org.gradle.api.Project
-import org.gradle.api.artifacts.Configuration
 import org.gradle.api.file.FileCollection
 import org.gradle.api.model.ObjectFactory
-import org.gradle.internal.hash.HashCode
 import java.security.MessageDigest
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.inputStream
 
 class AccessModifierResolutionData(
@@ -24,8 +21,6 @@ class AccessModifierResolutionData(
 open class AccessWidenerExtension(objectFactory: ObjectFactory, private val project: Project) {
     val zipAccessWidenerResolution = objectFactory.zipResolutionRules<AccessModifierResolutionData>()
     val accessWidenerResolution = objectFactory.resolutionRules(zipAccessWidenerResolution)
-
-    private val accessWidenerCache = ConcurrentHashMap<Configuration, LoadedAccessWideners>()
 
     init {
         accessWidenerResolution.add { path, extension, data ->
@@ -61,7 +56,7 @@ open class AccessWidenerExtension(objectFactory: ObjectFactory, private val proj
     fun loadAccessWideners(
         files: FileCollection,
         namespace: String?,
-    ): LoadedAccessWideners {
+    ): AccessModifiers {
         val widener = AccessModifiers(false, namespace)
 
         val md = MessageDigest.getInstance("SHA1")
@@ -76,11 +71,6 @@ open class AccessWidenerExtension(objectFactory: ObjectFactory, private val proj
             }
         }
 
-        return LoadedAccessWideners(
-            widener,
-            HashCode.fromBytes(md.digest()),
-        )
+        return widener
     }
-
-    data class LoadedAccessWideners(val tree: AccessModifiers, val hash: HashCode)
 }

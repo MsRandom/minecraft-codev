@@ -50,7 +50,7 @@ abstract class Remap : TransformAction<Remap.Parameters> {
         val remapperExtension = project.extension<RemapperExtension>()
 
         val input = input.get().asFile.toPath()
-        val mappings = remapperExtension.loadMappings(parameters.mappings, project.objects).tree
+        val mappings = remapperExtension.loadMappings(parameters.mappings)
         val sourceNamespace = parameters.sourceNamespace.get()
         val targetNamespace = parameters.targetNamespace.get()
 

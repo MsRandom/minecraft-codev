@@ -15,7 +15,7 @@ dependencies {
     implementation(projects.minecraftCodevCore.sideAnnotations)
 
     implementation(api(group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version = "1.3.3"))
-    implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version = "1.6.4")
+    implementation(api(group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version = "1.6.4"))
 
     implementation(api(group = "net.minecraftforge", name = "srgutils", version = "latest.release"))
 

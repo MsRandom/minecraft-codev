@@ -11,7 +11,7 @@ import java.nio.file.StandardCopyOption
 import kotlin.io.path.*
 
 object BundledClientJarSplitter {
-    fun split(
+    suspend fun split(
         project: Project,
         metadata: MinecraftVersionMetadata,
         server: Path,

@@ -10,7 +10,7 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import kotlin.io.path.*
 
-fun getExtractionState(
+suspend fun getExtractionState(
     project: Project,
     manifest: MinecraftVersionMetadata,
 ): ServerExtractionResult? {

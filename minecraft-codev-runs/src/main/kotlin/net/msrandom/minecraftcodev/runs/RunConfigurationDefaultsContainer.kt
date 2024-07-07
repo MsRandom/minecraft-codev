@@ -1,5 +1,6 @@
 package net.msrandom.minecraftcodev.runs
 
+import kotlinx.coroutines.runBlocking
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.resolve.*
 import net.msrandom.minecraftcodev.core.utils.*
@@ -191,11 +192,13 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
                 manifestProvider
                     .map { manifest ->
                         val serverJar =
-                            downloadMinecraftFile(
-                                project,
-                                manifest,
-                                MinecraftDownloadVariant.Server,
-                            ) ?: throw UnsupportedOperationException("Version ${manifest.id} does not have a server.")
+                            runBlocking {
+                                downloadMinecraftFile(
+                                    project,
+                                    manifest,
+                                    MinecraftDownloadVariant.Server,
+                                ) ?: throw UnsupportedOperationException("Version ${manifest.id} does not have a server.")
+                            }
 
                         zipFileSystem(serverJar).use {
                             val mainPath = it.base.getPath("META-INF/main-class")
@@ -217,10 +220,12 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
     companion object {
         fun MinecraftRunConfiguration.getManifest(minecraftVersion: Provider<String>) =
             minecraftVersion.map {
-                project
-                    .extension<MinecraftCodevExtension>()
-                    .versionList
-                    .version(it)
+                runBlocking {
+                    project
+                        .extension<MinecraftCodevExtension>()
+                        .getVersionList()
+                        .version(it)
+                }
             }
     }
 }

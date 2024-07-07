@@ -1,5 +1,6 @@
 package net.msrandom.minecraftcodev.core.resolve
 
+import kotlinx.coroutines.runBlocking
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.utils.download
 import net.msrandom.minecraftcodev.core.utils.extension
@@ -17,7 +18,7 @@ enum class MinecraftDownloadVariant(val download: String) {
     ClientMappings("client_mappings"),
 }
 
-fun downloadMinecraftClient(
+suspend fun downloadMinecraftClient(
     project: Project,
     metadata: MinecraftVersionMetadata,
 ) = downloadMinecraftFile(
@@ -27,7 +28,7 @@ fun downloadMinecraftClient(
     metadata.downloads.getValue(MinecraftDownloadVariant.Client.download),
 )
 
-fun downloadMinecraftFile(
+suspend fun downloadMinecraftFile(
     project: Project,
     metadata: MinecraftVersionMetadata,
     variant: MinecraftDownloadVariant,
@@ -42,7 +43,7 @@ fun downloadMinecraftFile(
     )
 }
 
-private fun downloadMinecraftFile(
+private suspend fun downloadMinecraftFile(
     project: Project,
     version: String,
     downloadName: String,
@@ -66,18 +67,20 @@ fun minecraftFilePath(
     version: String,
     variant: MinecraftDownloadVariant,
 ): Provider<RegularFile> {
-    val versionList = project.extension<MinecraftCodevExtension>().versionList
-
     val fileProvider =
         project.provider {
-            val variantDownload =
-                versionList.version(version).downloads[variant.download]
-                    ?: throw InvalidUserCodeException(
-                        "Tried to access ${variant.download} download for version $version, " +
-                            "but it does not have a ${variant.download} download.",
-                    )
+            runBlocking {
+                val versionList = project.extension<MinecraftCodevExtension>().getVersionList()
 
-            minecraftFilePath(project, version, variant.download, variantDownload).toFile()
+                val variantDownload =
+                    versionList.version(version).downloads[variant.download]
+                        ?: throw InvalidUserCodeException(
+                            "Tried to access ${variant.download} download for version $version, " +
+                                "but it does not have a ${variant.download} download.",
+                        )
+
+                minecraftFilePath(project, version, variant.download, variantDownload).toFile()
+            }
         }
 
     return project.layout.file(fileProvider)

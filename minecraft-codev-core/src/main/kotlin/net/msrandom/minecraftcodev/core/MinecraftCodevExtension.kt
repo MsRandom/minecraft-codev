@@ -1,5 +1,6 @@
 package net.msrandom.minecraftcodev.core
 
+import kotlinx.coroutines.runBlocking
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionList
 import net.msrandom.minecraftcodev.core.resolve.getClientDependencies
 import net.msrandom.minecraftcodev.core.resolve.setupCommon
@@ -16,35 +17,42 @@ abstract class MinecraftCodevExtension(private val project: Project) : Extension
             convention("https://launchermeta.mojang.com/mc/game/version_manifest_v2.json")
         }
 
-    private var _versionList = versionListResolver()
+    private var _versionList: MinecraftVersionList? = null
 
-    val versionList
-        get() = _versionList.value
+    suspend fun getVersionList() =
+        _versionList ?: run {
+            MinecraftVersionList.load(project, versionMetadataUrl.get()).also {
+                _versionList = it
+            }
+        }
 
     private fun versionListResolver() =
         lazy {
-            MinecraftVersionList.load(project, versionMetadataUrl.get())
         }
 
     fun versionMetadataUrl(url: String) {
         versionMetadataUrl.set(url)
 
-        _versionList = versionListResolver()
+        _versionList = null
     }
 
     fun versionMetadataUrl(url: Provider<String>) {
         versionMetadataUrl.set(url)
 
-        _versionList = versionListResolver()
+        _versionList = null
     }
 
     fun commonDependencies(version: String): Provider<List<Dependency>> =
         project.provider {
-            setupCommon(project, versionList.version(version)).map(project.dependencies::create)
+            runBlocking {
+                setupCommon(project, getVersionList().version(version)).map(project.dependencies::create)
+            }
         }
 
     fun clientDependencies(version: String): Provider<List<Dependency>> =
         project.provider {
-            getClientDependencies(project, versionList.version(version))
+            runBlocking {
+                getClientDependencies(project, getVersionList().version(version))
+            }
         }
 }

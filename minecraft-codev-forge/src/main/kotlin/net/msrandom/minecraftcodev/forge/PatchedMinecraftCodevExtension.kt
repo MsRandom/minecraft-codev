@@ -1,5 +1,6 @@
 package net.msrandom.minecraftcodev.forge
 
+import kotlinx.coroutines.runBlocking
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.resolve.getClientDependencies
 import net.msrandom.minecraftcodev.core.utils.extension
@@ -14,12 +15,14 @@ open class PatchedMinecraftCodevExtension(private val project: Project) {
         userdev: FileCollection,
     ): Provider<List<Dependency>> =
         project.provider {
-            val versionList =
-                project
-                    .extension<MinecraftCodevExtension>()
-                    .versionList
+            runBlocking {
+                val versionList =
+                    project
+                        .extension<MinecraftCodevExtension>()
+                        .getVersionList()
 
-            getClientDependencies(project, versionList.version(version)) +
-                Userdev.fromFile(userdev.singleFile)!!.config.libraries.map(project.dependencies::create)
+                getClientDependencies(project, versionList.version(version)) +
+                    Userdev.fromFile(userdev.singleFile)!!.config.libraries.map(project.dependencies::create)
+            }
         }
 }

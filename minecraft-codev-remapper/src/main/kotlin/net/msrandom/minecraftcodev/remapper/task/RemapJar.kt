@@ -50,11 +50,11 @@ abstract class RemapJar : Jar() {
                 .extension<MinecraftCodevExtension>()
                 .extension<RemapperExtension>()
 
-        val mappings = remapper.loadMappings(mappings, objectFactory)
+        val mappings = remapper.loadMappings(mappings)
 
         JarRemapper.remap(
             remapper,
-            mappings.tree,
+            mappings,
             sourceNamespace.get(),
             targetNamespace.get(),
             input.asFile.get().toPath(),

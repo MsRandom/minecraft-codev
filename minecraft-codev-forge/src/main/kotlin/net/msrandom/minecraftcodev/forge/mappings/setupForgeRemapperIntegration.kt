@@ -1,6 +1,7 @@
 package net.msrandom.minecraftcodev.forge.mappings
 
 import de.siegmar.fastcsv.reader.NamedCsvReader
+import kotlinx.coroutines.runBlocking
 import net.fabricmc.mappingio.MappedElementKind
 import net.fabricmc.mappingio.MappingUtil
 import net.fabricmc.mappingio.adapter.ForwardingMappingVisitor
@@ -59,19 +60,21 @@ internal fun Project.setupForgeRemapperIntegration() {
 
                 val classFixer =
                     if (config.official) {
-                        val version = extension<MinecraftCodevExtension>().versionList.version(config.version)
-                        val artifactResult = downloadMinecraftFile(project, version, MinecraftDownloadVariant.ClientMappings)!!
+                        runBlocking {
+                            val version = extension<MinecraftCodevExtension>().getVersionList().version(config.version)
+                            val artifactResult = downloadMinecraftFile(project, version, MinecraftDownloadVariant.ClientMappings)!!
 
-                        val clientMappings = MemoryMappingTree()
+                            val clientMappings = MemoryMappingTree()
 
-                        artifactResult.reader().use { ProGuardReader.read(it, clientMappings) }
-                        ClassNameReplacer(
-                            namespaceCompleter,
-                            clientMappings,
-                            MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE,
-                            MappingUtil.NS_SOURCE_FALLBACK,
-                            MappingUtil.NS_TARGET_FALLBACK,
-                        )
+                            artifactResult.reader().use { ProGuardReader.read(it, clientMappings) }
+                            ClassNameReplacer(
+                                namespaceCompleter,
+                                clientMappings,
+                                MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE,
+                                MappingUtil.NS_SOURCE_FALLBACK,
+                                MappingUtil.NS_TARGET_FALLBACK,
+                            )
+                        }
                     } else {
                         namespaceCompleter
                     }

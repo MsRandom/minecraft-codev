@@ -1,5 +1,6 @@
 package net.msrandom.minecraftcodev.core.task
 
+import kotlinx.coroutines.runBlocking
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.resolve.MinecraftDownloadVariant
 import net.msrandom.minecraftcodev.core.resolve.downloadMinecraftFile
@@ -35,11 +36,13 @@ abstract class DownloadMinecraftMappings : DefaultTask() {
 
     @TaskAction
     private fun download() {
-        val versionList = project.extension<MinecraftCodevExtension>().versionList
+        runBlocking {
+            val versionList = project.extension<MinecraftCodevExtension>().getVersionList()
 
-        val version = versionList.version(version.get())
-        val variant = if (server.get()) MinecraftDownloadVariant.ServerMappings else MinecraftDownloadVariant.ClientMappings
+            val version = versionList.version(version.get())
+            val variant = if (server.get()) MinecraftDownloadVariant.ServerMappings else MinecraftDownloadVariant.ClientMappings
 
-        downloadMinecraftFile(project, version, variant, output.asFile.get().toPath())
+            downloadMinecraftFile(project, version, variant, output.asFile.get().toPath())
+        }
     }
 }
