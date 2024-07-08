@@ -44,8 +44,8 @@ data class McpConfig(
     val version: String,
     val official: Boolean = false,
     val data:
-        @Serializable(DataSerializer::class)
-        Map<String, String?>,
+    @Serializable(DataSerializer::class)
+    Map<String, String?>,
     val functions: Map<String, PatchLibrary>,
 )
 

@@ -7,7 +7,6 @@ import net.msrandom.minecraftcodev.core.utils.*
 import org.apache.commons.lang3.SystemUtils
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Dependency
-import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import kotlin.io.path.copyTo
@@ -71,39 +70,60 @@ suspend fun setupClient(
     }
 }
 
+fun rulesMatch(rules: List<MinecraftVersionMetadata.Rule>): Boolean {
+    if (rules.isEmpty()) {
+        return true
+    }
+
+    var allowed = false
+
+    for (rule in rules) {
+        if (rule.action == MinecraftVersionMetadata.RuleAction.Allow) {
+            if (rule.os == null || osMatches(rule.os)) {
+                allowed = true
+            }
+        } else {
+            if (rule.os == null || osMatches(rule.os)) {
+                allowed = false
+            }
+        }
+    }
+
+    return allowed
+}
+
 fun getClientDependencies(
     project: Project,
     metadata: MinecraftVersionMetadata,
 ): List<Dependency> {
     val libs =
-        metadata.libraries.filter { library ->
-            if (library.rules.isEmpty()) {
-                return@filter true
-            }
-
-            val rulesMatch =
-                library.rules.all { rule ->
-                    if (rule.os == null) {
-                        return@all true
-                    }
-
-                    if (rule.action == MinecraftVersionMetadata.RuleAction.Allow) {
-                        osMatches(rule.os)
-                    } else {
-                        !osMatches(rule.os)
-                    }
-                }
-
-            rulesMatch
-        }.map(MinecraftVersionMetadata.Library::name)
+        metadata.libraries.filter { rulesMatch(it.rules) }.map(MinecraftVersionMetadata.Library::name)
 
     return libs.map(project.dependencies::create)
 }
 
-private fun osMatches(os: OperatingSystem): Boolean {
-    val systemName = DefaultNativePlatform.host().operatingSystem.toFamilyName()
+fun getNatives(
+    project: Project,
+    metadata: MinecraftVersionMetadata,
+): List<Dependency> {
+    val libs =
+        metadata.libraries.filter { library ->
+            if (library.natives.isEmpty()) {
+                return@filter false
+            }
 
-    if (os.name != null && os.name != systemName) {
+            rulesMatch(library.rules)
+        }.map {
+            val classifier = it.natives.getValue(osName())
+
+            project.dependencies.create("${it.name}:$classifier")
+        }
+
+    return libs
+}
+
+private fun osMatches(os: OperatingSystem): Boolean {
+    if (os.name != null && os.name != osName()) {
         return false
     }
 

@@ -67,148 +67,148 @@ fun sourceNamespaceVisitor(
 }
 
 open class RemapperExtension
-    @Inject
-    constructor(objectFactory: ObjectFactory, private val project: Project) {
-        val zipMappingsResolution = objectFactory.zipResolutionRules<MappingResolutionData>()
-        val mappingsResolution = objectFactory.resolutionRules(zipMappingsResolution)
-        val extraFileRemappers: ListProperty<ExtraFileRemapper> = objectFactory.listProperty(ExtraFileRemapper::class.java)
+@Inject
+constructor(objectFactory: ObjectFactory, private val project: Project) {
+    val zipMappingsResolution = objectFactory.zipResolutionRules<MappingResolutionData>()
+    val mappingsResolution = objectFactory.resolutionRules(zipMappingsResolution)
+    val extraFileRemappers: ListProperty<ExtraFileRemapper> = objectFactory.listProperty(ExtraFileRemapper::class.java)
 
-        init {
-            mappingsResolution.add { path, extension, data ->
-                if (extension == "txt" || extension == "map") {
-                    data.decorate(path.inputStream()).reader().use {
-                        ProGuardReader.read(
-                            it,
-                            MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE,
-                            MappingsNamespace.OBF,
-                            sourceNamespaceVisitor(data, MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE),
-                        )
-                    }
-
-                    true
-                } else {
-                    false
+    init {
+        mappingsResolution.add { path, extension, data ->
+            if (extension == "txt" || extension == "map") {
+                data.decorate(path.inputStream()).reader().use {
+                    ProGuardReader.read(
+                        it,
+                        MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE,
+                        MappingsNamespace.OBF,
+                        sourceNamespaceVisitor(data, MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE),
+                    )
                 }
-            }
-
-            mappingsResolution.add { path, extension, data ->
-                if (extension != "json") {
-                    return@add false
-                }
-
-                handleParchment(data, path)
 
                 true
-            }
-
-            zipMappingsResolution.add { _, fileSystem, _, data ->
-                val parchmentJson = fileSystem.getPath("parchment.json")
-
-                if (parchmentJson.notExists()) {
-                    return@add false
-                }
-
-                handleParchment(data, parchmentJson)
-
-                true
+            } else {
+                false
             }
         }
 
-        private fun handleParchment(
-            data: MappingResolutionData,
-            path: Path,
-        ) {
-            data.visitor.withTree(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE) {
-                val visitor = it
-                val parchment =
-                    data.decorate(path.inputStream()).use {
-                        json.decodeFromStream<Parchment>(it)
-                    }
+        mappingsResolution.add { path, extension, data ->
+            if (extension != "json") {
+                return@add false
+            }
 
-                do {
-                    if (visitor.visitHeader()) {
-                        visitor.visitNamespaces(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE, emptyList())
-                    }
+            handleParchment(data, path)
 
-                    if (visitor.visitContent()) {
-                        parchment.classes?.forEach CLASS_LOOP@{ classElement ->
-                            if (!visitor.visitClass(classElement.name) || !visitor.visitElementContent(MappedElementKind.CLASS)) {
-                                return@CLASS_LOOP
-                            }
+            true
+        }
 
-                            fun visitComment(
-                                element: Parchment.Element,
-                                type: MappedElementKind,
-                            ) {
-                                element.javadoc?.let {
-                                    if (it.lines.isNotEmpty()) {
-                                        visitor.visitComment(type, it.lines.joinToString("\n"))
-                                    }
-                                }
-                            }
+        zipMappingsResolution.add { _, fileSystem, _, data ->
+            val parchmentJson = fileSystem.getPath("parchment.json")
 
-                            visitComment(classElement, MappedElementKind.CLASS)
+            if (parchmentJson.notExists()) {
+                return@add false
+            }
 
-                            classElement.fields?.forEach FIELD_LOOP@{ fieldElement ->
-                                if (!visitor.visitField(
-                                        fieldElement.name,
-                                        fieldElement.descriptor,
-                                    ) || !visitor.visitElementContent(MappedElementKind.METHOD)
-                                ) {
-                                    return@FIELD_LOOP
-                                }
+            handleParchment(data, parchmentJson)
 
-                                visitComment(fieldElement, MappedElementKind.FIELD)
-                            }
+            true
+        }
+    }
 
-                            classElement.methods?.forEach METHOD_LOOP@{ methodElement ->
-                                if (!visitor.visitMethod(
-                                        methodElement.name,
-                                        methodElement.descriptor,
-                                    ) || !visitor.visitElementContent(MappedElementKind.METHOD)
-                                ) {
-                                    return@METHOD_LOOP
-                                }
+    private fun handleParchment(
+        data: MappingResolutionData,
+        path: Path,
+    ) {
+        data.visitor.withTree(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE) {
+            val visitor = it
+            val parchment =
+                data.decorate(path.inputStream()).use {
+                    json.decodeFromStream<Parchment>(it)
+                }
 
-                                visitComment(methodElement, MappedElementKind.METHOD)
+            do {
+                if (visitor.visitHeader()) {
+                    visitor.visitNamespaces(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE, emptyList())
+                }
 
-                                methodElement.parameters?.forEach { parameterElement ->
-                                    visitor.visitMethodArg(parameterElement.index, parameterElement.index, parameterElement.name)
+                if (visitor.visitContent()) {
+                    parchment.classes?.forEach CLASS_LOOP@{ classElement ->
+                        if (!visitor.visitClass(classElement.name) || !visitor.visitElementContent(MappedElementKind.CLASS)) {
+                            return@CLASS_LOOP
+                        }
 
-                                    visitComment(parameterElement, MappedElementKind.METHOD_ARG)
+                        fun visitComment(
+                            element: Parchment.Element,
+                            type: MappedElementKind,
+                        ) {
+                            element.javadoc?.let {
+                                if (it.lines.isNotEmpty()) {
+                                    visitor.visitComment(type, it.lines.joinToString("\n"))
                                 }
                             }
                         }
-                    }
-                } while (!visitor.visitEnd())
-            }
-        }
 
-        fun loadMappings(files: FileCollection): MappingTreeView {
-            val tree = MemoryMappingTree()
-            val md = MessageDigest.getInstance("SHA1")
+                        visitComment(classElement, MappedElementKind.CLASS)
 
-            val data = MappingResolutionData(MappingTreeProvider(tree), md)
+                        classElement.fields?.forEach FIELD_LOOP@{ fieldElement ->
+                            if (!visitor.visitField(
+                                    fieldElement.name,
+                                    fieldElement.descriptor,
+                                ) || !visitor.visitElementContent(MappedElementKind.METHOD)
+                            ) {
+                                return@FIELD_LOOP
+                            }
 
-            for (file in files) {
-                for (rule in mappingsResolution.get()) {
-                    if (rule.load(file.toPath(), file.extension, data)) {
-                        break
+                            visitComment(fieldElement, MappedElementKind.FIELD)
+                        }
+
+                        classElement.methods?.forEach METHOD_LOOP@{ methodElement ->
+                            if (!visitor.visitMethod(
+                                    methodElement.name,
+                                    methodElement.descriptor,
+                                ) || !visitor.visitElementContent(MappedElementKind.METHOD)
+                            ) {
+                                return@METHOD_LOOP
+                            }
+
+                            visitComment(methodElement, MappedElementKind.METHOD)
+
+                            methodElement.parameters?.forEach { parameterElement ->
+                                visitor.visitMethodArg(parameterElement.index, parameterElement.index, parameterElement.name)
+
+                                visitComment(parameterElement, MappedElementKind.METHOD_ARG)
+                            }
+                        }
                     }
                 }
-            }
-
-            return tree
-        }
-
-        fun remapFiles(
-            mappings: MappingTreeView,
-            fileSystem: FileSystem,
-            sourceNamespace: String,
-            targetNamespace: String,
-        ) {
-            for (extraMapper in extraFileRemappers.get()) {
-                extraMapper(mappings, fileSystem, sourceNamespace, targetNamespace)
-            }
+            } while (!visitor.visitEnd())
         }
     }
+
+    fun loadMappings(files: FileCollection): MappingTreeView {
+        val tree = MemoryMappingTree()
+        val md = MessageDigest.getInstance("SHA1")
+
+        val data = MappingResolutionData(MappingTreeProvider(tree), md)
+
+        for (file in files) {
+            for (rule in mappingsResolution.get()) {
+                if (rule.load(file.toPath(), file.extension, data)) {
+                    break
+                }
+            }
+        }
+
+        return tree
+    }
+
+    fun remapFiles(
+        mappings: MappingTreeView,
+        fileSystem: FileSystem,
+        sourceNamespace: String,
+        targetNamespace: String,
+    ) {
+        for (extraMapper in extraFileRemappers.get()) {
+            extraMapper(mappings, fileSystem, sourceNamespace, targetNamespace)
+        }
+    }
+}

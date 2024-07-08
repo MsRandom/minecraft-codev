@@ -7,11 +7,18 @@ import org.gradle.api.Project
 import org.gradle.api.initialization.Settings
 import org.gradle.api.invocation.Gradle
 import org.gradle.api.plugins.PluginAware
+import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
 
 fun osVersion(): String {
     val version = SystemUtils.OS_VERSION
     val versionEnd = version.indexOf('-')
     return if (versionEnd < 0) version else version.substring(0, versionEnd)
+}
+
+fun osName(): String {
+    // TODO Don't use Gradle internals
+
+    return DefaultNativePlatform.host().operatingSystem.toFamilyName()
 }
 
 fun <T : PluginAware> Plugin<T>.applyPlugin(

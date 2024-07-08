@@ -72,14 +72,14 @@ fun Project.integrateIdeaRuns() {
 
 // Relies on IntelliJ plugin to import
 abstract class RunConfigurationBeforeRunTask
-    @Inject
-    constructor(name: String) : BeforeRunTask() {
-        abstract val configuration: Property<String>
+@Inject
+constructor(name: String) : BeforeRunTask() {
+    abstract val configuration: Property<String>
 
-        init {
-            super.name = name
-            type = "runConfiguration"
-        }
-
-        override fun toMap() = mapOf(*super.toMap().toList().toTypedArray(), "configuration" to configuration.get())
+    init {
+        super.name = name
+        type = "runConfiguration"
     }
+
+    override fun toMap() = mapOf(*super.toMap().toList().toTypedArray(), "configuration" to configuration.get())
+}

@@ -11,155 +11,155 @@ import org.gradle.api.tasks.SourceSetContainer
 import javax.inject.Inject
 
 abstract class MinecraftRunConfigurationBuilder
-    @Inject
-    constructor(val project: Project, private val name: String, private val runsContainer: RunsContainer) : Named {
-        private val setupActions = mutableListOf<Action<MinecraftRunConfiguration>>()
-        private val configurationActions = mutableListOf<Action<MinecraftRunConfiguration>>()
+@Inject
+constructor(val project: Project, private val name: String, private val runsContainer: RunsContainer) : Named {
+    private val setupActions = mutableListOf<Action<MinecraftRunConfiguration>>()
+    private val configurationActions = mutableListOf<Action<MinecraftRunConfiguration>>()
 
-        val defaults: RunConfigurationDefaultsContainer
-            get() =
-                runsContainer.extension<RunConfigurationDefaultsContainer>().also { it.builder = this }
+    val defaults: RunConfigurationDefaultsContainer
+        get() =
+            runsContainer.extension<RunConfigurationDefaultsContainer>().also { it.builder = this }
 
-        val friendlyName
-            get() =
-                if (project == project.rootProject) {
-                    "Run $name"
-                } else {
-                    "Run ${project.path}:$name"
-                }
-
-        override fun getName() = name
-
-        fun setup(action: Action<MinecraftRunConfiguration>) {
-            setupActions += action
-        }
-
-        fun setup(action: MinecraftRunConfiguration.() -> Unit) = setup(Action(action))
-
-        fun action(action: Action<MinecraftRunConfiguration>) {
-            configurationActions += action
-        }
-
-        fun action(action: MinecraftRunConfiguration.() -> Unit) = action(Action(action))
-
-        fun mainClass(mainClass: String) =
-            apply {
-                action { this.mainClass.set(mainClass) }
+    val friendlyName
+        get() =
+            if (project == project.rootProject) {
+                "Run $name"
+            } else {
+                "Run ${project.path}:$name"
             }
 
-        fun jvmVersion(jvmVersion: Int) =
-            apply {
-                action { this.jvmVersion.set(jvmVersion) }
-            }
+    override fun getName() = name
 
-        fun sourceSet(sourceSet: String) =
-            apply {
-                setup { this.sourceSet.set(project.extension<SourceSetContainer>().named(sourceSet)) }
-            }
-
-        fun sourceSet(sourceSet: Provider<SourceSet>) =
-            apply {
-                setup { this.sourceSet.set(sourceSet) }
-            }
-
-        fun sourceSet(sourceSet: SourceSet) =
-            apply {
-                setup { this.sourceSet.set(sourceSet) }
-            }
-
-        fun beforeRun(task: Provider<Task>) =
-            apply {
-                action { beforeRun.add(task) }
-            }
-
-        fun beforeRun(vararg tasks: Task) =
-            apply {
-                action { beforeRun.addAll(tasks.toList()) }
-            }
-
-        fun beforeRun(vararg taskNames: String) =
-            apply {
-                action {
-                    for (taskName in taskNames) {
-                        beforeRun.add(project.tasks.named(taskName))
-                    }
-                }
-            }
-
-        fun dependsOn(vararg runConfigurations: MinecraftRunConfigurationBuilder) =
-            apply {
-                action { dependsOn.addAll(runConfigurations.toList()) }
-            }
-
-        fun args(vararg args: Any?) = arguments(*args)
-
-        fun arguments(vararg args: Any?) =
-            apply {
-                action { arguments.addAll(mapArgs(*args)) }
-            }
-
-        fun jvmArgs(vararg args: Any?) = jvmArguments(*args)
-
-        fun jvmArguments(vararg args: Any?) =
-            apply {
-                action { jvmArguments.addAll(mapArgs(*args)) }
-            }
-
-        fun env(variables: Map<String, Any>) = environment(variables)
-
-        fun env(vararg variables: Pair<String, Any>) = environment(*variables)
-
-        fun env(
-            key: String,
-            value: Any,
-        ) = environment(key, value)
-
-        fun environment(variables: Map<String, Any>) =
-            apply {
-                action {
-                    environment.putAll(variables.mapValues { MinecraftRunConfiguration.Argument(it) })
-                }
-            }
-
-        fun environment(vararg variables: Pair<String, Any>) =
-            apply {
-                action {
-                    environment.putAll(variables.associate { it.first to MinecraftRunConfiguration.Argument(it.second) })
-                }
-            }
-
-        fun environment(
-            key: String,
-            value: Any,
-        ) = apply {
-            action {
-                environment.put(key, MinecraftRunConfiguration.Argument(value))
-            }
-        }
-
-        fun executableDir(path: Any) =
-            apply {
-                action { executableDirectory.set(project.file(path)) }
-            }
-
-        fun executableDirectory(path: Any) =
-            apply {
-                action { executableDirectory.set(project.file(path)) }
-            }
-
-        private fun mapArgs(vararg args: Any?) =
-            args.map {
-                if (it is MinecraftRunConfiguration.Argument) it else MinecraftRunConfiguration.Argument(it)
-            }
-
-        internal fun build() =
-            project.objects.newInstance(MinecraftRunConfiguration::class.java).also {
-                for (action in setupActions) {
-                    action.execute(it)
-                }
-
-                for (action in configurationActions) {
-                    action.execute(it)
-                }
-            }
+    fun setup(action: Action<MinecraftRunConfiguration>) {
+        setupActions += action
     }
+
+    fun setup(action: MinecraftRunConfiguration.() -> Unit) = setup(Action(action))
+
+    fun action(action: Action<MinecraftRunConfiguration>) {
+        configurationActions += action
+    }
+
+    fun action(action: MinecraftRunConfiguration.() -> Unit) = action(Action(action))
+
+    fun mainClass(mainClass: String) =
+        apply {
+            action { this.mainClass.set(mainClass) }
+        }
+
+    fun jvmVersion(jvmVersion: Int) =
+        apply {
+            action { this.jvmVersion.set(jvmVersion) }
+        }
+
+    fun sourceSet(sourceSet: String) =
+        apply {
+            setup { this.sourceSet.set(project.extension<SourceSetContainer>().named(sourceSet)) }
+        }
+
+    fun sourceSet(sourceSet: Provider<SourceSet>) =
+        apply {
+            setup { this.sourceSet.set(sourceSet) }
+        }
+
+    fun sourceSet(sourceSet: SourceSet) =
+        apply {
+            setup { this.sourceSet.set(sourceSet) }
+        }
+
+    fun beforeRun(task: Provider<Task>) =
+        apply {
+            action { beforeRun.add(task) }
+        }
+
+    fun beforeRun(vararg tasks: Task) =
+        apply {
+            action { beforeRun.addAll(tasks.toList()) }
+        }
+
+    fun beforeRun(vararg taskNames: String) =
+        apply {
+            action {
+                for (taskName in taskNames) {
+                    beforeRun.add(project.tasks.named(taskName))
+                }
+            }
+        }
+
+    fun dependsOn(vararg runConfigurations: MinecraftRunConfigurationBuilder) =
+        apply {
+            action { dependsOn.addAll(runConfigurations.toList()) }
+        }
+
+    fun args(vararg args: Any?) = arguments(*args)
+
+    fun arguments(vararg args: Any?) =
+        apply {
+            action { arguments.addAll(mapArgs(*args)) }
+        }
+
+    fun jvmArgs(vararg args: Any?) = jvmArguments(*args)
+
+    fun jvmArguments(vararg args: Any?) =
+        apply {
+            action { jvmArguments.addAll(mapArgs(*args)) }
+        }
+
+    fun env(variables: Map<String, Any>) = environment(variables)
+
+    fun env(vararg variables: Pair<String, Any>) = environment(*variables)
+
+    fun env(
+        key: String,
+        value: Any,
+    ) = environment(key, value)
+
+    fun environment(variables: Map<String, Any>) =
+        apply {
+            action {
+                environment.putAll(variables.mapValues { MinecraftRunConfiguration.Argument(it) })
+            }
+        }
+
+    fun environment(vararg variables: Pair<String, Any>) =
+        apply {
+            action {
+                environment.putAll(variables.associate { it.first to MinecraftRunConfiguration.Argument(it.second) })
+            }
+        }
+
+    fun environment(
+        key: String,
+        value: Any,
+    ) = apply {
+        action {
+            environment.put(key, MinecraftRunConfiguration.Argument(value))
+        }
+    }
+
+    fun executableDir(path: Any) =
+        apply {
+            action { executableDirectory.set(project.file(path)) }
+        }
+
+    fun executableDirectory(path: Any) =
+        apply {
+            action { executableDirectory.set(project.file(path)) }
+        }
+
+    private fun mapArgs(vararg args: Any?) =
+        args.map {
+            if (it is MinecraftRunConfiguration.Argument) it else MinecraftRunConfiguration.Argument(it)
+        }
+
+    internal fun build() =
+        project.objects.newInstance(MinecraftRunConfiguration::class.java).also {
+            for (action in setupActions) {
+                action.execute(it)
+            }
+
+            for (action in configurationActions) {
+                action.execute(it)
+            }
+        }
+}
