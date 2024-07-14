@@ -11,17 +11,23 @@ import net.fabricmc.mappingio.adapter.MappingNsCompleter
 import net.fabricmc.mappingio.adapter.MappingNsRenamer
 import net.fabricmc.mappingio.format.Tiny1Reader
 import net.fabricmc.mappingio.format.Tiny2Reader
+import net.fabricmc.mappingio.tree.MappingTreeView
 import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
 import net.msrandom.minecraftcodev.core.utils.extension
 import net.msrandom.minecraftcodev.fabric.MinecraftCodevFabricPlugin
+import net.msrandom.minecraftcodev.fabric.MinecraftCodevFabricPlugin.Companion.MOD_JSON
 import net.msrandom.minecraftcodev.remapper.MappingResolutionData
 import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
 import net.msrandom.minecraftcodev.remapper.RemapperExtension
 import org.gradle.api.Project
 import java.nio.file.Path
-import kotlin.io.path.*
+import java.util.jar.Manifest
+import kotlin.io.path.exists
+import kotlin.io.path.inputStream
+import kotlin.io.path.notExists
+import kotlin.io.path.writeText
 
 private fun readTiny(
     data: MappingResolutionData,
@@ -42,7 +48,10 @@ private fun readTiny(
             }
 
         val namespaceCompleter =
-            if (MinecraftCodevFabricPlugin.INTERMEDIARY_MAPPINGS_NAMESPACE in parts) {
+            if (MinecraftCodevFabricPlugin.INTERMEDIARY_MAPPINGS_NAMESPACE in parts && data.visitor.tree.getNamespaceId(
+                    MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE,
+                ) == MappingTreeView.NULL_NAMESPACE_ID
+            ) {
                 MappingNsCompleter(
                     data.visitor.tree,
                     mapOf(
@@ -169,6 +178,16 @@ fun Project.setupFabricRemapperIntegration() {
             }
 
             accessWidener.writeText(writer.writeString())
+        }
+
+        remapper.modDetectionRules.add {
+            it.getPath(MOD_JSON).exists()
+        }
+
+        remapper.modDetectionRules.add {
+            val path = it.getPath("META-INF", "MANIFEST.MF")
+
+            path.exists() && path.inputStream().use(::Manifest).mainAttributes.keys.any { it.toString().startsWith("Fabric") }
         }
     }
 }

@@ -14,7 +14,6 @@ import net.msrandom.minecraftcodev.remapper.dependency.getNamespaceId
 import org.objectweb.asm.commons.Remapper
 import java.io.File
 import java.nio.file.Path
-import kotlin.io.path.deleteExisting
 
 object JarRemapper {
     @Synchronized
@@ -184,8 +183,6 @@ object JarRemapper {
                 }.build()
 
         try {
-            output.deleteExisting()
-
             OutputConsumerPath.Builder(output).build().use {
                 it.addNonClassFiles(input, NonClassCopyMode.FIX_META_INF, remapper)
 
@@ -198,8 +195,8 @@ object JarRemapper {
             remapper.finish()
         }
 
-        zipFileSystem(output).use {
-            remapperExtension.remapFiles(mappings, it.base, sourceNamespace, targetNamespace)
+        zipFileSystem(output).use { (fs) ->
+            remapperExtension.remapFiles(mappings, fs, sourceNamespace, targetNamespace)
         }
     }
 }

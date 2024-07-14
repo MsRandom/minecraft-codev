@@ -13,6 +13,7 @@ import org.gradle.api.file.RegularFile
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.jvm.toolchain.JavaToolchainService
 import java.io.File
+import java.io.OutputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
@@ -30,6 +31,7 @@ open class McpAction(
     private val mcpConfig: McpConfigFile,
     private val library: PatchLibrary,
     private val argumentTemplates: Map<String, Any>,
+    private val stdout: OutputStream?,
 ) {
     open val inputName = "input"
 
@@ -108,6 +110,8 @@ open class McpAction(
                     }
 
                 it.args = args
+
+                it.standardOutput = stdout ?: it.standardOutput
             }
 
         executionResult.rethrowFailure()
@@ -117,12 +121,19 @@ open class McpAction(
     }
 }
 
-class PatchMcpAction(project: Project, metadata: MinecraftVersionMetadata, mcpConfig: McpConfigFile, private val userdev: Userdev) : McpAction(
+class PatchMcpAction(
+    project: Project,
+    metadata: MinecraftVersionMetadata,
+    mcpConfig: McpConfigFile,
+    private val userdev: Userdev,
+    logFile: OutputStream,
+) : McpAction(
     project,
     metadata,
     mcpConfig,
     userdev.config.binpatcher,
     emptyMap(),
+    logFile,
 ) {
     override val inputName
         get() = "clean"

@@ -6,11 +6,9 @@ import net.fabricmc.mappingio.adapter.MappingSourceNsSwitch
 import net.fabricmc.mappingio.format.ProGuardReader
 import net.fabricmc.mappingio.tree.MappingTreeView
 import net.fabricmc.mappingio.tree.MemoryMappingTree
-import net.msrandom.minecraftcodev.core.MappingsNamespace
+import net.msrandom.minecraftcodev.core.*
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
-import net.msrandom.minecraftcodev.core.ResolutionData
-import net.msrandom.minecraftcodev.core.resolutionRules
-import net.msrandom.minecraftcodev.core.zipResolutionRules
+import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.gradle.api.Action
 import org.gradle.api.Project
 import org.gradle.api.file.FileCollection
@@ -20,6 +18,8 @@ import java.nio.file.FileSystem
 import java.nio.file.Path
 import java.security.MessageDigest
 import javax.inject.Inject
+import kotlin.io.path.exists
+import kotlin.io.path.extension
 import kotlin.io.path.inputStream
 import kotlin.io.path.notExists
 
@@ -57,6 +57,10 @@ fun interface ExtraFileRemapper {
     )
 }
 
+fun interface ModDetectionRule {
+    operator fun invoke(fileSystem: FileSystem): Boolean
+}
+
 fun sourceNamespaceVisitor(
     data: MappingResolutionData,
     sourceNamespace: String,
@@ -72,6 +76,7 @@ constructor(objectFactory: ObjectFactory, private val project: Project) {
     val zipMappingsResolution = objectFactory.zipResolutionRules<MappingResolutionData>()
     val mappingsResolution = objectFactory.resolutionRules(zipMappingsResolution)
     val extraFileRemappers: ListProperty<ExtraFileRemapper> = objectFactory.listProperty(ExtraFileRemapper::class.java)
+    val modDetectionRules: ListProperty<ModDetectionRule> = objectFactory.listProperty(ModDetectionRule::class.java)
 
     init {
         mappingsResolution.add { path, extension, data ->
@@ -111,6 +116,10 @@ constructor(objectFactory: ObjectFactory, private val project: Project) {
             handleParchment(data, parchmentJson)
 
             true
+        }
+
+        modDetectionRules.add {
+            it.getPath("pack.mcmeta").exists()
         }
     }
 
@@ -209,6 +218,18 @@ constructor(objectFactory: ObjectFactory, private val project: Project) {
     ) {
         for (extraMapper in extraFileRemappers.get()) {
             extraMapper(mappings, fileSystem, sourceNamespace, targetNamespace)
+        }
+    }
+
+    fun isMod(path: Path): Boolean {
+        val extension = path.extension
+
+        if (extension != "zip" && extension != "jar") {
+            return false
+        }
+
+        return zipFileSystem(path).use { (fs) ->
+            modDetectionRules.get().any { it(fs) }
         }
     }
 }

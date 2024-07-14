@@ -1,15 +1,14 @@
 package net.msrandom.minecraftcodev.forge.mappings
 
+import com.google.common.io.ByteStreams.nullOutputStream
 import de.siegmar.fastcsv.reader.NamedCsvReader
 import kotlinx.coroutines.runBlocking
 import net.fabricmc.mappingio.MappedElementKind
-import net.fabricmc.mappingio.MappingUtil
 import net.fabricmc.mappingio.adapter.ForwardingMappingVisitor
 import net.fabricmc.mappingio.adapter.MappingNsCompleter
-import net.fabricmc.mappingio.format.ProGuardReader
+import net.fabricmc.mappingio.adapter.MappingNsRenamer
 import net.fabricmc.mappingio.format.TsrgReader
 import net.fabricmc.mappingio.tree.MappingTreeView
-import net.fabricmc.mappingio.tree.MemoryMappingTree
 import net.msrandom.minecraftcodev.core.MappingsNamespace
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.resolve.MinecraftDownloadVariant
@@ -18,8 +17,10 @@ import net.msrandom.minecraftcodev.core.utils.extension
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.forge.McpConfigFile
 import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin
+import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin.Companion.SRG_MAPPINGS_NAMESPACE
 import net.msrandom.minecraftcodev.forge.Userdev
 import net.msrandom.minecraftcodev.forge.accesswidener.findAccessTransformers
+import net.msrandom.minecraftcodev.forge.task.McpAction
 import net.msrandom.minecraftcodev.remapper.MappingResolutionData
 import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
 import net.msrandom.minecraftcodev.remapper.RemapperExtension
@@ -31,7 +32,6 @@ import java.nio.file.Path
 import kotlin.io.path.deleteExisting
 import kotlin.io.path.exists
 import kotlin.io.path.inputStream
-import kotlin.io.path.reader
 
 internal fun Project.setupForgeRemapperIntegration() {
     plugins.withType(MinecraftCodevRemapperPlugin::class.java) {
@@ -44,37 +44,53 @@ internal fun Project.setupForgeRemapperIntegration() {
 
             val mcpConfigFile = McpConfigFile.fromFile(mcp) ?: return@add false
 
-            val config = mcpConfigFile.config
-
             zipFileSystem(mcpConfigFile.source.toPath()).use { (mcpFs) ->
-                val mappings = mcpFs.getPath(config.data.getValue("mappings")!!)
+                val mappings =
+                    if (mcpConfigFile.config.official) {
+                        val mergeMappings =
+                            runBlocking {
+                                val metadata = extension<MinecraftCodevExtension>().getVersionList().version(mcpConfigFile.config.version)
+
+                                val clientMappings = downloadMinecraftFile(project, metadata, MinecraftDownloadVariant.ClientMappings)!!
+
+                                McpAction(
+                                    project,
+                                    metadata,
+                                    mcpConfigFile,
+                                    mcpConfigFile.config.functions.getValue("mergeMappings"),
+                                    mapOf(
+                                        "official" to clientMappings,
+                                    ),
+                                    nullOutputStream(),
+                                )
+                            }
+
+                        mergeMappings.execute()
+                    } else {
+                        mcpFs.getPath(mcpConfigFile.config.data.getValue("mappings")!!)
+                    }
+
+                val namedNamespace = data.visitor.tree.getNamespaceId(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
 
                 val namespaceCompleter =
-                    MappingNsCompleter(
-                        data.visitor.tree,
-                        mapOf(
-                            MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE to MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE,
-                        ),
-                        true,
-                    )
+                    if (namedNamespace == MappingTreeView.NULL_NAMESPACE_ID) {
+                        MappingNsCompleter(
+                            data.visitor.tree,
+                            mapOf(
+                                MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE to MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE,
+                            ),
+                            true,
+                        )
+                    } else {
+                        data.visitor.tree
+                    }
 
-                val classFixer =
-                    if (config.official) {
-                        runBlocking {
-                            val version = extension<MinecraftCodevExtension>().getVersionList().version(config.version)
-                            val artifactResult = downloadMinecraftFile(project, version, MinecraftDownloadVariant.ClientMappings)!!
-
-                            val clientMappings = MemoryMappingTree()
-
-                            artifactResult.reader().use { ProGuardReader.read(it, clientMappings) }
-                            ClassNameReplacer(
-                                namespaceCompleter,
-                                clientMappings,
-                                MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE,
-                                MappingUtil.NS_SOURCE_FALLBACK,
-                                MappingUtil.NS_TARGET_FALLBACK,
-                            )
-                        }
+                val namespaceFixer =
+                    if (mcpConfigFile.config.official) {
+                        MappingNsRenamer(
+                            namespaceCompleter,
+                            mapOf("left" to MappingsNamespace.OBF, "right" to MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE),
+                        )
                     } else {
                         namespaceCompleter
                     }
@@ -84,7 +100,7 @@ internal fun Project.setupForgeRemapperIntegration() {
                         it,
                         MappingsNamespace.OBF,
                         MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE,
-                        classFixer,
+                        namespaceFixer,
                     )
                 }
             }
@@ -240,6 +256,13 @@ internal fun Project.setupForgeRemapperIntegration() {
 
                 AccessTransformFormats.FML.write(path, accessTransformer.remap(mappingSet))
             }
+        }
+
+        remapper.modDetectionRules.add {
+            it.getPath(
+                "META-INF",
+                "mods.toml",
+            ).exists() || it.getPath("META-INF", "neoforge.mods.toml").exists() || it.getPath("mcmod.info").exists()
         }
     }
 }

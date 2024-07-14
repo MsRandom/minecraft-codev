@@ -36,7 +36,7 @@ abstract class ExtractNatives : DefaultTask() {
     }
 
     @TaskAction
-    fun extract() {
+    private fun extract() {
         val natives = natives.get()
         val output = destinationDirectory.get().asFile.toPath()
 

@@ -6,7 +6,6 @@ import net.msrandom.minecraftcodev.core.resolve.*
 import net.msrandom.minecraftcodev.core.utils.*
 import net.msrandom.minecraftcodev.runs.task.DownloadAssets
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
-import org.apache.commons.lang3.SystemUtils
 import org.gradle.api.file.Directory
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.plugins.ExtensionAware
@@ -16,7 +15,6 @@ import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.SourceSet
-import org.gradle.internal.os.OperatingSystem
 import java.util.jar.Attributes
 import java.util.jar.JarFile
 import java.util.jar.Manifest
@@ -27,14 +25,6 @@ import kotlin.random.Random
 
 abstract class RunConfigurationDefaultsContainer : ExtensionAware {
     lateinit var builder: MinecraftRunConfigurationBuilder
-
-    private fun ruleMatches(os: MinecraftVersionMetadata.Rule.OperatingSystem): Boolean {
-        if (os.name != null && OperatingSystem.forName(os.name) != OperatingSystem.current()) return false
-        if (os.version != null && osVersion() matches Regex(os.version!!)) return false
-        if (os.arch != null && os.arch != SystemUtils.OS_ARCH) return false
-
-        return true
-    }
 
     fun client(minecraftVersion: Provider<String>) {
         builder.action {
@@ -116,62 +106,41 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
                     val fixedJvmArguments = mutableListOf<MinecraftRunConfiguration.Argument>()
 
                     ARGUMENTS@ for (argument in jvmArguments) {
-                        var matches = argument.rules.isEmpty()
+                        if (!rulesMatch(argument.rules)) continue
 
-                        if (!matches) {
-                            for (rule in argument.rules) {
-                                if (rule.action == MinecraftVersionMetadata.RuleAction.Allow) {
-                                    if (rule.os == null) {
-                                        continue
-                                    }
-
-                                    if (!ruleMatches(rule.os!!)) {
-                                        continue@ARGUMENTS
-                                    }
-
-                                    matches = true
-                                } else {
-                                    if (rule.os == null) {
-                                        continue
-                                    }
-
-                                    if (ruleMatches(rule.os!!)) {
-                                        continue@ARGUMENTS
-                                    }
-                                }
+                        for (value in argument.value) {
+                            if (value == "\${classpath}") {
+                                fixedJvmArguments.removeLast()
+                                continue
                             }
-                        }
 
-                        if (matches) {
-                            for (value in argument.value) {
-                                if (value == "\${classpath}") {
-                                    fixedJvmArguments.removeLast()
+                            if (value.startsWith("-Dminecraft.launcher")) {
+                                continue
+                            }
+
+                            val templateStart = value.indexOf("\${")
+
+                            if (templateStart != -1) {
+                                val template = value.subSequence(templateStart + 2, value.indexOf('}'))
+
+                                if (template != "natives_directory") {
                                     continue
-                                } else if (value.startsWith("-Dminecraft.launcher")) {
-                                    continue
-                                } else {
-                                    val templateStart = value.indexOf("\${")
-                                    if (templateStart != -1) {
-                                        val template = value.subSequence(templateStart + 2, value.indexOf('}'))
-                                        if (template == "natives_directory") {
-                                            fixedJvmArguments.add(
-                                                MinecraftRunConfiguration.Argument(
-                                                    value.substring(0, templateStart),
-                                                    extractNativesTask.flatMap(ExtractNatives::destinationDirectory),
-                                                ),
-                                            )
-                                        } else {
-                                            continue
-                                        }
-                                        continue
-                                    } else {
-                                        if (' ' in value) {
-                                            fixedJvmArguments.add(MinecraftRunConfiguration.Argument("\"$value\""))
-                                        } else {
-                                            fixedJvmArguments.add(MinecraftRunConfiguration.Argument(value))
-                                        }
-                                    }
                                 }
+
+                                fixedJvmArguments.add(
+                                    MinecraftRunConfiguration.Argument(
+                                        value.substring(0, templateStart),
+                                        extractNativesTask.flatMap(ExtractNatives::destinationDirectory),
+                                    ),
+                                )
+
+                                continue
+                            }
+
+                            if (' ' in value) {
+                                fixedJvmArguments.add(MinecraftRunConfiguration.Argument("\"$value\""))
+                            } else {
+                                fixedJvmArguments.add(MinecraftRunConfiguration.Argument(value))
                             }
                         }
                     }

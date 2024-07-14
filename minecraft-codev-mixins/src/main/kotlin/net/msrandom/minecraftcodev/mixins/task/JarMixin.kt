@@ -1,9 +1,10 @@
-package net.msrandom.minecraftcodev.mixins
+package net.msrandom.minecraftcodev.mixins.task
 
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.utils.extension
 import net.msrandom.minecraftcodev.core.utils.walk
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
+import net.msrandom.minecraftcodev.mixins.MixinsExtension
 import net.msrandom.minecraftcodev.mixins.mixin.GradleMixinService
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
@@ -15,10 +16,12 @@ import org.spongepowered.asm.mixin.Mixins
 import org.spongepowered.asm.service.MixinService
 import java.io.File
 import java.nio.file.Path
+import kotlin.io.path.deleteIfExists
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.readBytes
 import kotlin.io.path.writeBytes
 
+@CacheableTask
 abstract class JarMixin : DefaultTask() {
     abstract val input: RegularFileProperty
         @InputFile get
@@ -34,8 +37,20 @@ abstract class JarMixin : DefaultTask() {
     abstract val output: RegularFileProperty
         @OutputFile get
 
+    init {
+        output.convention(
+            project.layout.file(
+                project.provider {
+                    temporaryDir.resolve("mixin-output.jar")
+                },
+            ),
+        )
+
+        side.convention(Side.UNKNOWN)
+    }
+
     @TaskAction
-    fun mixin() {
+    private fun mixin() {
         (MixinService.getService() as GradleMixinService).use(classpath + project.files(input), side.get()) {
             for (mixinFile in classpath) {
                 zipFileSystem(mixinFile.toPath()).use {
@@ -62,7 +77,11 @@ abstract class JarMixin : DefaultTask() {
                 }
             }
 
-            zipFileSystem(output.asFile.get().toPath()).use {
+            val output = output.asFile.get().toPath()
+
+            output.deleteIfExists()
+
+            zipFileSystem(output, true).use {
                 val root = it.base.getPath("/")
 
                 root.walk {
@@ -75,6 +94,7 @@ abstract class JarMixin : DefaultTask() {
                                 0,
                                 pathName.length - ".class".length,
                             ).replace(File.separatorChar, '.')
+
                         path.writeBytes(transformer.transformClassBytes(name, name, path.readBytes()))
                     }
                 }

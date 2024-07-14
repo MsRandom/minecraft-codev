@@ -25,12 +25,19 @@ abstract class MergeAccessWideners : DefaultTask() {
 
     init {
         apply {
-            output.convention(project.layout.dir(project.provider { temporaryDir }).flatMap { accessWidenerName.map { name -> it.file("$name.accessWidener") } })
+            output.convention(
+                project.layout.dir(project.provider { temporaryDir }).flatMap {
+                    accessWidenerName.map {
+                            name ->
+                        it.file("$name.accessWidener")
+                    }
+                },
+            )
         }
     }
 
     @TaskAction
-    fun generate() {
+    private fun generate() {
         output.get().asFile.bufferedWriter().use {
             val writer = AccessWidenerWriter()
             val reader = AccessWidenerReader(writer)

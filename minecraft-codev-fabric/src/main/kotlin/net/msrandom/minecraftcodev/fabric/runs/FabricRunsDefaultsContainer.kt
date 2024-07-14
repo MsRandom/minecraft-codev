@@ -1,30 +1,41 @@
 package net.msrandom.minecraftcodev.fabric.runs
 
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromStream
+import kotlinx.coroutines.runBlocking
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
 import net.msrandom.minecraftcodev.core.utils.extension
+import net.msrandom.minecraftcodev.fabric.FabricInstaller
+import net.msrandom.minecraftcodev.fabric.loadFabricInstaller
 import net.msrandom.minecraftcodev.runs.*
 import net.msrandom.minecraftcodev.runs.task.DownloadAssets
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
 import org.gradle.api.Action
 import org.gradle.api.file.Directory
+import org.gradle.api.provider.Provider
 import java.io.File
 import kotlin.io.path.createDirectories
 
 open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDefaultsContainer) {
-    private fun defaults() {
+    private fun defaults(sidedMain: FabricInstaller.MainClass.() -> String) {
         defaults.builder.jvmArguments("-Dfabric.development=true")
         // defaults.builder.jvmArguments("-Dmixin.env.remapRefMap=true")
 
         defaults.builder.action {
-            val file = project.layout.buildDirectory.dir("fabricRemapClasspath").get().file("classpath.txt")
+            val remapClasspathDirectory = project.layout.buildDirectory.dir("fabricRemapClasspath")
 
-            val runtimeClasspath = sourceSet.get().runtimeClasspath
+            mainClass.set(
+                sourceSet.map {
+                    val fabricInstaller = loadFabricInstaller(it.runtimeClasspath, false)!!
+
+                    fabricInstaller.mainClass.sidedMain()
+                },
+            )
 
             jvmArguments.add(
-                project.provider {
+                sourceSet.zip(remapClasspathDirectory, ::Pair).map { (sourceSet, directory) ->
+                    val file = directory.file("classpath.txt")
+                    val runtimeClasspath = sourceSet.runtimeClasspath
+
                     file.asFile.toPath().parent.createDirectories()
                     file.asFile.writeText(runtimeClasspath.files.joinToString("\n", transform = File::getAbsolutePath))
 
@@ -32,38 +43,44 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
                 },
             )
         }
+
         defaults.builder.jvmArguments()
     }
 
-    fun client() {
-        defaults()
-
-        defaults.builder.mainClass(KNOT_CLIENT)
+    fun client(version: Provider<String>) {
+        defaults(FabricInstaller.MainClass::client)
 
         defaults.builder.action {
+            val codev = project.extension<MinecraftCodevExtension>()
+            val runs = codev.extension<RunsContainer>()
+
+            val assetIndex =
+                version.map {
+                    runBlocking {
+                        codev
+                            .getVersionList()
+                            .version(it)
+                            .assetIndex
+                    }
+                }
+
             val extractNativesTask =
                 sourceSet.flatMap {
                     project.tasks.withType(ExtractNatives::class.java)
                         .named(it.extractNativesTaskName)
                 }
 
-            val codev = project.extension<MinecraftCodevExtension>().extension<RunsContainer>()
-
             val downloadAssetsTask =
-                project.tasks.withType(DownloadAssets::class.java)
-                    .named(sourceSet.get().downloadAssetsTaskName)
+                sourceSet.flatMap {
+                    project.tasks.withType(DownloadAssets::class.java).named(it.downloadAssetsTaskName) {
+                        it.useAssetIndex(assetIndex.get())
+                    }
+                }
 
             val nativesDirectory = extractNativesTask.flatMap(ExtractNatives::destinationDirectory).map(Directory::getAsFile)
 
-            val assetIndex =
-                downloadAssetsTask.map {
-                    it.assetIndexFile.asFile.get().inputStream().use {
-                        Json.decodeFromStream<MinecraftVersionMetadata.AssetIndex>(it)
-                    }.id
-                }
-
-            arguments.add(MinecraftRunConfiguration.Argument("--assetsDir=", codev.assetsDirectory.asFile))
-            arguments.add(MinecraftRunConfiguration.Argument("--assetIndex=", assetIndex))
+            arguments.add(MinecraftRunConfiguration.Argument("--assetsDir=", runs.assetsDirectory.asFile))
+            arguments.add(MinecraftRunConfiguration.Argument("--assetIndex=", assetIndex.map(MinecraftVersionMetadata.AssetIndex::id)))
 
             jvmArguments.add(MinecraftRunConfiguration.Argument("-Djava.library.path=", nativesDirectory))
             jvmArguments.add(MinecraftRunConfiguration.Argument("-Dorg.lwjgl.librarypath=", nativesDirectory))
@@ -74,16 +91,18 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
     }
 
     fun server() {
-        defaults()
+        defaults(FabricInstaller.MainClass::server)
 
         defaults.builder.apply {
             arguments("nogui")
-            mainClass(KNOT_SERVER)
         }
     }
 
-    fun data(action: Action<FabricDatagenRunConfigurationData>) {
-        client()
+    fun data(
+        version: Provider<String>,
+        action: Action<FabricDatagenRunConfigurationData>,
+    ) {
+        client(version)
 
         defaults.builder.action {
             val data = project.objects.newInstance(FabricDatagenRunConfigurationData::class.java)
@@ -98,13 +117,7 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
         }
     }
 
-    private fun gameTest(client: Boolean) {
-        if (client) {
-            client()
-        } else {
-            server()
-        }
-
+    private fun gameTest() {
         defaults.builder.apply {
             jvmArguments(
                 "-Dfabric-api.gametest",
@@ -113,13 +126,25 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
         }
     }
 
-    fun gameTestServer() = gameTest(false)
+    fun gameTestServer() {
+        server()
 
-    fun gameTestClient() = gameTest(true)
+        gameTest()
+    }
 
-    private companion object {
-        private const val KNOT_SERVER = "net.fabricmc.loader.launch.knot.KnotServer"
-        private const val KNOT_CLIENT = "net.fabricmc.loader.launch.knot.KnotClient"
+    fun gameTestClient(version: Provider<String>) {
+        client(version)
+
+        gameTest()
+    }
+
+    fun gameTestData(
+        version: Provider<String>,
+        action: Action<FabricDatagenRunConfigurationData>,
+    ) {
+        data(version, action)
+
+        gameTest()
     }
 }
 

@@ -4,9 +4,7 @@ import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
-import org.gradle.api.tasks.InputFiles
-import org.gradle.api.tasks.OutputFile
-import org.gradle.api.tasks.TaskAction
+import org.gradle.api.tasks.*
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassWriter
 import org.objectweb.asm.Opcodes
@@ -20,9 +18,9 @@ import java.util.jar.Attributes
 import java.util.jar.Manifest
 import kotlin.io.path.*
 import kotlin.math.min
-import kotlin.random.Random
 import kotlin.streams.asSequence
 
+@CacheableTask
 abstract class JarIntersection : DefaultTask() {
     private companion object {
         private const val VISIBILITY_MASK = Opcodes.ACC_PUBLIC or Opcodes.ACC_PRIVATE or Opcodes.ACC_PROTECTED
@@ -217,20 +215,38 @@ abstract class JarIntersection : DefaultTask() {
     }
 
     abstract val files: ConfigurableFileCollection
-        @InputFiles get
+        @InputFiles
+        @PathSensitive(PathSensitivity.RELATIVE)
+        get
 
     abstract val output: RegularFileProperty
         @OutputFile get
 
+    init {
+        output.convention(
+            project.layout.file(
+                project.provider {
+                    temporaryDir.resolve("intersection.jar")
+                },
+            ),
+        )
+    }
+
     @TaskAction
-    fun intersection() {
+    private fun intersection() {
+        val output = output.get().asFile.toPath()
+
+        output.deleteIfExists()
+
         val intersection =
             files.asSequence().map(File::toPath).reduce { acc, path ->
-                val output = temporaryDir.resolve("${Random.nextLong()}.jar").toPath()
+                val intermediateOutput = Files.createTempFile("intermediate-intersection", ".jar")
+
+                intermediateOutput.deleteExisting()
 
                 zipFileSystem(acc).use { fileSystemA ->
                     zipFileSystem(path).use { fileSystemB ->
-                        zipFileSystem(output, create = true).use { outputFileSystem ->
+                        zipFileSystem(intermediateOutput, create = true).use { outputFileSystem ->
                             val pathsA = Files.walk(fileSystemA.base.getPath("/")).asSequence().map(Path::toString)
                             val pathsB = Files.walk(fileSystemB.base.getPath("/")).asSequence().map(Path::toString)
 
@@ -250,9 +266,9 @@ abstract class JarIntersection : DefaultTask() {
                     }
                 }
 
-                output
+                intermediateOutput
             }
 
-        intersection.moveTo(output.get().asFile.toPath())
+        intersection.moveTo(output)
     }
 }

@@ -1,3 +1,3 @@
 moduleName = access-wideners
 moduleVersion = 1.0
-extensionClasses = net.msrandom.minecraftcodev.accesswidener.dependency.AccessWidenerExtensionsKt
+extensionClasses = net.msrandom.minecraftcodev.accesswidener.MinecraftCodevAccessWidenerPluginKt

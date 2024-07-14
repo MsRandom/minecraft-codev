@@ -7,10 +7,12 @@ import net.msrandom.minecraftcodev.core.utils.extension
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
+import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
 
+@CacheableTask
 abstract class ResolveMinecraftCommon : DefaultTask() {
     abstract val version: Property<String>
         @Input get
@@ -22,7 +24,7 @@ abstract class ResolveMinecraftCommon : DefaultTask() {
         output.convention(
             project.layout.file(
                 version.map {
-                    temporaryDir.resolve("$it.jar")
+                    temporaryDir.resolve("common-$it.jar")
                 },
             ),
         )

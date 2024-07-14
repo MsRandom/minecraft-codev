@@ -8,10 +8,12 @@ import net.msrandom.minecraftcodev.core.utils.extension
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
+import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
 
+@CacheableTask
 abstract class DownloadMinecraftMappings : DefaultTask() {
     abstract val version: Property<String>
         @Input get
@@ -28,7 +30,7 @@ abstract class DownloadMinecraftMappings : DefaultTask() {
                 version.zip(server, ::Pair).map { (v, s) ->
                     val variant = if (s) "server" else "client"
 
-                    temporaryDir.resolve("$variant-$v.txt")
+                    temporaryDir.resolve("$variant-mappings-$v.txt")
                 },
             ),
         )

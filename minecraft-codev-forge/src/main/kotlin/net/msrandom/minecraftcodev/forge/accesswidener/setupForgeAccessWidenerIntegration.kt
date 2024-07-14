@@ -12,8 +12,7 @@ import org.gradle.api.Project
 import java.nio.file.FileSystem
 import java.nio.file.Path
 import java.util.jar.Manifest
-import kotlin.io.path.exists
-import kotlin.io.path.inputStream
+import kotlin.io.path.*
 
 fun FileSystem.findAccessTransformers(): List<Path> {
     val transformers = mutableListOf<Path>()
@@ -30,7 +29,20 @@ fun FileSystem.findAccessTransformers(): List<Path> {
 
     val configPath = getPath("config.json")
     if (configPath.exists()) {
-        transformers.addAll(configPath.inputStream().use { json.decodeFromStream<UserdevConfig>(it) }.ats.map(::getPath))
+        val userdev = configPath.inputStream().use { json.decodeFromStream<UserdevConfig>(it) }
+
+        val accessTransformers =
+            userdev.ats.flatMap {
+                val path = getPath(it)
+
+                if (path.isDirectory()) {
+                    path.listDirectoryEntries()
+                } else {
+                    listOf(path)
+                }
+            }
+
+        transformers.addAll(accessTransformers)
     }
 
     return transformers

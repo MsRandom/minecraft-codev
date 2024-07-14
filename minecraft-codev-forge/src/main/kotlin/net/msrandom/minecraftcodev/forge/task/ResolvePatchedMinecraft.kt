@@ -15,6 +15,9 @@ import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.*
+import java.io.Closeable
+import java.io.OutputStream
+import java.io.PrintStream
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import kotlin.io.path.copyTo
@@ -22,15 +25,20 @@ import kotlin.io.path.isDirectory
 import kotlin.io.path.listDirectoryEntries
 import kotlin.io.path.writeLines
 
+@CacheableTask
 abstract class ResolvePatchedMinecraft : DefaultTask() {
     abstract val version: Property<String>
         @Input get
 
     abstract val clientMappings: RegularFileProperty
-        @InputFile get
+        @PathSensitive(PathSensitivity.RELATIVE)
+        @InputFile
+        get
 
     abstract val patches: ConfigurableFileCollection
-        @InputFiles get
+        @InputFiles
+        @PathSensitive(PathSensitivity.ABSOLUTE)
+        get
 
     abstract val output: RegularFileProperty
         @OutputFile get
@@ -39,14 +47,14 @@ abstract class ResolvePatchedMinecraft : DefaultTask() {
         output.convention(
             project.layout.file(
                 version.map {
-                    temporaryDir.resolve("$it.jar")
+                    temporaryDir.resolve("patched-$it.jar")
                 },
             ),
         )
     }
 
     @TaskAction
-    fun resolve() {
+    private fun resolve() {
         runBlocking {
             val metadata = project.extension<MinecraftCodevExtension>().getVersionList().version(version.get())
 
@@ -70,75 +78,98 @@ abstract class ResolvePatchedMinecraft : DefaultTask() {
             fun mcpAction(
                 name: String,
                 template: Map<String, Any>,
-            ) = McpAction(project, metadata, mcpConfigFile, mcpConfigFile.config.functions.getValue(name), template)
+                stdout: OutputStream?,
+            ) = McpAction(
+                project,
+                metadata,
+                mcpConfigFile,
+                mcpConfigFile.config.functions.getValue(name),
+                template,
+                stdout,
+            )
 
             val librariesFile = Files.createTempFile("libraries", ".txt")
 
             librariesFile.writeLines(libraries.flatMap { listOf("-e", it.absolutePath) })
 
-            val merge =
-                mcpAction(
-                    "merge",
-                    mapOf(
-                        "client" to clientJar,
-                        "server" to serverJar,
-                        "version" to version.get(),
-                    ),
-                )
-
-            val rename =
-                mcpAction(
-                    "rename",
-                    mapOf(
-                        "libraries" to librariesFile,
-                    ),
-                )
-
-            val patch = PatchMcpAction(project, metadata, mcpConfigFile, userdev)
-
-            val official = mcpConfigFile.config.official
-            val notchObf = userdev.config.notchObf
-
             val outputFile = output.get()
 
+            val patchLog = temporaryDir.resolve("patch.log").outputStream()
+            val renameLog = temporaryDir.resolve("rename.log").outputStream()
+
+            val logFiles = listOf(patchLog, renameLog)
+
             val patched =
-                if (official) {
-                    val mergeMappings =
+                try {
+                    val merge =
                         mcpAction(
-                            "mergeMappings",
+                            "merge",
                             mapOf(
-                                "official" to clientMappings,
+                                "client" to clientJar,
+                                "server" to serverJar,
+                                "version" to version.get(),
                             ),
+                            null,
                         )
 
-                    merge.execute()
-                        .let { merged ->
-                            mergeMappings.execute().let { mappings ->
-                                rename.execute("input" to merged, "mappings" to mappings)
+                    val rename =
+                        mcpAction(
+                            "rename",
+                            mapOf(
+                                "libraries" to librariesFile,
+                            ),
+                            renameLog,
+                        )
+
+                    val patch = PatchMcpAction(project, metadata, mcpConfigFile, userdev, patchLog)
+
+                    val official = mcpConfigFile.config.official
+                    val notchObf = userdev.config.notchObf
+
+                    if (official) {
+                        temporaryDir.resolve("patch.log").outputStream().use {
+                            val mergeMappings =
+                                mcpAction(
+                                    "mergeMappings",
+                                    mapOf(
+                                        "official" to clientMappings,
+                                    ),
+                                    it,
+                                )
+
+                            merge.execute()
+                                .let { merged ->
+                                    mergeMappings.execute().let { mappings ->
+                                        rename.execute("input" to merged, "mappings" to mappings)
+                                    }
+                                }
+                                .let(patch::execute)
+                        }
+                    } else {
+                        val inject =
+                            mcpAction(
+                                "mcinject",
+                                mapOf(
+                                    "log" to temporaryDir.resolve("mcinject.log"),
+                                ),
+                                null,
+                            )
+
+                        val base =
+                            if (notchObf) {
+                                merge.execute()
+                                    .let(patch::execute)
+                                    .let(rename::execute)
+                            } else {
+                                merge.execute()
+                                    .let(rename::execute)
+                                    .let(patch::execute)
                             }
-                        }
-                        .let(patch::execute)
-                } else {
-                    val inject =
-                        mcpAction(
-                            "mcinject",
-                            mapOf(
-                                "log" to outputFile.asFile.toPath().parent.resolve("mcinject.log"),
-                            ),
-                        )
 
-                    val base =
-                        if (notchObf) {
-                            merge.execute()
-                                .let(patch::execute)
-                                .let(rename::execute)
-                        } else {
-                            merge.execute()
-                                .let(rename::execute)
-                                .let(patch::execute)
-                        }
-
-                    inject.execute(base)
+                        inject.execute(base)
+                    }
+                } finally {
+                    logFiles.forEach(Closeable::close)
                 }
 
             val atFiles =
@@ -150,7 +181,7 @@ abstract class ResolvePatchedMinecraft : DefaultTask() {
                             if (path.isDirectory()) {
                                 path.listDirectoryEntries()
                             } else {
-                                path
+                                listOf(path)
                             }
 
                         paths.map {
@@ -163,15 +194,25 @@ abstract class ResolvePatchedMinecraft : DefaultTask() {
                     }
                 }
 
-            TransformerProcessor.main(
-                "--inJar",
-                patched.toAbsolutePath().toString(),
-                "--outJar",
-                outputFile.toString(),
-                *atFiles.flatMap {
-                    listOf("--atFile", it.toAbsolutePath().toString())
-                }.toTypedArray(),
-            )
+            val err = System.err
+
+            try {
+                temporaryDir.resolve("at.log").outputStream().use {
+                    System.setErr(PrintStream(it))
+
+                    TransformerProcessor.main(
+                        "--inJar",
+                        patched.toAbsolutePath().toString(),
+                        "--outJar",
+                        outputFile.toString(),
+                        *atFiles.flatMap { at ->
+                            listOf("--atFile", at.toAbsolutePath().toString())
+                        }.toTypedArray(),
+                    )
+                }
+            } finally {
+                System.setErr(err)
+            }
         }
     }
 }

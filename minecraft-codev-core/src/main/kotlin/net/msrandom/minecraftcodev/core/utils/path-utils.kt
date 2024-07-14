@@ -5,20 +5,9 @@ import java.nio.file.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.Lock
 import java.util.concurrent.locks.ReentrantLock
-import kotlin.io.path.copyTo
 import kotlin.streams.asSequence
 
 private val fileSystemLocks = ConcurrentHashMap<Path, ReentrantLock>()
-
-fun Path.createDeterministicCopy(
-    prefix: String,
-    suffix: String,
-): Path {
-    val path = Files.createTempFile(prefix, suffix)
-    copyTo(path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES)
-
-    return path
-}
 
 fun zipFileSystem(
     file: Path,

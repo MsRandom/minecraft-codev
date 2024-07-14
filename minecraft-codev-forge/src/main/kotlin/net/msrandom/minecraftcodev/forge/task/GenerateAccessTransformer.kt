@@ -32,7 +32,7 @@ abstract class GenerateAccessTransformer : DefaultTask() {
     }
 
     @TaskAction
-    fun generate() {
+    private fun generate() {
         val accessTransformers = AccessTransformSet.create()
 
         for (accessWidener in input) {

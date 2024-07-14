@@ -22,7 +22,7 @@ open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
         applyPlugin(target) {
             createSourceSetConfigurations(PATCHES_CONFIGURATION)
 
-            extension<MinecraftCodevExtension>().extensions.create("patched", PatchedMinecraftCodevExtension::class.java)
+            extension<MinecraftCodevExtension>().extensions.create("forge", MinecraftCodevForgeExtension::class.java)
 
             setupForgeAccessWidenerIntegration()
             setupForgeRemapperIntegration()

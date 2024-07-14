@@ -10,6 +10,7 @@ import org.gradle.api.artifacts.Dependency
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import kotlin.io.path.copyTo
+import kotlin.io.path.deleteIfExists
 import kotlin.io.path.exists
 import kotlin.io.path.notExists
 
@@ -18,6 +19,8 @@ suspend fun setupCommon(
     metadata: MinecraftVersionMetadata,
     output: Path? = null,
 ): List<String> {
+    output?.deleteIfExists()
+
     val (extractedServer, isBundled, libraries) = getExtractionState(project, metadata)!!
 
     return if (isBundled) {
@@ -46,7 +49,10 @@ suspend fun setupClient(
     output: Path,
     metadata: MinecraftVersionMetadata,
 ) {
+    output.deleteIfExists()
+
     val clientJarPath = clientJarPath(project, metadata.id)
+
     if (clientJarPath.exists()) {
         clientJarPath.copyTo(output)
 
@@ -92,14 +98,16 @@ fun rulesMatch(rules: List<MinecraftVersionMetadata.Rule>): Boolean {
     return allowed
 }
 
-fun getClientDependencies(
+fun getAllDependencies(metadata: MinecraftVersionMetadata) =
+    metadata.libraries.filter { rulesMatch(it.rules) }.map(MinecraftVersionMetadata.Library::name)
+
+suspend fun getClientDependencies(
     project: Project,
     metadata: MinecraftVersionMetadata,
 ): List<Dependency> {
-    val libs =
-        metadata.libraries.filter { rulesMatch(it.rules) }.map(MinecraftVersionMetadata.Library::name)
+    val (_, _, serverLibraries) = getExtractionState(project, metadata)!!
 
-    return libs.map(project.dependencies::create)
+    return (getAllDependencies(metadata) - serverLibraries.toSet()).map(project.dependencies::create)
 }
 
 fun getNatives(

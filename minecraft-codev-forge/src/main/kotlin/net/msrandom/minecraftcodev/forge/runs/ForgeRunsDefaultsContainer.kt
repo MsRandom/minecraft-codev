@@ -106,7 +106,9 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
 
             "modules" ->
                 config.modules.flatMapTo(mutableSetOf()) {
-                    project.configurations.detachedConfiguration(project.dependencies.create(it)).setTransitive(false)
+                    project.configurations
+                        .detachedConfiguration(project.dependencies.create(it))
+                        .setTransitive(false)
                 }.joinToString(File.pathSeparator)
 
             "MC_VERSION" -> manifest.id

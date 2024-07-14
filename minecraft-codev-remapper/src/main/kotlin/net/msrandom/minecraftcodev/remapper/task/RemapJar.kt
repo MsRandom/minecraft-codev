@@ -32,7 +32,6 @@ abstract class RemapJar : Jar() {
     abstract val classpath: ConfigurableFileCollection
         @InputFiles
         @CompileClasspath
-        @PathSensitive(PathSensitivity.NONE)
         get
 
     init {

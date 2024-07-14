@@ -45,7 +45,9 @@ private fun sha1ToBytes(sha1: String) =
         .map { it.toUByte(16).toByte() }
         .toByteArray()
 
-private suspend fun hashFile(file: Path): ByteArray =
+fun hashToString(hash: ByteArray) = hash.joinToString("") { it.toString(16) }
+
+suspend fun hashFile(file: Path): ByteArray =
     coroutineScope {
         runBlocking {
             file.inputStream().use { stream ->

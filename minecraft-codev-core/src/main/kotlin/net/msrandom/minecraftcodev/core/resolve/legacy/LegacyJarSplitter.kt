@@ -219,11 +219,17 @@ object LegacyJarSplitter {
         val outputCommon = commonJarPath(project, metadata.id)
         val outputClient = clientJarPath(project, metadata.id)
 
+        outputCommon.parent.createDirectories()
+        outputClient.parent.createDirectories()
+
+        outputCommon.deleteIfExists()
+        outputClient.deleteIfExists()
+
         useFileSystems { handle ->
             val clientFs = zipFileSystem(client).also(handle)
             val serverFs = zipFileSystem(server).also(handle)
-            val commonFs = zipFileSystem(outputCommon).also(handle)
-            val newClientFs = zipFileSystem(outputClient).also(handle)
+            val commonFs = zipFileSystem(outputCommon, create = true).also(handle)
+            val newClientFs = zipFileSystem(outputClient, create = true).also(handle)
 
             val extraCommonTypes = hashSetOf<Type>()
 

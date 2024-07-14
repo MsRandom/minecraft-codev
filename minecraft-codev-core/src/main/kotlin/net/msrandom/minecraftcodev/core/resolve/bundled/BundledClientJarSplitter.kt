@@ -19,6 +19,8 @@ object BundledClientJarSplitter {
         val client = downloadMinecraftClient(project, metadata)
         val outputClient = clientJarPath(project, metadata.id)
 
+        outputClient.parent.createDirectories()
+
         useFileSystems { handle ->
             val clientFs = zipFileSystem(client).also(handle)
             val serverFs = zipFileSystem(server).also(handle)
