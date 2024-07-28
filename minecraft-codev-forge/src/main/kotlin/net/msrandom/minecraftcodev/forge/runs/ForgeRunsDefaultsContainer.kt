@@ -19,6 +19,7 @@ import net.msrandom.minecraftcodev.runs.task.DownloadAssets
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
 import org.gradle.api.Action
 import org.gradle.api.artifacts.Configuration
+import org.gradle.api.file.FileCollection
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
@@ -58,7 +59,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
     private fun MinecraftRunConfiguration.addArgs(
         manifest: MinecraftVersionMetadata,
         config: UserdevConfig,
-        runtimeConfiguration: Configuration,
+        runtimeClasspath: FileCollection,
         arguments: MutableSet<MinecraftRunConfiguration.Argument>,
         existing: List<String>,
         extractNativesName: String,
@@ -71,7 +72,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
                         resolveTemplate(
                             manifest,
                             config,
-                            runtimeConfiguration,
+                            runtimeClasspath,
                             it.substring(1, it.length - 1),
                             extractNativesName,
                             downloadAssetsName,
@@ -87,7 +88,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
     private fun MinecraftRunConfiguration.resolveTemplate(
         manifest: MinecraftVersionMetadata,
         config: UserdevConfig,
-        runtimeConfiguration: Configuration,
+        runtimeClasspath: FileCollection,
         template: String,
         extractNativesName: String,
         downloadAssetsName: String,
@@ -212,7 +213,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
                 val path = project.layout.buildDirectory.dir("legacyClasspath").get().file("legacyClasspath.txt").asFile.toPath()
 
                 path.parent.createDirectories()
-                path.writeLines(runtimeConfiguration.map(File::getAbsolutePath))
+                path.writeLines(runtimeClasspath.map(File::getAbsolutePath))
 
                 path.toAbsolutePath().toString()
             }
@@ -252,13 +253,11 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
 
         mainClass.set(configProvider.map { it.getRun().main })
 
-        val zipped =
-            sourceSet.map(SourceSet::getRuntimeClasspathConfigurationName).flatMap(project.configurations::named)
-                .zip(manifestProvider) { config, manifest -> config to manifest }
-                .zip(configProvider) { (config, manifest), userdevConfig -> Triple(config, manifest, userdevConfig) }
+        val zipped = manifestProvider.zip(configProvider, ::Pair)
+        val runtimeClasspath = project.files(sourceSet.map(SourceSet::getRuntimeClasspath))
 
         environment.putAll(
-            zipped.map { (config, manifest, userdevConfig) ->
+            zipped.map { (manifest, userdevConfig) ->
                 buildMap {
                     for ((key, value) in userdevConfig.getRun().env) {
                         val argument =
@@ -267,7 +266,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
                                     resolveTemplate(
                                         manifest,
                                         userdevConfig,
-                                        config,
+                                        runtimeClasspath,
                                         value.substring(2, value.length - 1),
                                         extractNativesTaskName,
                                         downloadAssetsTaskName,
@@ -278,7 +277,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
                                     resolveTemplate(
                                         manifest,
                                         userdevConfig,
-                                        config,
+                                        runtimeClasspath,
                                         value.substring(1, value.length - 1),
                                         extractNativesTaskName,
                                         downloadAssetsTaskName,
@@ -295,13 +294,13 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
         )
 
         arguments.addAll(
-            zipped.map { (config, manifest, userdevConfig) ->
+            zipped.map { (manifest, userdevConfig) ->
                 val arguments = mutableSetOf<MinecraftRunConfiguration.Argument>()
 
                 addArgs(
                     manifest,
                     userdevConfig,
-                    config,
+                    runtimeClasspath,
                     arguments,
                     userdevConfig.getRun().args,
                     extractNativesTaskName,
@@ -317,11 +316,11 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
         )
 
         jvmArguments.addAll(
-            zipped.map { (config, manifest, userdevConfig) ->
+            zipped.map { (manifest, userdevConfig) ->
                 val run = userdevConfig.getRun()
                 val jvmArguments = mutableSetOf<MinecraftRunConfiguration.Argument>()
 
-                addArgs(manifest, userdevConfig, config, jvmArguments, run.jvmArgs, extractNativesTaskName, downloadAssetsTaskName)
+                addArgs(manifest, userdevConfig, runtimeClasspath, jvmArguments, run.jvmArgs, extractNativesTaskName, downloadAssetsTaskName)
 
                 for ((key, value) in run.props) {
                     if (value.startsWith('{')) {
@@ -329,7 +328,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
                         jvmArguments.add(
                             MinecraftRunConfiguration.Argument(
                                 "-D$key=",
-                                resolveTemplate(manifest, userdevConfig, config, template, extractNativesTaskName, downloadAssetsTaskName),
+                                resolveTemplate(manifest, userdevConfig, runtimeClasspath, template, extractNativesTaskName, downloadAssetsTaskName),
                             ),
                         )
                     } else {

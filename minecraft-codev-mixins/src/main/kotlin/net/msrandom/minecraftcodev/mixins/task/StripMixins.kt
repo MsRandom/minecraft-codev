@@ -7,27 +7,44 @@ import net.msrandom.minecraftcodev.mixins.MixinsExtension
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.FileCollection
 import org.gradle.api.tasks.*
-import kotlin.io.path.deleteExisting
+import org.gradle.work.ChangeType
+import org.gradle.work.InputChanges
+import java.nio.file.StandardCopyOption
+import kotlin.io.path.*
 
 @CacheableTask
-abstract class RemoveJarMixins : DefaultTask() {
+abstract class StripMixins : DefaultTask() {
     abstract val inputFiles: ConfigurableFileCollection
         @InputFiles
         @Classpath
+        @SkipWhenEmpty
         get
 
     abstract val outputDirectory: DirectoryProperty
         @OutputDirectory get
+
+    val outputFiles: FileCollection
+        @OutputFiles get() = project.fileTree(outputDirectory)
 
     init {
         outputDirectory.convention(project.layout.dir(project.provider { temporaryDir }))
     }
 
     @TaskAction
-    private fun removeMixins() {
-        for (input in inputFiles) {
-            val input = input.toPath()
+    private fun removeMixins(inputChanges: InputChanges) {
+        for (fileChange in inputChanges.getFileChanges(inputFiles)) {
+            val input = fileChange.file.toPath()
+            val output = outputDirectory.asFile.get().toPath().resolve("${input.nameWithoutExtension}-no-mixins.${input.extension}")
+
+            if (fileChange.changeType == ChangeType.MODIFIED) {
+                output.deleteExisting()
+            } else if (fileChange.changeType == ChangeType.REMOVED) {
+                output.deleteExisting()
+
+                continue
+            }
 
             val handler =
                 zipFileSystem(input).use {
@@ -44,14 +61,13 @@ abstract class RemoveJarMixins : DefaultTask() {
                 }
 
             if (handler == null) {
-                outputs.file(input)
+                output.deleteIfExists()
+                output.createSymbolicLinkPointingTo(input)
 
                 continue
             }
 
-            val output = outputDirectory.asFile.get().toPath().resolve(input.fileName)
-
-            outputs.file(output)
+            input.copyTo(output, StandardCopyOption.COPY_ATTRIBUTES)
 
             zipFileSystem(output).use {
                 val root = it.base.getPath("/")

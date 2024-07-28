@@ -92,6 +92,8 @@ class GradleMixinService : MixinServiceAbstract() {
                 name: String,
                 runTransformers: Boolean,
             ) = getClassNode(name)
+
+            override fun getClassNode(name: String, runTransformers: Boolean, readerFlags: Int) = getClassNode(name)
         }
 
     override fun getTransformerProvider() = null
@@ -111,6 +113,10 @@ class GradleMixinService : MixinServiceAbstract() {
 
     override fun getPrimaryContainer() =
         object : IContainerHandle {
+            override fun getId() = "codev"
+
+            override fun getDescription() = "Minecraft Codev Dummy Mixin Container"
+
             override fun getAttribute(name: String?) = null
 
             override fun getNestedContainers() = emptyList<IContainerHandle>()

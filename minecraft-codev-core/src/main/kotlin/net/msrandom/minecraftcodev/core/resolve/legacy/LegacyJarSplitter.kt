@@ -282,7 +282,7 @@ object LegacyJarSplitter {
                             )
                         }
                     } else {
-                        newClientFs.base.getPath(pathName).deleteExisting()
+                        newClientFs.base.getPath(pathName).deleteIfExists()
                     }
                 }
             }

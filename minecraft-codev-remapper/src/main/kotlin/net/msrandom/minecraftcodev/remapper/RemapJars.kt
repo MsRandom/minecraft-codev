@@ -1,13 +1,17 @@
 package net.msrandom.minecraftcodev.remapper
 
+import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
+import net.msrandom.minecraftcodev.core.utils.cacheExpensiveOperation
 import net.msrandom.minecraftcodev.core.utils.extension
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.FileCollection
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.*
-import kotlin.io.path.extension
-import kotlin.io.path.nameWithoutExtension
+import org.gradle.work.ChangeType
+import org.gradle.work.InputChanges
+import kotlin.io.path.*
 
 @CacheableTask
 abstract class RemapJars : DefaultTask() {
@@ -25,6 +29,7 @@ abstract class RemapJars : DefaultTask() {
     abstract val inputFiles: ConfigurableFileCollection
         @InputFiles
         @Classpath
+        @SkipWhenEmpty
         get
 
     abstract val classpath: ConfigurableFileCollection
@@ -32,8 +37,14 @@ abstract class RemapJars : DefaultTask() {
         @InputFiles
         get
 
+    abstract val filterMods: Property<Boolean>
+        @Input get
+
     abstract val outputDirectory: DirectoryProperty
         @OutputDirectory get
+
+    val outputFiles: FileCollection
+        @OutputFiles get() = project.fileTree(outputDirectory)
 
     init {
         outputDirectory.convention(project.layout.dir(project.provider { temporaryDir }))
@@ -42,40 +53,53 @@ abstract class RemapJars : DefaultTask() {
     init {
         run {
             targetNamespace.convention(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
+
+            filterMods.convention(true)
         }
     }
 
     @TaskAction
-    private fun remapJars() {
-        val remapperExtension = project.extension<RemapperExtension>()
+    private fun remapJars(inputs: InputChanges) {
+        val remapperExtension = project.extension<MinecraftCodevExtension>().extension<RemapperExtension>()
 
-        for (input in inputFiles) {
-            val input = input.toPath()
+        for (fileChange in inputs.getFileChanges(inputFiles)) {
+            val input = fileChange.file.toPath()
 
-            if (!remapperExtension.isMod(input)) {
-                outputs.file(input)
+            val output =
+                outputDirectory.asFile.get().toPath().resolve(
+                    "${input.nameWithoutExtension}-${targetNamespace.get()}.${input.extension}",
+                )
+
+            if (fileChange.changeType == ChangeType.REMOVED) {
+                output.deleteIfExists()
+
+                continue
+            } else if (fileChange.changeType == ChangeType.MODIFIED) {
+                output.deleteExisting()
+            }
+
+            if (filterMods.get() && !remapperExtension.isMod(input)) {
+                output.createSymbolicLinkPointingTo(input)
 
                 return
             }
 
-            val sourceNamespace = sourceNamespace.get()
-            val targetNamespace = targetNamespace.get()
+            project.cacheExpensiveOperation("remapped", mappings + inputFiles + classpath, output) {
+                val sourceNamespace = sourceNamespace.get()
+                val targetNamespace = targetNamespace.get()
 
-            val mappings = remapperExtension.loadMappings(mappings)
+                val mappings = remapperExtension.loadMappings(mappings)
 
-            val output = outputDirectory.asFile.get().toPath().resolve("${input.nameWithoutExtension}-${targetNamespace}.${input.extension}")
-
-            outputs.file(output)
-
-            JarRemapper.remap(
-                remapperExtension,
-                mappings,
-                sourceNamespace,
-                targetNamespace,
-                input,
-                output,
-                classpath,
-            )
+                JarRemapper.remap(
+                    remapperExtension,
+                    mappings,
+                    sourceNamespace,
+                    targetNamespace,
+                    input,
+                    output,
+                    classpath,
+                )
+            }
         }
     }
 }

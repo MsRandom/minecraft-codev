@@ -12,7 +12,7 @@ data class FabricInstaller(
         val client: List<FabricLibrary>,
         val common: List<FabricLibrary>,
         val server: List<FabricLibrary>,
-        val development: List<FabricLibrary>,
+        val development: List<FabricLibrary> = emptyList(),
     )
 
     @Serializable

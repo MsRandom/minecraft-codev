@@ -56,7 +56,7 @@ constructor(private val project: Project) {
         runBlocking {
             val metadata = project.extension<MinecraftCodevExtension>().getVersionList().version(version)
 
-            setupCommon(project, metadata, null).map(project.dependencies::create)
+            it + setupCommon(project, metadata, null).map(project.dependencies::create)
         }
     }
 
@@ -68,7 +68,7 @@ constructor(private val project: Project) {
         runBlocking {
             val metadata = project.extension<MinecraftCodevExtension>().getVersionList().version(version)
 
-            getClientDependencies(project, metadata)
+            it + getClientDependencies(project, metadata)
         }
     }
 }

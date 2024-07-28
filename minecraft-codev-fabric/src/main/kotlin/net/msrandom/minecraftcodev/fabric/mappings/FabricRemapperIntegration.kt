@@ -48,17 +48,21 @@ private fun readTiny(
             }
 
         val namespaceCompleter =
-            if (MinecraftCodevFabricPlugin.INTERMEDIARY_MAPPINGS_NAMESPACE in parts && data.visitor.tree.getNamespaceId(
-                    MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE,
-                ) == MappingTreeView.NULL_NAMESPACE_ID
-            ) {
-                MappingNsCompleter(
-                    data.visitor.tree,
-                    mapOf(
-                        MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE to MinecraftCodevFabricPlugin.INTERMEDIARY_MAPPINGS_NAMESPACE,
-                    ),
-                    true,
-                )
+            if (MinecraftCodevFabricPlugin.INTERMEDIARY_MAPPINGS_NAMESPACE in parts) {
+                if (
+                    data.visitor.tree.dstNamespaces == null ||
+                    data.visitor.tree.getNamespaceId(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE) == MappingTreeView.NULL_NAMESPACE_ID
+                ) {
+                    MappingNsCompleter(
+                        data.visitor.tree,
+                        mapOf(
+                            MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE to MinecraftCodevFabricPlugin.INTERMEDIARY_MAPPINGS_NAMESPACE,
+                        ),
+                        true,
+                    )
+                } else {
+                    data.visitor.tree
+                }
             } else {
                 data.visitor.tree
             }

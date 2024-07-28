@@ -12,7 +12,7 @@ gradlePlugin {
 }
 
 dependencies {
-    implementation(group = "org.spongepowered", name = "mixin", version = "0.8.5")
+    api(group = "net.fabricmc", name = "sponge-mixin", version = "0.15.0+mixin.0.8.7")
 
     implementation(projects.minecraftCodevCore)
 }

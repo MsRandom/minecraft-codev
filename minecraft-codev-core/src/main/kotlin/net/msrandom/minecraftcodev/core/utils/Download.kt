@@ -39,38 +39,6 @@ private fun getResourceRepository(transportFactory: RepositoryTransportFactory) 
         ).repository
     }
 
-private fun sha1ToBytes(sha1: String) =
-    sha1
-        .windowed(2, 2, true)
-        .map { it.toUByte(16).toByte() }
-        .toByteArray()
-
-fun hashToString(hash: ByteArray) = hash.joinToString("") { it.toString(16) }
-
-suspend fun hashFile(file: Path): ByteArray =
-    coroutineScope {
-        runBlocking {
-            file.inputStream().use { stream ->
-                val sha1Hash = MessageDigest.getInstance("SHA-1")
-
-                val buffer = ByteArray(8192)
-
-                var read: Int
-
-                while (stream.read(buffer).also { read = it } > 0) {
-                    sha1Hash.update(buffer, 0, read)
-                }
-
-                sha1Hash.digest()
-            }
-        }
-    }
-
-suspend fun checkHash(
-    file: Path,
-    expectedHash: String,
-) = hashFile(file) contentEquals sha1ToBytes(expectedHash)
-
 private suspend fun fetchResource(
     uri: URI,
     repository: ExternalResourceRepository,
