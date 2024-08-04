@@ -46,12 +46,12 @@ abstract class ExtractIncludes : DefaultTask() {
             runBlocking {
                 inputFiles.map {
                     async {
-                        stringHashFile(it.toPath())
+                        hashFile(it.toPath())
                     }
                 }.awaitAll().toHashSet()
             }
 
-        for (fileChange in inputChanges.getFileChanges(inputFiles)) {
+        CHANGE@for (fileChange in inputChanges.getFileChanges(inputFiles)) {
             val input = fileChange.file.toPath()
             val outputDirectory = outputDirectory.asFile.get().toPath().resolve(input.nameWithoutExtension)
 
@@ -80,7 +80,7 @@ abstract class ExtractIncludes : DefaultTask() {
                             output.deleteIfExists()
                             output.createSymbolicLinkPointingTo(input)
 
-                            return
+                            return@use null
                         }
 
                     runBlocking {
@@ -89,7 +89,7 @@ abstract class ExtractIncludes : DefaultTask() {
                                 val path = it.base.getPath(includedJar.path)
                                 val includeOutput = outputDirectory.resolve(path.fileName.toString())
 
-                                val hash = stringHashFile(path)
+                                val hash = hashFile(path)
 
                                 if (hash !in inputHashes) {
                                     path.copyTo(includeOutput, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
@@ -99,7 +99,7 @@ abstract class ExtractIncludes : DefaultTask() {
                     }
 
                     handler
-                }
+                } ?: continue
 
             input.copyTo(output, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
 

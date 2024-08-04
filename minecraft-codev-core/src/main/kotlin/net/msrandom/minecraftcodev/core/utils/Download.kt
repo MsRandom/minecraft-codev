@@ -1,5 +1,6 @@
 package net.msrandom.minecraftcodev.core.utils
 
+import com.google.common.hash.HashCode
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import org.gradle.api.GradleException
@@ -89,7 +90,7 @@ private suspend fun getCachedResource(
     if (!alwaysRefresh) {
         val hash = externalResource.metaData?.sha1?.toByteArray()
 
-        if (hash != null && hash contentEquals hashFile(output)) {
+        if (hash != null && HashCode.fromBytes(hash) == hashFile(output)) {
             return null
         }
     }

@@ -1,5 +1,6 @@
 package net.msrandom.minecraftcodev.core.utils
 
+import com.google.common.hash.HashCode
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
@@ -41,12 +42,12 @@ fun Project.cacheExpensiveOperation(
     prefix: String,
     inputFiles: Iterable<File>,
     outputPath: Path,
-    action: () -> Unit,
+    action: (Path) -> Unit,
 ) {
     val hashes =
         runBlocking {
             inputFiles.map {
-                async { hashFile(it.toPath()).toList() }
+                async { hashFile(it.toPath()).asBytes().toList() }
             }.awaitAll()
         }
 
@@ -55,14 +56,16 @@ fun Project.cacheExpensiveOperation(
             acc.zip(bytes).map { (a, b) -> (b + a * 31).toByte() }
         }.toByteArray()
 
+    val directoryName = HashCode.fromBytes(cumulativeHash).toString()
+
     val cacheDirectory =
         getCacheDirectory(project)
             .resolve("cached-operations")
             .resolve(prefix)
-            .resolve(hashToString(cumulativeHash))
+            .resolve(directoryName)
 
     val cachedOutput = cacheDirectory.resolve(outputPath.fileName)
-    val completionMarker = cacheDirectory.resolve("valid-marker")
+    val completionMarker = cacheDirectory.resolve("$directoryName-valid-marker")
 
     if (completionMarker.exists()) {
         outputPath.deleteIfExists()
@@ -75,7 +78,7 @@ fun Project.cacheExpensiveOperation(
 
     cachedOutput.deleteIfExists()
 
-    action()
+    action(cachedOutput)
 
     completionMarker.createFile()
 

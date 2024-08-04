@@ -125,7 +125,7 @@ abstract class Mixin : DefaultTask() {
             }
 
             project.cacheExpensiveOperation("mixin", classpath + mixinFiles + project.files(input), output) {
-                mixin(input, output)
+                mixin(input, it)
             }
         }
     }

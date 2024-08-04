@@ -10,10 +10,9 @@ import java.nio.file.Path
 object SourcesGenerator {
     fun decompile(
         input: Path,
+        output: Path,
         classpath: Collection<Path>,
-    ): Path {
-        val output = Files.createTempFile("sources", ".tmp.jar")
-
+    ) {
         val decompiler =
             BaseDecompiler(
                 SingleFileSaver(output.toFile()),
@@ -39,7 +38,5 @@ object SourcesGenerator {
         decompiler.addSource(input.toFile())
 
         decompiler.decompileContext()
-
-        return output
     }
 }

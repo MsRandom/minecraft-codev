@@ -1,5 +1,6 @@
 package net.msrandom.minecraftcodev.core.utils
 
+import com.google.common.hash.HashCode
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import java.nio.file.Path
@@ -7,30 +8,9 @@ import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.inputStream
 
-private val hashCache = ConcurrentHashMap<Path, ByteArray>()
-private val stringHashCache = ConcurrentHashMap<Path, String>()
+private val hashCache = ConcurrentHashMap<Path, HashCode>()
 
-private fun sha1ToBytes(sha1: String) =
-    sha1
-        .windowed(2, 2, true)
-        .map { it.toUByte(16).toByte() }
-        .toByteArray()
-
-fun hashToString(hash: ByteArray) = hash.joinToString("") { it.toString(16) }
-
-suspend fun stringHashFile(file: Path): String {
-    stringHashCache[file]?.let {
-        return it
-    }
-
-    val hash = hashToString(hashFile(file))
-
-    stringHashCache[file] = hash
-
-    return hash
-}
-
-suspend fun hashFile(file: Path): ByteArray {
+suspend fun hashFile(file: Path): HashCode {
     hashCache[file]?.let {
         return it
     }
@@ -49,7 +29,7 @@ suspend fun hashFile(file: Path): ByteArray {
                         sha1Hash.update(buffer, 0, read)
                     }
 
-                    sha1Hash.digest()
+                    HashCode.fromBytes(sha1Hash.digest())
                 }
             }
 
@@ -62,4 +42,4 @@ suspend fun hashFile(file: Path): ByteArray {
 suspend fun checkHash(
     file: Path,
     expectedHash: String,
-) = hashFile(file) contentEquals sha1ToBytes(expectedHash)
+) = hashFile(file) == HashCode.fromString(expectedHash)

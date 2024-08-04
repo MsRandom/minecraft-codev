@@ -1,8 +1,11 @@
-package net.msrandom.minecraftcodev.remapper
+package net.msrandom.minecraftcodev.remapper.task
 
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.utils.cacheExpensiveOperation
 import net.msrandom.minecraftcodev.core.utils.extension
+import net.msrandom.minecraftcodev.remapper.JarRemapper
+import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
+import net.msrandom.minecraftcodev.remapper.RemapperExtension
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
@@ -14,7 +17,7 @@ import org.gradle.work.InputChanges
 import kotlin.io.path.*
 
 @CacheableTask
-abstract class RemapJars : DefaultTask() {
+abstract class Remap : DefaultTask() {
     abstract val mappings: ConfigurableFileCollection
         @InputFiles
         @PathSensitive(PathSensitivity.RELATIVE)
@@ -84,7 +87,7 @@ abstract class RemapJars : DefaultTask() {
                 return
             }
 
-            project.cacheExpensiveOperation("remapped", mappings + inputFiles + classpath, output) {
+            project.cacheExpensiveOperation("remapped", mappings + classpath + project.files(input), output) {
                 val sourceNamespace = sourceNamespace.get()
                 val targetNamespace = targetNamespace.get()
 
@@ -96,7 +99,7 @@ abstract class RemapJars : DefaultTask() {
                     sourceNamespace,
                     targetNamespace,
                     input,
-                    output,
+                    it,
                     classpath,
                 )
             }
