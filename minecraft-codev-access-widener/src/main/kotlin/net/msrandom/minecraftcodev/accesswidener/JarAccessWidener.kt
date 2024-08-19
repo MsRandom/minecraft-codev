@@ -41,7 +41,7 @@ abstract class AccessWiden : DefaultTask() {
         @OutputDirectory get
 
     val outputFiles: FileCollection
-        @OutputFiles get() = project.fileTree(outputDirectory)
+        @Internal get() = project.fileTree(outputDirectory)
 
     init {
         outputDirectory.convention(project.layout.dir(project.provider { temporaryDir }))

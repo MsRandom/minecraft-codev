@@ -65,13 +65,36 @@ fun Project.cacheExpensiveOperation(
             .resolve(directoryName)
 
     val cachedOutput = cacheDirectory.resolve(outputPath.fileName)
-    val completionMarker = cacheDirectory.resolve("$directoryName-valid-marker")
+    val completionMarker = cacheDirectory.resolve("${outputPath.fileName}-valid-marker")
 
     if (completionMarker.exists()) {
-        outputPath.deleteIfExists()
-        outputPath.createSymbolicLinkPointingTo(cachedOutput)
+        if (outputPath.isSymbolicLink()) {
+            val link = outputPath.readSymbolicLink()
 
-        return
+            if (link == cachedOutput) {
+                if (cachedOutput.exists()) {
+                    return
+                }
+
+                outputPath.deleteIfExists()
+            } else {
+                outputPath.deleteIfExists()
+
+                if (cachedOutput.exists()) {
+                    outputPath.createSymbolicLinkPointingTo(cachedOutput)
+
+                    return
+                }
+            }
+        } else {
+            outputPath.deleteIfExists()
+
+            if (cachedOutput.exists()) {
+                outputPath.createSymbolicLinkPointingTo(cachedOutput)
+
+                return
+            }
+        }
     }
 
     cacheDirectory.createDirectories()
@@ -80,7 +103,10 @@ fun Project.cacheExpensiveOperation(
 
     action(cachedOutput)
 
-    completionMarker.createFile()
+    if (completionMarker.notExists()) {
+        completionMarker.createFile()
+    }
 
+    outputPath.deleteIfExists()
     outputPath.createSymbolicLinkPointingTo(cachedOutput)
 }

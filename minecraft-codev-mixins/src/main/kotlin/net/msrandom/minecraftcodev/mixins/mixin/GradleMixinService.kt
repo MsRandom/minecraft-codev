@@ -82,18 +82,21 @@ class GradleMixinService : MixinServiceAbstract() {
 
     override fun getBytecodeProvider() =
         object : IClassBytecodeProvider {
-            override fun getClassNode(name: String) =
-                getResourceAsStream(name.replace('.', '/') + ".class")
-                    ?.use(::ClassReader)
-                    ?.let { reader -> ClassNode().also { reader.accept(it, 0) } }
-                    ?: throw FileNotFoundException(name)
+            override fun getClassNode(name: String) = getClassNode(name, true)
 
             override fun getClassNode(
                 name: String,
                 runTransformers: Boolean,
-            ) = getClassNode(name)
+            ) = getClassNode(name, runTransformers, 0)
 
-            override fun getClassNode(name: String, runTransformers: Boolean, readerFlags: Int) = getClassNode(name)
+            override fun getClassNode(
+                name: String,
+                runTransformers: Boolean,
+                readerFlags: Int,
+            ) = getResourceAsStream(name.replace('.', '/') + ".class")
+                ?.use(::ClassReader)
+                ?.let { reader -> ClassNode().also { reader.accept(it, readerFlags) } }
+                ?: throw FileNotFoundException(name)
         }
 
     override fun getTransformerProvider() = null
