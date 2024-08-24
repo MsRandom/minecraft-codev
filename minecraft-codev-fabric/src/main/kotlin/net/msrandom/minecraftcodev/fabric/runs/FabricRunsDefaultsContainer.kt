@@ -72,9 +72,7 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
 
             val downloadAssetsTask =
                 sourceSet.flatMap {
-                    project.tasks.withType(DownloadAssets::class.java).named(it.downloadAssetsTaskName) {
-                        it.useAssetIndex(assetIndex.get())
-                    }
+                    project.tasks.withType(DownloadAssets::class.java).named(it.downloadAssetsTaskName)
                 }
 
             val nativesDirectory = extractNativesTask.flatMap(ExtractNatives::destinationDirectory).map(Directory::getAsFile)

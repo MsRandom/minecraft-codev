@@ -2,6 +2,7 @@ package net.msrandom.minecraftcodev.core.utils
 
 import com.google.common.hash.HashCode
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import org.gradle.api.GradleException
 import org.gradle.api.InvalidUserCodeException
@@ -42,7 +43,7 @@ private suspend fun fetchResource(
     uri: URI,
     repository: ExternalResourceRepository,
 ): ExternalResource =
-    withContext(Dispatchers.IO) {
+    coroutineScope {
         repository.resource(ExternalResourceName(uri))
     }
 
@@ -105,9 +106,11 @@ suspend fun download(
 
     val repository = getResourceRepository(transportFactory)
 
-    val resource = getCachedResource(project, uri, sha1, repository, output, alwaysRefresh) ?: return
+    withContext(Dispatchers.IO) {
+        val resource = getCachedResource(project, uri, sha1, repository, output, alwaysRefresh) ?: return@withContext
 
-    output.parent.createDirectories()
+        output.parent.createDirectories()
 
-    resource.writeTo(output.toFile())
+        resource.writeTo(output.toFile())
+    }
 }

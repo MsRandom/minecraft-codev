@@ -98,8 +98,6 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
             "assets_root" -> {
                 val task = project.tasks.withType(DownloadAssets::class.java).getByName(downloadAssetsName)
 
-                task.useAssetIndex(manifest.assetIndex)
-
                 beforeRun.add(task)
 
                 project.extension<MinecraftCodevExtension>().extension<RunsContainer>().assetsDirectory.asFile

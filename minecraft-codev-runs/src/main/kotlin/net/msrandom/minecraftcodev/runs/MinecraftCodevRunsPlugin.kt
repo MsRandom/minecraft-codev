@@ -9,6 +9,7 @@ import net.msrandom.minecraftcodev.runs.task.DownloadAssets
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
 import org.apache.commons.lang3.StringUtils
 import org.gradle.api.Plugin
+import org.gradle.api.artifacts.Configuration
 import org.gradle.api.plugins.ApplicationPlugin
 import org.gradle.api.plugins.PluginAware
 import org.gradle.api.tasks.JavaExec
@@ -22,31 +23,19 @@ class MinecraftCodevRunsPlugin<T : PluginAware> : Plugin<T> {
             val cache = getCacheDirectory(this)
             val logging: Path = cache.resolve("logging")
 
-            fun addNativesConfiguration(nativesConfigurationName: String) =
-                configurations.maybeCreate(nativesConfigurationName).apply {
-                    isCanBeConsumed = false
-                }
-
             fun addSourceElements(
-                nativesConfigurationName: String,
                 extractNativesTaskName: String,
                 downloadAssetsTaskName: String,
             ) {
-                val configuration = addNativesConfiguration(nativesConfigurationName)
-
-                tasks.register(extractNativesTaskName, ExtractNatives::class.java) {
-                    it.natives.set(configuration)
-                }
-
-                tasks.register(downloadAssetsTaskName, DownloadAssets::class.java) { task ->
-                    val fileName = if (name.isEmpty()) "${SourceSet.MAIN_SOURCE_SET_NAME}.json" else "$name.json"
-
-                    task.assetIndexFile.set(layout.buildDirectory.dir("assetIndices").map { it.file(fileName) })
-                }
+                tasks.register(extractNativesTaskName, ExtractNatives::class.java)
+                tasks.register(downloadAssetsTaskName, DownloadAssets::class.java)
             }
 
             createSourceSetElements {
-                addSourceElements(it.nativesConfigurationName, it.extractNativesTaskName, it.downloadAssetsTaskName)
+                addSourceElements(
+                    it.extractNativesTaskName,
+                    it.downloadAssetsTaskName,
+                )
             }
 
             val runs =
@@ -96,10 +85,4 @@ class MinecraftCodevRunsPlugin<T : PluginAware> : Plugin<T> {
                 }
             }
         }
-
-    companion object {
-        const val NATIVES_CONFIGURATION = "natives"
-        const val EXTRACT_NATIVES_TASK = "extractNatives"
-        const val DOWNLOAD_ASSETS_TASK = "downloadAssets"
-    }
 }

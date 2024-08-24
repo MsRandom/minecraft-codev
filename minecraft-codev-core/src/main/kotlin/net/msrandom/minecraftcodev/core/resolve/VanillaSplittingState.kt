@@ -110,26 +110,6 @@ suspend fun getClientDependencies(
     return (getAllDependencies(metadata) - serverLibraries.toSet()).map(project.dependencies::create)
 }
 
-fun getNatives(
-    project: Project,
-    metadata: MinecraftVersionMetadata,
-): List<Dependency> {
-    val libs =
-        metadata.libraries.filter { library ->
-            if (library.natives.isEmpty()) {
-                return@filter false
-            }
-
-            rulesMatch(library.rules)
-        }.map {
-            val classifier = it.natives.getValue(osName())
-
-            project.dependencies.create("${it.name}:$classifier")
-        }
-
-    return libs
-}
-
 private fun osMatches(os: OperatingSystem): Boolean {
     if (os.name != null && os.name != osName()) {
         return false

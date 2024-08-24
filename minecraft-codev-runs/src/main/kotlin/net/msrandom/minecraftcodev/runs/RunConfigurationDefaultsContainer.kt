@@ -37,8 +37,10 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
                 }
 
             val downloadAssetsTask =
-                project.tasks.withType(DownloadAssets::class.java)
-                    .getByName(sourceSet.get().downloadAssetsTaskName)
+                sourceSet.flatMap {
+                    project.tasks.withType(DownloadAssets::class.java)
+                        .named(it.downloadAssetsTaskName)
+                }
 
             beforeRun.add(extractNativesTask)
             beforeRun.add(downloadAssetsTask)
@@ -68,15 +70,11 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
                                     when (value.subSequence(2, value.length - 1)) {
                                         "version_name" -> fixedArguments.add(MinecraftRunConfiguration.Argument(it.id))
                                         "assets_root" -> {
-                                            downloadAssetsTask.useAssetIndex(it.assetIndex)
-
                                             fixedArguments.add(MinecraftRunConfiguration.Argument(runs.assetsDirectory.asFile.get()))
                                         }
 
                                         "assets_index_name" -> fixedArguments.add(MinecraftRunConfiguration.Argument(it.assets))
                                         "game_assets" -> {
-                                            downloadAssetsTask.useAssetIndex(it.assetIndex)
-
                                             fixedArguments.add(MinecraftRunConfiguration.Argument(runs.resourcesDirectory.asFile.get()))
                                         }
 

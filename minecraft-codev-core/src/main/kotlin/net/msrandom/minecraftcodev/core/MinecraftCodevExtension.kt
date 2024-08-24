@@ -3,7 +3,6 @@ package net.msrandom.minecraftcodev.core
 import kotlinx.coroutines.runBlocking
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionList
 import net.msrandom.minecraftcodev.core.resolve.getClientDependencies
-import net.msrandom.minecraftcodev.core.resolve.getNatives
 import net.msrandom.minecraftcodev.core.resolve.setupCommon
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Dependency
@@ -50,13 +49,6 @@ abstract class MinecraftCodevExtension(private val project: Project) : Extension
         project.provider {
             runBlocking {
                 getClientDependencies(project, getVersionList().version(version))
-            }
-        }
-
-    fun nativeDependencies(version: String): Provider<List<Dependency>> =
-        project.provider {
-            runBlocking {
-                getNatives(project, getVersionList().version(version))
             }
         }
 }

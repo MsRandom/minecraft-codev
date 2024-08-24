@@ -1,12 +1,14 @@
 package net.msrandom.minecraftcodev.runs.task
 
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromStream
-import net.msrandom.minecraftcodev.core.LibraryData
+import kotlinx.coroutines.*
+import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
+import net.msrandom.minecraftcodev.core.resolve.rulesMatch
+import net.msrandom.minecraftcodev.core.utils.extension
+import net.msrandom.minecraftcodev.core.utils.osName
 import net.msrandom.minecraftcodev.core.utils.walk
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.gradle.api.DefaultTask
-import org.gradle.api.artifacts.Configuration
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.file.Directory
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
@@ -22,68 +24,77 @@ import kotlin.io.path.isRegularFile
 
 @CacheableTask
 abstract class ExtractNatives : DefaultTask() {
-    abstract val natives: Property<Configuration>
+    abstract val version: Property<String>
         @Input get
 
     val destinationDirectory: Provider<Directory>
         @OutputDirectory
         get() = project.layout.dir(project.provider { temporaryDir })
 
-    init {
-        run {
-            natives.finalizeValueOnRead()
-        }
-    }
-
     @TaskAction
     private fun extract() {
-        val natives = natives.get()
         val output = destinationDirectory.get().asFile.toPath()
 
-        val rules = mutableListOf<LibraryData.Native>()
+        runBlocking {
+            val metadata = project.extension<MinecraftCodevExtension>().getVersionList().version(version.get())
 
-        for (file in natives) {
-            if (file.extension == "json") {
-                val native =
-                    file.inputStream().use {
-                        Json.decodeFromStream<LibraryData.Native>(it)
+            val libs =
+                metadata.libraries.filter { library ->
+                    if (library.natives.isEmpty()) {
+                        return@filter false
                     }
 
-                rules.add(native)
-            }
-        }
+                    rulesMatch(library.rules)
+                }.associate {
+                    val classifier = it.natives.getValue(osName())
 
-        for (rule in rules) {
-            val artifacts =
-                natives.resolvedConfiguration.resolvedArtifacts.filter {
-                    it.moduleVersion.id.group == rule.library.group && it.moduleVersion.id.name == rule.library.module && it.moduleVersion.id.version == rule.library.version
+                    project.dependencies.create("${it.name}:$classifier") to it.extract
                 }
 
-            val exclude = rule.extractData?.exclude.orEmpty()
+            withContext(Dispatchers.IO) {
+                val config = project.configurations.detachedConfiguration(*libs.keys.toTypedArray())
 
-            for (artifact in artifacts) {
-                val extension = artifact.extension
-                if (extension == "jar" || extension == "zip") {
-                    zipFileSystem(artifact.file.toPath()).use {
-                        val root = it.base.getPath("/")
-                        root.walk {
-                            for (path in filter(Path::isRegularFile)) {
-                                val name = root.relativize(path).toString()
-                                if (exclude.none(name::startsWith)) {
-                                    val outputPath = output.resolve(name)
-                                    outputPath.parent?.createDirectories()
+                val fileResolution = libs.flatMap { (dependency, extractionRules) ->
+                    val artifactView = config.incoming.artifactView { view ->
+                        view.componentFilter {
+                            it is ModuleComponentIdentifier &&
+                                    it.group == dependency.group &&
+                                    it.module == dependency.name &&
+                                    it.version == dependency.version
+                        }
+                    }
 
-                                    path.copyTo(outputPath, StandardCopyOption.REPLACE_EXISTING)
+                    val exclude = extractionRules?.exclude.orEmpty()
+
+                    artifactView.artifacts.artifactFiles.map { artifact ->
+                        async {
+                            val extension = artifact.extension
+                            if (extension == "jar" || extension == "zip") {
+                                zipFileSystem(artifact.toPath()).use {
+                                    val root = it.base.getPath("/")
+                                    root.walk {
+                                        for (path in filter(Path::isRegularFile)) {
+                                            val name = root.relativize(path).toString()
+                                            if (exclude.none(name::startsWith)) {
+                                                val outputPath = output.resolve(name)
+                                                outputPath.parent?.createDirectories()
+
+                                                path.copyTo(outputPath, StandardCopyOption.REPLACE_EXISTING)
+                                            }
+                                        }
+                                    }
                                 }
+                            } else if (extension != "json") {
+                                val outputPath = output.resolve(artifact.name)
+                                outputPath.parent?.createDirectories()
+
+                                artifact.toPath().copyTo(outputPath, StandardCopyOption.REPLACE_EXISTING)
                             }
                         }
                     }
-                } else if (extension != "json") {
-                    val outputPath = output.resolve(artifact.name)
-                    outputPath.parent?.createDirectories()
-
-                    artifact.file.toPath().copyTo(outputPath, StandardCopyOption.REPLACE_EXISTING)
                 }
+
+                fileResolution.awaitAll()
             }
         }
     }
