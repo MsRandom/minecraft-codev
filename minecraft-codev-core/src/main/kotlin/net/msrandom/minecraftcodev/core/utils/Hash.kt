@@ -1,8 +1,8 @@
 package net.msrandom.minecraftcodev.core.utils
 
 import com.google.common.hash.HashCode
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.nio.file.Path
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
@@ -15,22 +15,20 @@ suspend fun hashFile(file: Path): HashCode {
         return it
     }
 
-    return coroutineScope {
+    return withContext(Dispatchers.IO) {
         val hash =
-            runBlocking {
-                file.inputStream().use { stream ->
-                    val sha1Hash = MessageDigest.getInstance("SHA-1")
+            file.inputStream().use { stream ->
+                val sha1Hash = MessageDigest.getInstance("SHA-1")
 
-                    val buffer = ByteArray(8192)
+                val buffer = ByteArray(8192)
 
-                    var read: Int
+                var read: Int
 
-                    while (stream.read(buffer).also { read = it } > 0) {
-                        sha1Hash.update(buffer, 0, read)
-                    }
-
-                    HashCode.fromBytes(sha1Hash.digest())
+                while (stream.read(buffer).also { read = it } > 0) {
+                    sha1Hash.update(buffer, 0, read)
                 }
+
+                HashCode.fromBytes(sha1Hash.digest())
             }
 
         hashCache[file] = hash

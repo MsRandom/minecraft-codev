@@ -2,7 +2,6 @@ package net.msrandom.minecraftcodev.runs.task
 
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
@@ -77,37 +76,35 @@ abstract class DownloadAssets : DefaultTask() {
 
             val index = assetIndexJson.inputStream().use { Json.decodeFromStream<AssetsIndex>(it) }
 
-            coroutineScope {
-                val downloads =
-                    index.objects.mapNotNull { (name, asset) ->
-                        val section = asset.hash.substring(0, 2)
+            val downloads =
+                index.objects.mapNotNull { (name, asset) ->
+                    val section = asset.hash.substring(0, 2)
 
-                        val file =
-                            if (index.mapToResources) {
-                                resourcesDirectory.file(name)
-                            } else {
-                                objectsDirectory.dir(section).file(asset.hash)
-                            }
-
-                        async {
-                            if (file.asFile.exists()) {
-                                if (checkHash(file.asFile.toPath(), asset.hash)) {
-                                    return@async
-                                } else {
-                                    file.asFile.delete()
-                                }
-                            }
-
-                            downloadFile(
-                                URI("https", "resources.download.minecraft.net", "/$section/${asset.hash}", null),
-                                asset.hash,
-                                file,
-                            )
+                    val file =
+                        if (index.mapToResources) {
+                            resourcesDirectory.file(name)
+                        } else {
+                            objectsDirectory.dir(section).file(asset.hash)
                         }
-                    }
 
-                downloads.awaitAll()
-            }
+                    async {
+                        if (file.asFile.exists()) {
+                            if (checkHash(file.asFile.toPath(), asset.hash)) {
+                                return@async
+                            } else {
+                                file.asFile.delete()
+                            }
+                        }
+
+                        downloadFile(
+                            URI("https", "resources.download.minecraft.net", "/$section/${asset.hash}", null),
+                            asset.hash,
+                            file,
+                        )
+                    }
+                }
+
+            downloads.awaitAll()
         }
     }
 }

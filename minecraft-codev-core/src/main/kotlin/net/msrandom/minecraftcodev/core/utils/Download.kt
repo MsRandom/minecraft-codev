@@ -1,8 +1,8 @@
 package net.msrandom.minecraftcodev.core.utils
 
 import com.google.common.hash.HashCode
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.gradle.api.GradleException
 import org.gradle.api.InvalidUserCodeException
 import org.gradle.api.Project
@@ -15,10 +15,8 @@ import org.gradle.internal.resource.ExternalResourceRepository
 import org.gradle.internal.verifier.HttpRedirectVerifierFactory
 import java.net.URI
 import java.nio.file.Path
-import java.security.MessageDigest
 import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
-import kotlin.io.path.inputStream
 
 private val resourceRepositoryCache = hashMapOf<RepositoryTransportFactory, ExternalResourceRepository>()
 
@@ -44,10 +42,8 @@ private suspend fun fetchResource(
     uri: URI,
     repository: ExternalResourceRepository,
 ): ExternalResource =
-    coroutineScope {
-        runBlocking {
-            repository.resource(ExternalResourceName(uri))
-        }
+    withContext(Dispatchers.IO) {
+        repository.resource(ExternalResourceName(uri))
     }
 
 private suspend fun getCachedResource(
