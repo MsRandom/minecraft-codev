@@ -9,19 +9,20 @@ import org.gradle.util.internal.GUtil
 val String.asNamePart
     get() = takeIf { it != SourceSet.MAIN_SOURCE_SET_NAME }.orEmpty()
 
-fun SourceSet.disambiguateName(elementName: String) = lowerCamelCaseName(name.asNamePart, elementName)
+fun SourceSet.disambiguateName(elementName: String) = lowerCamelCaseGradleName(name.asNamePart, elementName)
 
 fun lowerCamelCaseName(vararg nameParts: String?): String {
     val nonEmptyParts = nameParts.mapNotNull { it?.takeIf(String::isNotEmpty) }
 
-    return GUtil.toLowerCamelCase(
-        nonEmptyParts.drop(1).joinToString(
-            separator = "",
-            prefix = nonEmptyParts.firstOrNull().orEmpty(),
-            transform = StringUtils::capitalize,
-        ),
+    return nonEmptyParts.drop(1).joinToString(
+        separator = "",
+        prefix = nonEmptyParts.firstOrNull().orEmpty(),
+        transform = StringUtils::capitalize,
     )
 }
+
+fun lowerCamelCaseGradleName(vararg nameParts: String?): String =
+    GUtil.toLowerCamelCase(lowerCamelCaseName(*nameParts))
 
 fun Project.createSourceSetElements(sourceSetHandler: (sourceSet: SourceSet) -> Unit) {
     extension<SourceSetContainer>().all(sourceSetHandler)

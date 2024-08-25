@@ -236,6 +236,8 @@ object LegacyJarSplitter {
             clientFs.base.getPath("/").walk {
                 for (clientEntry in filter(Path::isRegularFile)) {
                     val pathName = clientEntry.toString()
+                    val clientTargetPath = newClientFs.base.getPath(pathName)
+
                     if (pathName.endsWith(".class")) {
                         val serverEntry = serverFs.base.getPath(pathName)
 
@@ -270,19 +272,23 @@ object LegacyJarSplitter {
                             serverNode.accept(writer)
 
                             val path = commonFs.base.getPath(pathName)
-                            serverEntry.copyTo(path, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
+
+                            path.parent.createDirectories()
+
                             path.writeBytes(writer.toByteArray(), StandardOpenOption.WRITE, StandardOpenOption.CREATE)
 
-                            newClientFs.base.getPath(pathName).deleteExisting()
+                            clientTargetPath.deleteIfExists()
                         } else {
+                            clientTargetPath.parent.createDirectories()
+
                             clientEntry.copyTo(
-                                newClientFs.base.getPath(pathName),
+                                clientTargetPath,
                                 StandardCopyOption.COPY_ATTRIBUTES,
                                 StandardCopyOption.REPLACE_EXISTING,
                             )
                         }
                     } else {
-                        newClientFs.base.getPath(pathName).deleteIfExists()
+                        clientTargetPath.deleteIfExists()
                     }
                 }
             }
@@ -312,6 +318,7 @@ object LegacyJarSplitter {
                 for (serverEntry in filter(Path::isRegularFile)) {
                     val name = serverEntry.toString()
                     val output = commonFs.base.getPath(name)
+
                     if (name.endsWith(".class")) {
                         if (output.notExists()) {
                             val reader = serverEntry.inputStream().use(::ClassReader)
@@ -326,7 +333,7 @@ object LegacyJarSplitter {
                             output.writeBytes(writer.toByteArray(), StandardOpenOption.WRITE, StandardOpenOption.CREATE)
                         }
                     } else {
-                        output.deleteExisting()
+                        output.deleteIfExists()
                     }
                 }
             }
