@@ -84,7 +84,7 @@ abstract class Remap : DefaultTask() {
             if (filterMods.get() && !remapperExtension.isMod(input)) {
                 output.createSymbolicLinkPointingTo(input)
 
-                return
+                continue
             }
 
             project.cacheExpensiveOperation("remapped", mappings + classpath + project.files(input), output) {
