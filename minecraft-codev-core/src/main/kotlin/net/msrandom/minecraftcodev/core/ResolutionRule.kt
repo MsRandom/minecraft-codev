@@ -8,7 +8,8 @@ import java.nio.file.FileSystem
 import java.nio.file.Path
 import java.security.DigestInputStream
 import java.security.MessageDigest
-import kotlin.io.path.inputStream
+import java.util.ServiceLoader
+import kotlin.reflect.KClass
 
 open class ResolutionData<T>(
     val visitor: T,
@@ -34,6 +35,41 @@ fun interface ZipResolutionRule<T : ResolutionData<*>> {
     ): Boolean
 }
 
+fun <T : ResolutionData<*>> handleZipRules(
+    zipResolutionRules: Iterable<ZipResolutionRule<T>>,
+    path: Path,
+    extension: String,
+    data: T,
+): Boolean {
+    val isJar = extension == "jar"
+
+    if (!isJar && extension != "zip") {
+        return false
+    }
+
+    zipFileSystem(path).use {
+        for (rule in zipResolutionRules) {
+            if (rule.load(path, it.base, isJar, data)) {
+                return true
+            }
+        }
+    }
+
+    return false
+}
+
+abstract class ZipResolutionRuleHandler<T : ResolutionData<*>, U : ZipResolutionRule<T>>(
+    zipType: KClass<U>,
+) : ResolutionRule<T> {
+    private val zipResolutionRules = ServiceLoader.load(zipType.java)
+
+    override fun load(
+        path: Path,
+        extension: String,
+        data: T,
+    ) = handleZipRules(zipResolutionRules, path, extension, data)
+}
+
 @Suppress("UNCHECKED_CAST")
 fun <T : ResolutionData<*>> ObjectFactory.zipResolutionRules() =
     listProperty(ZipResolutionRule::class.java) as ListProperty<ZipResolutionRule<T>>
@@ -45,21 +81,7 @@ fun <T : ResolutionData<*>> ObjectFactory.resolutionRules(
     val rules = listProperty(ResolutionRule::class.java) as ListProperty<ResolutionRule<T>>
 
     rules.add { path, extension, data ->
-        val isJar = extension == "jar"
-        var result = false
-
-        if (isJar || extension == "zip") {
-            zipFileSystem(path).use {
-                for (rule in zipResolutionRules.get()) {
-                    if (rule.load(path, it.base, isJar, data)) {
-                        result = true
-                        break
-                    }
-                }
-            }
-        }
-
-        result
+        handleZipRules(zipResolutionRules.get(), path, extension, data)
     }
 
     return rules

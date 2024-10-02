@@ -1,12 +1,10 @@
 package net.msrandom.minecraftcodev.mixins.task
 
-import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.utils.cacheExpensiveOperation
-import net.msrandom.minecraftcodev.core.utils.extension
 import net.msrandom.minecraftcodev.core.utils.walk
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
-import net.msrandom.minecraftcodev.mixins.MixinsExtension
 import net.msrandom.minecraftcodev.mixins.mixin.GradleMixinService
+import net.msrandom.minecraftcodev.mixins.mixinListingRules
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
@@ -62,15 +60,9 @@ abstract class Mixin : DefaultTask() {
                 zipFileSystem(mixinFile.toPath()).use fs@{
                     val root = it.base.getPath("/")
 
-                    val handler =
-                        project
-                            .extension<MinecraftCodevExtension>()
-                            .extension<MixinsExtension>()
-                            .rules
-                            .get()
-                            .firstNotNullOfOrNull { rule ->
-                                rule.load(root)
-                            }
+                    val handler = mixinListingRules.firstNotNullOfOrNull { rule ->
+                        rule.load(root)
+                    }
 
                     if (handler == null) {
                         return@fs

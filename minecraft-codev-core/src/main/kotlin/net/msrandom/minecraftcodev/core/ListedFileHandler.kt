@@ -18,7 +18,7 @@ interface ListedFileHandler<T : Any> {
     fun remove(root: Path)
 }
 
-fun interface ListedFileRule<T : Any> {
+fun interface FileListingRules<T : Any> {
     /**
      * Load a handler for the mod in directory
      * @param directory The directory which the mod is in, can potentially be in a zip file system
@@ -26,6 +26,3 @@ fun interface ListedFileRule<T : Any> {
      */
     fun load(directory: Path): ListedFileHandler<T>?
 }
-
-@Suppress("UNCHECKED_CAST")
-fun <T : Any> ObjectFactory.listedFileRuleList() = listProperty(ListedFileRule::class.java) as ListProperty<ListedFileRule<T>>

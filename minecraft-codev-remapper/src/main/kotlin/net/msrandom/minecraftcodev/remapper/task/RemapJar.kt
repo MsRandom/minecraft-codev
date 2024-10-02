@@ -5,6 +5,7 @@ import net.msrandom.minecraftcodev.core.utils.extension
 import net.msrandom.minecraftcodev.remapper.JarRemapper
 import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
 import net.msrandom.minecraftcodev.remapper.RemapperExtension
+import net.msrandom.minecraftcodev.remapper.loadMappings
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
@@ -49,10 +50,9 @@ abstract class RemapJar : Jar() {
                 .extension<MinecraftCodevExtension>()
                 .extension<RemapperExtension>()
 
-        val mappings = remapper.loadMappings(mappings)
+        val mappings = loadMappings(mappings)
 
         JarRemapper.remap(
-            remapper,
             mappings,
             sourceNamespace.get(),
             targetNamespace.get(),

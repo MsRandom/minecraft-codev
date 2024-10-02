@@ -1,0 +1,3 @@
+net.msrandom.minecraftcodev.remapper.ZipMappingResolutionRuleHandler
+net.msrandom.minecraftcodev.remapper.ProguardMappingResolutionRule
+net.msrandom.minecraftcodev.remapper.ParchmentJsonMappingResolutionHandler

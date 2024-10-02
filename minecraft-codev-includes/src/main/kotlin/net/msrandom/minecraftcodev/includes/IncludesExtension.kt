@@ -1,7 +1,7 @@
 package net.msrandom.minecraftcodev.includes
 
-import net.msrandom.minecraftcodev.core.listedFileRuleList
-import org.gradle.api.model.ObjectFactory
+import net.msrandom.minecraftcodev.core.FileListingRules
+import java.util.ServiceLoader
 
 data class IncludedJar(
     val path: String,
@@ -10,6 +10,6 @@ data class IncludedJar(
     val version: String?,
 )
 
-open class IncludesExtension(objectFactory: ObjectFactory) {
-    val rules = objectFactory.listedFileRuleList<IncludedJar>()
-}
+interface IncludedJarListingRule : FileListingRules<IncludedJar>
+
+val includedJarListingRules = ServiceLoader.load(IncludedJarListingRule::class.java).toList()

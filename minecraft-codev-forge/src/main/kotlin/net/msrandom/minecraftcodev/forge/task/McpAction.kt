@@ -10,8 +10,10 @@ import net.msrandom.minecraftcodev.forge.Userdev
 import net.msrandom.minecraftcodev.forge.mappings.injectForgeMappingService
 import org.gradle.api.Project
 import org.gradle.api.file.RegularFile
+import org.gradle.api.provider.Provider
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.jvm.toolchain.JavaToolchainService
+import org.gradle.process.ExecOperations
 import java.io.File
 import java.io.OutputStream
 import java.nio.file.Files
@@ -26,8 +28,9 @@ import kotlin.io.path.isRegularFile
 import kotlin.io.path.notExists
 
 open class McpAction(
-    protected val project: Project,
-    private val metadata: MinecraftVersionMetadata,
+    private val execOperations: ExecOperations,
+    private val javaExecutable: Provider<RegularFile>,
+    private val jarFile: File,
     private val mcpConfig: McpConfigFile,
     private val library: PatchLibrary,
     private val argumentTemplates: Map<String, Any>,
@@ -43,21 +46,8 @@ open class McpAction(
         val output = Files.createTempFile("mcp-step", ".out")
 
         val executionResult =
-            project.javaexec {
-                val executable =
-                    project
-                        .extension<JavaToolchainService>()
-                        .launcherFor { it.languageVersion.set(JavaLanguageVersion.of(metadata.javaVersion.majorVersion)) }
-                        .get()
-                        .executablePath
-
-                it.executable(executable)
-
-                val jarFile =
-                    project.configurations
-                        .detachedConfiguration(project.dependencies.create(library.version))
-                        .apply { isTransitive = false }
-                        .singleFile
+            execOperations.javaexec {
+                it.executable(javaExecutable)
 
                 val mainClass =
                     jarFile.let(::JarFile)
@@ -122,14 +112,17 @@ open class McpAction(
 }
 
 class PatchMcpAction(
-    project: Project,
-    metadata: MinecraftVersionMetadata,
+    execOperations: ExecOperations,
+    javaExecutable: Provider<RegularFile>,
+    jarFile: File,
     mcpConfig: McpConfigFile,
     private val userdev: Userdev,
+    private val universal: File,
     logFile: OutputStream,
 ) : McpAction(
-    project,
-    metadata,
+    execOperations,
+    javaExecutable,
+    jarFile,
     mcpConfig,
     userdev.config.binpatcher,
     emptyMap(),
@@ -168,11 +161,6 @@ class PatchMcpAction(
                     }
                 }
             }
-
-            val universal =
-                project.configurations.detachedConfiguration(project.dependencies.create(userdevConfig.universal)).apply {
-                    isTransitive = false
-                }.singleFile
 
             val filters = userdevConfig.universalFilters.map(::Regex)
 

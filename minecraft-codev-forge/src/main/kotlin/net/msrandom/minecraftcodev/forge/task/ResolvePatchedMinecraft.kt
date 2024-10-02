@@ -15,6 +15,7 @@ import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.*
+import org.gradle.configurationcache.extensions.serviceOf
 import java.io.Closeable
 import java.io.OutputStream
 import java.io.PrintStream
@@ -75,13 +76,15 @@ abstract class ResolvePatchedMinecraft : DefaultTask() {
                     project.configurations.detachedConfiguration(project.dependencies.create(userdev.config.mcp)).singleFile,
                 )!!
 
+            val javaExecutable = metadata.javaVersion.executable(project)
+
             fun mcpAction(
                 name: String,
                 template: Map<String, Any>,
                 stdout: OutputStream?,
             ) = McpAction(
-                project,
-                metadata,
+                project.serviceOf(),
+                javaExecutable,
                 mcpConfigFile,
                 mcpConfigFile.config.functions.getValue(name),
                 template,
@@ -121,7 +124,7 @@ abstract class ResolvePatchedMinecraft : DefaultTask() {
                             renameLog,
                         )
 
-                    val patch = PatchMcpAction(project, metadata, mcpConfigFile, userdev, patchLog)
+                    val patch = PatchMcpAction(project.serviceOf(), javaExecutable, mcpConfigFile, userdev, patchLog)
 
                     val official = mcpConfigFile.config.official
                     val notchObf = userdev.config.notchObf

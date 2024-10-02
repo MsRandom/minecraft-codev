@@ -3,91 +3,65 @@ package net.msrandom.minecraftcodev.includes
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
-import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.utils.*
-import org.gradle.api.DefaultTask
-import org.gradle.api.file.ConfigurableFileCollection
-import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.artifacts.transform.CacheableTransform
+import org.gradle.api.artifacts.transform.InputArtifact
+import org.gradle.api.artifacts.transform.InputArtifactDependencies
+import org.gradle.api.artifacts.transform.TransformAction
+import org.gradle.api.artifacts.transform.TransformOutputs
+import org.gradle.api.artifacts.transform.TransformParameters
 import org.gradle.api.file.FileCollection
+import org.gradle.api.file.FileSystemLocation
+import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.*
-import org.gradle.work.ChangeType
-import org.gradle.work.InputChanges
-import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import kotlin.io.path.*
 
-@CacheableTask
-abstract class ExtractIncludes : DefaultTask() {
-    abstract val inputFiles: ConfigurableFileCollection
-        @InputFiles
+@CacheableTransform
+abstract class ExtractIncludes : TransformAction<TransformParameters.None> {
+    abstract val inputFile: Provider<FileSystemLocation>
+        @InputArtifact get
+
+    abstract val classpath: FileCollection
         @Classpath
-        @SkipWhenEmpty
+        @InputArtifactDependencies
         get
 
-    abstract val outputDirectory: DirectoryProperty
-        @OutputDirectory get
+    override fun transform(outputs: TransformOutputs) {
+        val input = inputFile.get().asFile.toPath()
+        val output = outputs.file(input.fileName.toString()).toPath()
 
-    val outputFiles: FileCollection
-        @Internal get() = project.fileTree(outputDirectory)
-
-    init {
-        outputDirectory.convention(project.layout.dir(project.provider { temporaryDir }))
-    }
-
-    @TaskAction
-    private fun extractIncludes(inputChanges: InputChanges) {
-        val includeRules =
-            project
-                .extension<MinecraftCodevExtension>()
-                .extension<IncludesExtension>()
-                .rules
-
-        val inputHashes =
+        val handler =
             runBlocking {
-                inputFiles.map {
-                    async {
-                        hashFile(it.toPath())
-                    }
-                }.awaitAll().toHashSet()
-            }
+                val inputHashes =
+                    classpath
+                        .map {
+                            async {
+                                hashFile(it.toPath())
+                            }
+                        }.awaitAll()
+                        .toHashSet()
 
-        CHANGE@for (fileChange in inputChanges.getFileChanges(inputFiles)) {
-            val input = fileChange.file.toPath()
-            val outputDirectory = outputDirectory.asFile.get().toPath().resolve(input.nameWithoutExtension)
-
-            if (fileChange.changeType == ChangeType.MODIFIED || fileChange.changeType == ChangeType.REMOVED) {
-                outputDirectory.walk {
-                    filter(Files::isRegularFile).forEach(Files::delete)
-                }
-
-                if (fileChange.changeType == ChangeType.REMOVED) {
-                    continue
-                }
-            }
-
-            outputDirectory.createDirectories()
-
-            val output = outputDirectory.resolve(input.fileName)
-
-            val handler =
                 zipFileSystem(input).use {
                     val root = it.base.getPath("/")
 
                     val handler =
-                        includeRules.get().firstNotNullOfOrNull { rule ->
+                        includedJarListingRules.firstNotNullOfOrNull { rule ->
                             rule.load(root)
-                        } ?: run {
-                            output.deleteIfExists()
-                            output.createSymbolicLinkPointingTo(input)
-
-                            return@use null
                         }
 
-                    runBlocking {
-                        handler.list(root).map { includedJar ->
+                    if (handler == null) {
+                        outputs.file(input)
+
+                        return@runBlocking null
+                    }
+
+                    handler
+                        .list(root)
+                        .map { includedJar ->
                             async {
                                 val path = it.base.getPath(includedJar.path)
-                                val includeOutput = outputDirectory.resolve(path.fileName.toString())
+                                val includeOutput = outputs.file(path.fileName.toString()).toPath()
 
                                 val hash = hashFile(path)
 
@@ -96,22 +70,25 @@ abstract class ExtractIncludes : DefaultTask() {
                                 }
                             }
                         }.awaitAll()
-                    }
 
                     handler
-                } ?: continue
-
-            input.copyTo(output, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
-
-            zipFileSystem(output).use { (fs) ->
-                val root = fs.getPath("/")
-
-                for (jar in handler.list(root)) {
-                    fs.getPath(jar.path).deleteExisting()
                 }
-
-                handler.remove(root)
             }
+
+        if (handler == null) {
+            return
+        }
+
+        input.copyTo(output, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
+
+        zipFileSystem(output).use { (fs) ->
+            val root = fs.getPath("/")
+
+            for (jar in handler.list(root)) {
+                fs.getPath(jar.path).deleteExisting()
+            }
+
+            handler.remove(root)
         }
     }
 }

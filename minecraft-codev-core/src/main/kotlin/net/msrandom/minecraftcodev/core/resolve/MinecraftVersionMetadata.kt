@@ -5,6 +5,12 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.*
 import net.msrandom.minecraftcodev.core.URISerializer
+import net.msrandom.minecraftcodev.core.utils.extension
+import org.gradle.api.Project
+import org.gradle.api.file.RegularFile
+import org.gradle.api.provider.Provider
+import org.gradle.jvm.toolchain.JavaLanguageVersion
+import org.gradle.jvm.toolchain.JavaToolchainService
 import java.net.URI
 
 @Serializable
@@ -64,7 +70,12 @@ data class MinecraftVersionMetadata(
     )
 
     @Serializable
-    data class JavaVersionData(val majorVersion: Int)
+    data class JavaVersionData(val majorVersion: Int) {
+        fun executable(project: Project): Provider<RegularFile> = project
+            .extension<JavaToolchainService>()
+            .launcherFor { it.languageVersion.set(JavaLanguageVersion.of(majorVersion)) }
+            .map { it.executablePath }
+    }
 
     @Serializable
     data class Library(

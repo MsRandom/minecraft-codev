@@ -18,7 +18,6 @@ import java.nio.file.Path
 object JarRemapper {
     @Synchronized
     fun remap(
-        remapperExtension: RemapperExtension,
         mappings: MappingTreeView,
         sourceNamespace: String,
         targetNamespace: String,
@@ -196,7 +195,7 @@ object JarRemapper {
         }
 
         zipFileSystem(output).use { (fs) ->
-            remapperExtension.remapFiles(mappings, fs, sourceNamespace, targetNamespace)
+            remapFiles(mappings, fs, sourceNamespace, targetNamespace)
         }
     }
 }
