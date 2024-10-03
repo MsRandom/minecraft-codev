@@ -3,6 +3,7 @@ package net.msrandom.minecraftcodev.fabric.mappings
 import net.msrandom.minecraftcodev.fabric.MinecraftCodevFabricPlugin.Companion.MOD_JSON
 import net.msrandom.minecraftcodev.remapper.ModDetectionRule
 import java.nio.file.FileSystem
+import java.util.jar.JarFile
 import java.util.jar.Manifest
 import kotlin.io.path.exists
 import kotlin.io.path.inputStream
@@ -14,7 +15,7 @@ class FabricModDetectionRule : ModDetectionRule {
             return true
         }
 
-        val manifestPath = fileSystem.getPath("META-INF", "MANIFEST.MF")
+        val manifestPath = fileSystem.getPath(JarFile.MANIFEST_NAME)
 
         if (manifestPath.notExists()) {
             return false

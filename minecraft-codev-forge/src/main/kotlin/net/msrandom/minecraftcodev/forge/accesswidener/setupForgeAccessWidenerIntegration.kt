@@ -11,13 +11,17 @@ import org.cadixdev.at.io.AccessTransformFormats
 import org.gradle.api.Project
 import java.nio.file.FileSystem
 import java.nio.file.Path
+import java.util.jar.JarFile
 import java.util.jar.Manifest
-import kotlin.io.path.*
+import kotlin.io.path.exists
+import kotlin.io.path.inputStream
+import kotlin.io.path.isDirectory
+import kotlin.io.path.listDirectoryEntries
 
 fun FileSystem.findAccessTransformers(): List<Path> {
     val transformers = mutableListOf<Path>()
 
-    val meta = getPath("META-INF", "MANIFEST.MF")
+    val meta = getPath(JarFile.MANIFEST_NAME)
 
     val manifest = meta.takeIf(Path::exists)?.inputStream()?.use(::Manifest)
     val accessTransformerName = manifest?.mainAttributes?.getValue("FMLAT") ?: "accesstransformer.cfg"

@@ -48,7 +48,7 @@ open class McpAction(
                     jarFile.let(::JarFile)
                         .use { jar ->
                             jar
-                                .getInputStream(jar.getJarEntry("META-INF/MANIFEST.MF"))
+                                .getInputStream(jar.getJarEntry(JarFile.MANIFEST_NAME))
                                 .use(::Manifest)
                                 .mainAttributes
                                 .getValue(Attributes.Name.MAIN_CLASS)

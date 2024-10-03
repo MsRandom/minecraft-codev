@@ -60,7 +60,7 @@ abstract class ExtractIncludes : TransformAction<TransformParameters.None> {
                         .list(root)
                         .map { includedJar ->
                             async {
-                                val path = it.base.getPath(includedJar.path)
+                                val path = it.base.getPath(includedJar)
                                 val includeOutput = outputs.file(path.fileName.toString()).toPath()
 
                                 val hash = hashFile(path)
@@ -85,7 +85,7 @@ abstract class ExtractIncludes : TransformAction<TransformParameters.None> {
             val root = fs.getPath("/")
 
             for (jar in handler.list(root)) {
-                fs.getPath(jar.path).deleteExisting()
+                fs.getPath(jar).deleteExisting()
             }
 
             handler.remove(root)
