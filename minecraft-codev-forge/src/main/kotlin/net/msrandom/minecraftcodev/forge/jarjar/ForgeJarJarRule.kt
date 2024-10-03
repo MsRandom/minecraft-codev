@@ -5,7 +5,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.jsonArray
 import net.msrandom.minecraftcodev.core.ListedFileHandler
-import net.msrandom.minecraftcodev.includes.IncludedJar
 import net.msrandom.minecraftcodev.includes.IncludedJarListingRule
 import java.nio.file.Path
 import kotlin.io.path.inputStream

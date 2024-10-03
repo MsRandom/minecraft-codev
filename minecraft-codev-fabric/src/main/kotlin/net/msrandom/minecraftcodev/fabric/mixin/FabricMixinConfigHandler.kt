@@ -5,7 +5,7 @@ import net.msrandom.minecraftcodev.core.ListedFileHandler
 import java.nio.file.Path
 import kotlin.io.path.outputStream
 
-class FabricMixinConfigHandler(mixins: JsonElement, private val json: JsonObject, private val jsonName: String) : ListedFileHandler<String> {
+class FabricMixinConfigHandler(mixins: JsonElement, private val json: JsonObject, private val jsonName: String) : ListedFileHandler {
     private val paths = if (mixins is JsonArray) {
         mixins.map { if (it is JsonObject) it["config"]?.jsonPrimitive?.content!! else it.jsonPrimitive.content }
     } else {

@@ -11,7 +11,7 @@ import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 
 class FabricMixinListingRule : MixinListingRule {
-    override fun load(directory: Path): ListedFileHandler<String>? {
+    override fun load(directory: Path): ListedFileHandler? {
         val mod = directory.resolve(MinecraftCodevFabricPlugin.MOD_JSON)
 
         if (!mod.exists()) {

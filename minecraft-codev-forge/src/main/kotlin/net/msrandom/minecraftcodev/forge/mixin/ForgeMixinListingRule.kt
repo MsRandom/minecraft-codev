@@ -32,7 +32,7 @@ class ForgeMixinListingRule : MixinListingRule {
         return null
     }
 
-    override fun load(directory: Path): ListedFileHandler<String>? {
+    override fun load(directory: Path): ListedFileHandler? {
         val manifestPath = directory.resolve(JarFile.MANIFEST_NAME)
 
         if (manifestPath.notExists()) {
