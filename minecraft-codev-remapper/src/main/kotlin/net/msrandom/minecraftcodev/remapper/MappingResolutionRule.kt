@@ -8,21 +8,14 @@ import net.fabricmc.mappingio.tree.MappingTreeView
 import net.fabricmc.mappingio.tree.MemoryMappingTree
 import net.msrandom.minecraftcodev.core.*
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
-import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.gradle.api.Action
-import org.gradle.api.Project
 import org.gradle.api.file.FileCollection
-import org.gradle.api.model.ObjectFactory
-import org.gradle.api.provider.ListProperty
 import org.gradle.process.ExecOperations
 import java.io.File
 import java.nio.file.FileSystem
 import java.nio.file.Path
 import java.security.MessageDigest
-import java.util.*
-import javax.inject.Inject
-import kotlin.io.path.exists
-import kotlin.io.path.extension
+import java.util.ServiceLoader
 import kotlin.io.path.inputStream
 import kotlin.io.path.notExists
 
@@ -55,30 +48,6 @@ class MappingResolutionData(
     val extraFiles: Map<String, File>,
 ) : ResolutionData<MappingTreeProvider>(visitor, messageDigest)
 
-fun interface ExtraFileRemapper {
-    operator fun invoke(
-        mappings: MappingTreeView,
-        fileSystem: FileSystem,
-        sourceNamespace: String,
-        targetNamespace: String,
-    )
-}
-
-val extraFileRemappers = ServiceLoader.load(ExtraFileRemapper::class.java).toList()
-
-fun interface ModDetectionRule {
-    operator fun invoke(fileSystem: FileSystem): Boolean
-}
-
-fun sourceNamespaceVisitor(
-    data: MappingResolutionData,
-    sourceNamespace: String,
-) = if (data.visitor.tree.srcNamespace == sourceNamespace) {
-    data.visitor.tree
-} else {
-    MappingSourceNsSwitch(data.visitor.tree, data.visitor.tree.srcNamespace ?: MappingsNamespace.OBF)
-}
-
 interface MappingResolutionRule : ResolutionRule<MappingResolutionData>
 
 interface ZipMappingResolutionRule : ZipResolutionRule<MappingResolutionData>
@@ -88,6 +57,13 @@ class ZipMappingResolutionRuleHandler :
     MappingResolutionRule
 
 class ProguardMappingResolutionRule : MappingResolutionRule {
+    private fun sourceNamespaceVisitor(data: MappingResolutionData) =
+        if (data.visitor.tree.srcNamespace == MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE) {
+            data.visitor.tree
+        } else {
+            MappingSourceNsSwitch(data.visitor.tree, data.visitor.tree.srcNamespace ?: MappingsNamespace.OBF)
+        }
+
     override fun load(
         path: Path,
         extension: String,
@@ -102,7 +78,7 @@ class ProguardMappingResolutionRule : MappingResolutionRule {
                 it,
                 MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE,
                 MappingsNamespace.OBF,
-                sourceNamespaceVisitor(data, MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE),
+                sourceNamespaceVisitor(data),
             )
         }
 
@@ -126,7 +102,7 @@ class ParchmentJsonMappingResolutionHandler : MappingResolutionRule {
     }
 }
 
-class ParchmentZipMappingResolutionHandler : ZipMappingResolutionRule {
+class ParchmentZipMappingResolutionRule : ZipMappingResolutionRule {
     override fun load(
         path: Path,
         fileSystem: FileSystem,
@@ -147,7 +123,11 @@ class ParchmentZipMappingResolutionHandler : ZipMappingResolutionRule {
 
 val mappingResolutionRules = ServiceLoader.load(MappingResolutionRule::class.java).toList()
 
-fun loadMappings(files: FileCollection, execOperations: ExecOperations, extraFiles: Map<String, File>): MappingTreeView {
+fun loadMappings(
+    files: FileCollection,
+    execOperations: ExecOperations,
+    extraFiles: Map<String, File>,
+): MappingTreeView {
     val tree = MemoryMappingTree()
     val md = MessageDigest.getInstance("SHA1")
 
@@ -162,17 +142,6 @@ fun loadMappings(files: FileCollection, execOperations: ExecOperations, extraFil
     }
 
     return tree
-}
-
-fun remapFiles(
-    mappings: MappingTreeView,
-    fileSystem: FileSystem,
-    sourceNamespace: String,
-    targetNamespace: String,
-) {
-    for (extraMapper in extraFileRemappers) {
-        extraMapper(mappings, fileSystem, sourceNamespace, targetNamespace)
-    }
 }
 
 private fun handleParchment(
@@ -246,30 +215,3 @@ private fun handleParchment(
         } while (!visitor.visitEnd())
     }
 }
-
-open class RemapperExtension
-    @Inject
-    constructor(
-        objectFactory: ObjectFactory,
-        private val project: Project,
-    ) {
-        val modDetectionRules: ListProperty<ModDetectionRule> = objectFactory.listProperty(ModDetectionRule::class.java)
-
-        init {
-            modDetectionRules.add {
-                it.getPath("pack.mcmeta").exists()
-            }
-        }
-
-        fun isMod(path: Path): Boolean {
-            val extension = path.extension
-
-            if (extension != "zip" && extension != "jar") {
-                return false
-            }
-
-            return zipFileSystem(path).use { (fs) ->
-                modDetectionRules.get().any { it(fs) }
-            }
-        }
-    }

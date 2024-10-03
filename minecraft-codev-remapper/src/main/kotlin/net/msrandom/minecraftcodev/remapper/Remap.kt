@@ -1,8 +1,5 @@
-package net.msrandom.minecraftcodev.remapper.task
+package net.msrandom.minecraftcodev.remapper
 
-import net.msrandom.minecraftcodev.remapper.JarRemapper
-import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
-import net.msrandom.minecraftcodev.remapper.loadMappings
 import org.gradle.api.artifacts.transform.*
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.FileCollection
@@ -29,6 +26,9 @@ abstract class Remap : TransformAction<Remap.Parameters> {
         abstract val targetNamespace: Property<String>
             @Input get
 
+        abstract val filterMods: Property<Boolean>
+            @Input get
+
         abstract val extraFiles: MapProperty<String, File>
             @InputFiles get
 
@@ -52,6 +52,12 @@ abstract class Remap : TransformAction<Remap.Parameters> {
 
     override fun transform(outputs: TransformOutputs) {
         val input = inputFile.get().asFile
+
+        if (parameters.filterMods.get() && !isMod(input.toPath())) {
+            outputs.file(inputFile)
+
+            return
+        }
 
         val sourceNamespace = parameters.sourceNamespace.get()
         val targetNamespace = parameters.targetNamespace.get()

@@ -14,8 +14,6 @@ val SourceSet.mappingsConfigurationName get() = disambiguateName(MinecraftCodevR
 class MinecraftCodevRemapperPlugin<T : PluginAware> : Plugin<T> {
     override fun apply(target: T) =
         applyPlugin(target) {
-            extension<MinecraftCodevExtension>().extensions.create("remapper", RemapperExtension::class.java)
-
             createSourceSetConfigurations(MAPPINGS_CONFIGURATION)
         }
 

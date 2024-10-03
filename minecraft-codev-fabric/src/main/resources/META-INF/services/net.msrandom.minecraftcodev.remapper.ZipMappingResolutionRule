@@ -1,1 +1,1 @@
-net.msrandom.minecraftcodev.remapper.ParchmentZipMappingResolutionHandler
+net.msrandom.minecraftcodev.fabric.mappings.TinyZipMappingResolutionRule

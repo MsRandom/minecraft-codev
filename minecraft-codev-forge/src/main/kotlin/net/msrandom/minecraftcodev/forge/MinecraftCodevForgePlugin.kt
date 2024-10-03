@@ -5,7 +5,6 @@ import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
 import net.msrandom.minecraftcodev.core.utils.*
 import net.msrandom.minecraftcodev.forge.accesswidener.setupForgeAccessWidenerIntegration
-import net.msrandom.minecraftcodev.forge.mappings.setupForgeRemapperIntegration
 import net.msrandom.minecraftcodev.forge.runs.setupForgeRunsIntegration
 import org.gradle.api.Plugin
 import org.gradle.api.plugins.PluginAware
@@ -25,7 +24,6 @@ open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
             extension<MinecraftCodevExtension>().extensions.create("forge", MinecraftCodevForgeExtension::class.java)
 
             setupForgeAccessWidenerIntegration()
-            setupForgeRemapperIntegration()
             setupForgeRunsIntegration()
         }
 
