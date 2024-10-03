@@ -12,6 +12,7 @@ import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
+import kotlin.io.path.copyTo
 
 @CacheableTask
 abstract class DownloadMinecraftMappings : DefaultTask() {
@@ -44,7 +45,12 @@ abstract class DownloadMinecraftMappings : DefaultTask() {
             val version = versionList.version(version.get())
             val variant = if (server.get()) MinecraftDownloadVariant.ServerMappings else MinecraftDownloadVariant.ClientMappings
 
-            downloadMinecraftFile(project, version, variant, output.asFile.get().toPath())
+            val output = output.asFile.get().toPath()
+
+            val downloadPath = downloadMinecraftFile(project, version, variant)
+                ?: throw IllegalArgumentException("${version.id} does not have variant $variant")
+
+            downloadPath.copyTo(output)
         }
     }
 }

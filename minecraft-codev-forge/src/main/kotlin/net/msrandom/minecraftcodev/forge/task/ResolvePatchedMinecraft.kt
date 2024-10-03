@@ -11,12 +11,14 @@ import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.forge.McpConfigFile
 import net.msrandom.minecraftcodev.forge.Userdev
 import org.gradle.api.DefaultTask
+import org.gradle.api.Project
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.*
 import org.gradle.configurationcache.extensions.serviceOf
 import java.io.Closeable
+import java.io.File
 import java.io.OutputStream
 import java.io.PrintStream
 import java.nio.file.Files
@@ -25,6 +27,15 @@ import kotlin.io.path.copyTo
 import kotlin.io.path.isDirectory
 import kotlin.io.path.listDirectoryEntries
 import kotlin.io.path.writeLines
+
+internal fun resolveFile(
+    project: Project,
+    name: String,
+): File =
+    project.configurations
+        .detachedConfiguration(project.dependencies.create(name))
+        .apply { isTransitive = false }
+        .singleFile
 
 @CacheableTask
 abstract class ResolvePatchedMinecraft : DefaultTask() {
@@ -76,20 +87,25 @@ abstract class ResolvePatchedMinecraft : DefaultTask() {
                     project.configurations.detachedConfiguration(project.dependencies.create(userdev.config.mcp)).singleFile,
                 )!!
 
-            val javaExecutable = metadata.javaVersion.executable(project)
+            val javaExecutable = metadata.javaVersion.executable(project).get().asFile
 
             fun mcpAction(
                 name: String,
                 template: Map<String, Any>,
                 stdout: OutputStream?,
-            ) = McpAction(
-                project.serviceOf(),
-                javaExecutable,
-                mcpConfigFile,
-                mcpConfigFile.config.functions.getValue(name),
-                template,
-                stdout,
-            )
+            ): McpAction {
+                val function = mcpConfigFile.config.functions.getValue(name)
+
+                return McpAction(
+                    project.serviceOf(),
+                    javaExecutable,
+                    resolveFile(project, function.version),
+                    mcpConfigFile,
+                    function.args,
+                    template,
+                    stdout,
+                )
+            }
 
             val librariesFile = Files.createTempFile("libraries", ".txt")
 
@@ -124,7 +140,7 @@ abstract class ResolvePatchedMinecraft : DefaultTask() {
                             renameLog,
                         )
 
-                    val patch = PatchMcpAction(project.serviceOf(), javaExecutable, mcpConfigFile, userdev, patchLog)
+                    val patch = PatchMcpAction(project, javaExecutable, mcpConfigFile, userdev, patchLog)
 
                     val official = mcpConfigFile.config.official
                     val notchObf = userdev.config.notchObf

@@ -14,10 +14,12 @@ import org.gradle.api.Project
 import org.gradle.api.file.FileCollection
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.ListProperty
+import org.gradle.process.ExecOperations
+import java.io.File
 import java.nio.file.FileSystem
 import java.nio.file.Path
 import java.security.MessageDigest
-import java.util.ServiceLoader
+import java.util.*
 import javax.inject.Inject
 import kotlin.io.path.exists
 import kotlin.io.path.extension
@@ -49,6 +51,8 @@ class MappingTreeProvider(
 class MappingResolutionData(
     visitor: MappingTreeProvider,
     messageDigest: MessageDigest,
+    val execOperations: ExecOperations,
+    val extraFiles: Map<String, File>,
 ) : ResolutionData<MappingTreeProvider>(visitor, messageDigest)
 
 fun interface ExtraFileRemapper {
@@ -143,11 +147,11 @@ class ParchmentZipMappingResolutionHandler : ZipMappingResolutionRule {
 
 val mappingResolutionRules = ServiceLoader.load(MappingResolutionRule::class.java).toList()
 
-fun loadMappings(files: FileCollection): MappingTreeView {
+fun loadMappings(files: FileCollection, execOperations: ExecOperations, extraFiles: Map<String, File>): MappingTreeView {
     val tree = MemoryMappingTree()
     val md = MessageDigest.getInstance("SHA1")
 
-    val data = MappingResolutionData(MappingTreeProvider(tree), md)
+    val data = MappingResolutionData(MappingTreeProvider(tree), md, execOperations, extraFiles)
 
     for (file in files) {
         for (rule in mappingResolutionRules) {

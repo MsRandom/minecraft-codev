@@ -1,17 +1,11 @@
 package net.msrandom.minecraftcodev.core.utils
 
-import com.google.common.hash.HashCode
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.runBlocking
 import org.gradle.api.Project
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.internal.GradleInternal
 import org.gradle.cache.scopes.GlobalScopedCacheBuilderFactory
 import org.gradle.configurationcache.extensions.serviceOf
-import java.io.File
 import java.nio.file.Path
-import kotlin.io.path.*
 
 fun getCacheDirectory(project: Project): Path {
     val cacheBuilderFactory = (project.gradle as GradleInternal).serviceOf<GlobalScopedCacheBuilderFactory>()
@@ -37,76 +31,3 @@ fun clientJarPath(
     project: Project,
     version: String,
 ) = getVanillaExtractJarPath(project, version, "client")
-
-fun Project.cacheExpensiveOperation(
-    prefix: String,
-    inputFiles: Iterable<File>,
-    outputPath: Path,
-    action: (Path) -> Unit,
-) {
-    val hashes =
-        runBlocking {
-            inputFiles.map {
-                async { hashFile(it.toPath()).asBytes().toList() }
-            }.awaitAll()
-        }
-
-    val cumulativeHash =
-        hashes.reduce { acc, bytes ->
-            acc.zip(bytes).map { (a, b) -> (b + a * 31).toByte() }
-        }.toByteArray()
-
-    val directoryName = HashCode.fromBytes(cumulativeHash).toString()
-
-    val cacheDirectory =
-        getCacheDirectory(project)
-            .resolve("cached-operations")
-            .resolve(prefix)
-            .resolve(directoryName)
-
-    val cachedOutput = cacheDirectory.resolve(outputPath.fileName)
-    val completionMarker = cacheDirectory.resolve("${outputPath.fileName}-valid-marker")
-
-    if (completionMarker.exists()) {
-        if (outputPath.isSymbolicLink()) {
-            val link = outputPath.readSymbolicLink()
-
-            if (link == cachedOutput) {
-                if (cachedOutput.exists()) {
-                    return
-                }
-
-                outputPath.deleteIfExists()
-            } else {
-                outputPath.deleteIfExists()
-
-                if (cachedOutput.exists()) {
-                    outputPath.createSymbolicLinkPointingTo(cachedOutput)
-
-                    return
-                }
-            }
-        } else {
-            outputPath.deleteIfExists()
-
-            if (cachedOutput.exists()) {
-                outputPath.createSymbolicLinkPointingTo(cachedOutput)
-
-                return
-            }
-        }
-    }
-
-    cacheDirectory.createDirectories()
-
-    cachedOutput.deleteIfExists()
-
-    action(cachedOutput)
-
-    if (completionMarker.notExists()) {
-        completionMarker.createFile()
-    }
-
-    outputPath.deleteIfExists()
-    outputPath.createSymbolicLinkPointingTo(cachedOutput)
-}

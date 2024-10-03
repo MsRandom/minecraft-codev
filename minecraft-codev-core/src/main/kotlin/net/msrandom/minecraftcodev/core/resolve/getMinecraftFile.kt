@@ -15,7 +15,9 @@ enum class MinecraftDownloadVariant(val download: String) {
     Server("server"),
     Client("client"),
     ServerMappings("server_mappings"),
-    ClientMappings("client_mappings"),
+    ClientMappings("client_mappings");
+
+    override fun toString() = download
 }
 
 suspend fun downloadMinecraftClient(
@@ -32,14 +34,12 @@ suspend fun downloadMinecraftFile(
     project: Project,
     metadata: MinecraftVersionMetadata,
     variant: MinecraftDownloadVariant,
-    output: Path? = null,
 ) = metadata.downloads[variant.download]?.let {
     downloadMinecraftFile(
         project,
         metadata.id,
         variant.download,
         it,
-        output,
     )
 }
 
@@ -48,9 +48,8 @@ private suspend fun downloadMinecraftFile(
     version: String,
     downloadName: String,
     variantDownload: MinecraftVersionMetadata.Download,
-    output: Path? = null,
 ): Path {
-    val downloadPath = output ?: minecraftFilePath(project, version, downloadName, variantDownload)
+    val downloadPath = minecraftFilePath(project, version, downloadName, variantDownload)
 
     download(
         project,

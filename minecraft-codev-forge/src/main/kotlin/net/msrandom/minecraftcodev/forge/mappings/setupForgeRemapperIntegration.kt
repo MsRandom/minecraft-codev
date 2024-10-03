@@ -14,48 +14,109 @@ import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.resolve.MinecraftDownloadVariant
 import net.msrandom.minecraftcodev.core.resolve.downloadMinecraftFile
 import net.msrandom.minecraftcodev.core.utils.extension
+import net.msrandom.minecraftcodev.core.utils.lazyProvider
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.forge.McpConfigFile
-import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin
 import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin.Companion.SRG_MAPPINGS_NAMESPACE
 import net.msrandom.minecraftcodev.forge.Userdev
 import net.msrandom.minecraftcodev.forge.accesswidener.findAccessTransformers
 import net.msrandom.minecraftcodev.forge.task.McpAction
+import net.msrandom.minecraftcodev.forge.task.resolveFile
 import net.msrandom.minecraftcodev.remapper.*
 import net.msrandom.minecraftcodev.remapper.dependency.getNamespaceId
 import org.cadixdev.at.io.AccessTransformFormats
 import org.cadixdev.lorenz.MappingSet
 import org.gradle.api.Project
-import org.gradle.configurationcache.extensions.serviceOf
-import org.gradle.process.ExecOperations
+import org.gradle.api.file.FileCollection
+import org.gradle.api.file.RegularFile
+import org.gradle.api.provider.Provider
+import java.io.File
 import java.nio.file.FileSystem
 import java.nio.file.Path
 import kotlin.io.path.deleteExisting
 import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 
+fun mcpConfigFile(
+    project: Project,
+    userdevFiles: FileCollection,
+): Provider<File> {
+    val userdev = Userdev.fromFile(userdevFiles.singleFile)!!
+
+    return project.provider {
+        resolveFile(project, userdev.config.mcp)
+    }
+}
+
+fun mcpConfigExtraRemappingFiles(
+    project: Project,
+    mcpConfigFile: File,
+): Provider<Map<String, File>> {
+    val mcp = McpConfigFile.fromFile(mcpConfigFile)!!
+
+    val metadata =
+        project.lazyProvider {
+            runBlocking {
+                project.extension<MinecraftCodevExtension>().getVersionList().version(mcp.config.version)
+            }
+        }
+
+    val javaExecutable = metadata.flatMap {
+        it.javaVersion.executable(project).map(RegularFile::getAsFile)
+    }
+
+    val clientMappings =
+        metadata.map {
+            runBlocking {
+                downloadMinecraftFile(project, it, MinecraftDownloadVariant.ClientMappings)!!.toFile()
+            }
+        }
+
+    val mergeMappingsJarFile =
+        project.lazyProvider {
+            resolveFile(
+                project,
+                mcp.config.functions
+                    .getValue("mergeMappings")
+                    .version,
+            )
+        }
+
+    val mapProperty = project.objects.mapProperty(String::class.java, File::class.java)
+
+    mapProperty.put("javaExecutable", javaExecutable)
+    mapProperty.put("mergeMappingsJarFile", mergeMappingsJarFile)
+    mapProperty.put("clientMappings", clientMappings)
+
+    return mapProperty
+}
+
 class McpConfigMappingResolutionRule : ZipMappingResolutionRule {
-    override fun load(path: Path, fileSystem: FileSystem, isJar: Boolean, data: MappingResolutionData): Boolean {
-        val userdev = Userdev.fromFile(path.toFile())?.config ?: return false
+    override fun load(
+        path: Path,
+        fileSystem: FileSystem,
+        isJar: Boolean,
+        data: MappingResolutionData,
+    ): Boolean {
+        val mcpConfigFile = McpConfigFile.fromFile(path.toFile()) ?: return false
 
-        val mcp = configurations.detachedConfiguration(dependencies.create(userdev.mcp)).singleFile
-
-        val mcpConfigFile = McpConfigFile.fromFile(mcp) ?: return false
+        val javaExecutable = data.extraFiles.getValue("javaExecutable")
+        val mergeMappingsJarFile = data.extraFiles.getValue("mergeMappingsJarFile")
+        val clientMappings = data.extraFiles.getValue("clientMappings")
 
         zipFileSystem(mcpConfigFile.source.toPath()).use { (mcpFs) ->
             val mappings =
                 if (mcpConfigFile.config.official) {
                     val mergeMappings =
                         runBlocking {
-                            val metadata = extension<MinecraftCodevExtension>().getVersionList().version(mcpConfigFile.config.version)
-
-                            val clientMappings = downloadMinecraftFile(project, metadata, MinecraftDownloadVariant.ClientMappings)!!
-
                             McpAction(
-                                project.serviceOf<ExecOperations>(),
-                                metadata.javaVersion.majorVersion,
+                                data.execOperations,
+                                javaExecutable,
+                                mergeMappingsJarFile,
                                 mcpConfigFile,
-                                mcpConfigFile.config.functions.getValue("mergeMappings"),
+                                mcpConfigFile.config.functions
+                                    .getValue("mergeMappings")
+                                    .args,
                                 mapOf(
                                     "official" to clientMappings,
                                 ),
@@ -108,7 +169,12 @@ class McpConfigMappingResolutionRule : ZipMappingResolutionRule {
 }
 
 class McpFileMappingResolutionRule : ZipMappingResolutionRule {
-    override fun load(path: Path, fileSystem: FileSystem, isJar: Boolean, data: MappingResolutionData): Boolean {
+    override fun load(
+        path: Path,
+        fileSystem: FileSystem,
+        isJar: Boolean,
+        data: MappingResolutionData,
+    ): Boolean {
         val methods = fileSystem.getPath("methods.csv")
         val fields = fileSystem.getPath("fields.csv")
 
@@ -123,7 +189,7 @@ class McpFileMappingResolutionRule : ZipMappingResolutionRule {
         val fieldsMap = readMcp(fields, "searge", data)
         val paramsMap = readMcp(params, "param", data)
 
-        data.visitor.withTree(MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE) { tree ->
+        data.visitor.withTree(SRG_MAPPINGS_NAMESPACE) { tree ->
             tree.accept(
                 object : ForwardingMappingVisitor(data.visitor.tree) {
                     private var targetNamespace = MappingTreeView.NULL_NAMESPACE_ID
@@ -209,7 +275,12 @@ class McpFileMappingResolutionRule : ZipMappingResolutionRule {
 }
 
 class AccessTransformerRemapper : ExtraFileRemapper {
-    override fun invoke(mappings: MappingTreeView, fileSystem: FileSystem, sourceNamespace: String, targetNamespace: String) {
+    override fun invoke(
+        mappings: MappingTreeView,
+        fileSystem: FileSystem,
+        sourceNamespace: String,
+        targetNamespace: String,
+    ) {
         val sourceNamespaceId = mappings.getNamespaceId(sourceNamespace)
         val targetNamespaceId = mappings.getNamespaceId(targetNamespace)
 
@@ -247,9 +318,10 @@ class AccessTransformerRemapper : ExtraFileRemapper {
                     }
 
                     for (argument in method.args) {
-                        methodMapping.getOrCreateParameterMapping(
-                            argument.argPosition,
-                        ).deobfuscatedName = argument.getName(targetNamespaceId)
+                        methodMapping
+                            .getOrCreateParameterMapping(
+                                argument.argPosition,
+                            ).deobfuscatedName = argument.getName(targetNamespaceId)
                     }
                 }
             }
@@ -267,10 +339,13 @@ internal fun Project.setupForgeRemapperIntegration() {
         val remapper = extension<MinecraftCodevExtension>().extension<RemapperExtension>()
 
         remapper.modDetectionRules.add {
-            it.getPath(
-                "META-INF",
-                "mods.toml",
-            ).exists() || it.getPath("META-INF", "neoforge.mods.toml").exists() || it.getPath("mcmod.info").exists()
+            it
+                .getPath(
+                    "META-INF",
+                    "mods.toml",
+                ).exists() ||
+                it.getPath("META-INF", "neoforge.mods.toml").exists() ||
+                it.getPath("mcmod.info").exists()
         }
     }
 }
@@ -293,4 +368,7 @@ private fun readMcp(
     }
 } ?: emptyMap()
 
-private data class McpMapping(val name: String, val comment: String? = null)
+private data class McpMapping(
+    val name: String,
+    val comment: String? = null,
+)

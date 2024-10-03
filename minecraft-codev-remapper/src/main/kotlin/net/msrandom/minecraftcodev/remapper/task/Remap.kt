@@ -7,11 +7,13 @@ import org.gradle.api.artifacts.transform.*
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.FileCollection
 import org.gradle.api.file.FileSystemLocation
-import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.MapProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.*
-import kotlin.io.path.*
+import org.gradle.process.ExecOperations
+import java.io.File
+import javax.inject.Inject
 
 @CacheableTransform
 abstract class Remap : TransformAction<Remap.Parameters> {
@@ -27,16 +29,8 @@ abstract class Remap : TransformAction<Remap.Parameters> {
         abstract val targetNamespace: Property<String>
             @Input get
 
-        abstract val clientMappings: RegularFileProperty
-            @Optional
-            @InputFile
-            @PathSensitive(PathSensitivity.NONE)
-            get
-
-        abstract val javaExecutable: Property<String>
-            @Optional
-            @Input
-            get
+        abstract val extraFiles: MapProperty<String, File>
+            @InputFiles get
 
         init {
             apply {
@@ -44,6 +38,9 @@ abstract class Remap : TransformAction<Remap.Parameters> {
             }
         }
     }
+
+    abstract val execOperations: ExecOperations
+        @Inject get
 
     abstract val inputFile: Provider<FileSystemLocation>
         @InputArtifact get
@@ -61,7 +58,7 @@ abstract class Remap : TransformAction<Remap.Parameters> {
 
         val output = outputs.file("${input.nameWithoutExtension}-$targetNamespace.${input.extension}")
 
-        val mappings = loadMappings(parameters.mappings/*, parameters.clientMappings, parameters.javaExecutable*/)
+        val mappings = loadMappings(parameters.mappings, execOperations, parameters.extraFiles.get())
 
         JarRemapper.remap(
             mappings,

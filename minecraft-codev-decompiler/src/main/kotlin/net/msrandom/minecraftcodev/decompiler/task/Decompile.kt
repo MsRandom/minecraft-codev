@@ -1,6 +1,5 @@
 package net.msrandom.minecraftcodev.decompiler.task
 
-import net.msrandom.minecraftcodev.core.utils.cacheExpensiveOperation
 import net.msrandom.minecraftcodev.decompiler.SourcesGenerator
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
@@ -53,9 +52,7 @@ abstract class Decompile : DefaultTask() {
                 output.deleteExisting()
             }
 
-            project.cacheExpensiveOperation("decompiled-sources", classpath + project.files(input), output) {
-                SourcesGenerator.decompile(input, it, classpath.map(File::toPath))
-            }
+            SourcesGenerator.decompile(input, output, classpath.map(File::toPath))
         }
     }
 }

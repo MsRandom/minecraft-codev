@@ -1,6 +1,5 @@
 package net.msrandom.minecraftcodev.mixins.task
 
-import net.msrandom.minecraftcodev.core.utils.cacheExpensiveOperation
 import net.msrandom.minecraftcodev.core.utils.walk
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.mixins.mixin.GradleMixinService
@@ -54,15 +53,19 @@ abstract class Mixin : DefaultTask() {
         side.convention(Side.UNKNOWN)
     }
 
-    private fun mixin(input: Path, output: Path) {
+    private fun mixin(
+        input: Path,
+        output: Path,
+    ) {
         (MixinService.getService() as GradleMixinService).use(classpath + mixinFiles + project.files(input), side.get()) {
             CLASSPATH@ for (mixinFile in mixinFiles + project.files(input)) {
                 zipFileSystem(mixinFile.toPath()).use fs@{
                     val root = it.base.getPath("/")
 
-                    val handler = mixinListingRules.firstNotNullOfOrNull { rule ->
-                        rule.load(root)
-                    }
+                    val handler =
+                        mixinListingRules.firstNotNullOfOrNull { rule ->
+                            rule.load(root)
+                        }
 
                     if (handler == null) {
                         return@fs
@@ -106,7 +109,11 @@ abstract class Mixin : DefaultTask() {
     private fun mixin(inputChanges: InputChanges) {
         for (inputChange in inputChanges.getFileChanges(inputFiles)) {
             val input = inputChange.file.toPath()
-            val output = outputDirectory.asFile.get().toPath().resolve("${input.nameWithoutExtension}-with-mixins.${input.extension}")
+            val output =
+                outputDirectory.asFile
+                    .get()
+                    .toPath()
+                    .resolve("${input.nameWithoutExtension}-with-mixins.${input.extension}")
 
             if (inputChange.changeType == ChangeType.MODIFIED) {
                 output.deleteExisting()
@@ -116,9 +123,7 @@ abstract class Mixin : DefaultTask() {
                 continue
             }
 
-            project.cacheExpensiveOperation("mixin", classpath + mixinFiles + project.files(input), output) {
-                mixin(input, it)
-            }
+            mixin(input, output)
         }
     }
 }

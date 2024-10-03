@@ -1,18 +1,13 @@
 package net.msrandom.minecraftcodev.forge.task
 
-import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
-import net.msrandom.minecraftcodev.core.utils.extension
 import net.msrandom.minecraftcodev.core.utils.walk
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.forge.McpConfigFile
-import net.msrandom.minecraftcodev.forge.PatchLibrary
 import net.msrandom.minecraftcodev.forge.Userdev
 import net.msrandom.minecraftcodev.forge.mappings.injectForgeMappingService
 import org.gradle.api.Project
 import org.gradle.api.file.RegularFile
-import org.gradle.api.provider.Provider
-import org.gradle.jvm.toolchain.JavaLanguageVersion
-import org.gradle.jvm.toolchain.JavaToolchainService
+import org.gradle.configurationcache.extensions.serviceOf
 import org.gradle.process.ExecOperations
 import java.io.File
 import java.io.OutputStream
@@ -29,10 +24,10 @@ import kotlin.io.path.notExists
 
 open class McpAction(
     private val execOperations: ExecOperations,
-    private val javaExecutable: Provider<RegularFile>,
+    private val javaExecutable: File,
     private val jarFile: File,
     private val mcpConfig: McpConfigFile,
-    private val library: PatchLibrary,
+    private val args: List<String>,
     private val argumentTemplates: Map<String, Any>,
     private val stdout: OutputStream?,
 ) {
@@ -64,7 +59,7 @@ open class McpAction(
 
                 val args =
                     zipFileSystem(mcpConfig.source.toPath()).use { (fs) ->
-                        library.args.map { arg ->
+                        args.map { arg ->
                             if (!arg.startsWith('{')) {
                                 return@map arg
                             }
@@ -88,7 +83,7 @@ open class McpAction(
 
                                         dataOutput
                                     }
-                                    ?: throw UnsupportedOperationException("Unknown argument for MCP function ${library.args}: $template")
+                                    ?: throw UnsupportedOperationException("Unknown argument for MCP function $args: $template")
 
                             when (templateReplacement) {
                                 is RegularFile -> templateReplacement.toString()
@@ -112,19 +107,17 @@ open class McpAction(
 }
 
 class PatchMcpAction(
-    execOperations: ExecOperations,
-    javaExecutable: Provider<RegularFile>,
-    jarFile: File,
+    private val project: Project,
+    javaExecutable: File,
     mcpConfig: McpConfigFile,
     private val userdev: Userdev,
-    private val universal: File,
     logFile: OutputStream,
 ) : McpAction(
-    execOperations,
+    project.serviceOf(),
     javaExecutable,
-    jarFile,
+    resolveFile(project, userdev.config.binpatcher.version),
     mcpConfig,
-    userdev.config.binpatcher,
+    userdev.config.binpatcher.args,
     emptyMap(),
     logFile,
 ) {
@@ -161,6 +154,8 @@ class PatchMcpAction(
                     }
                 }
             }
+
+            val universal = resolveFile(project, userdevConfig.universal)
 
             val filters = userdevConfig.universalFilters.map(::Regex)
 

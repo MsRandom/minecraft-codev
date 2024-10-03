@@ -8,10 +8,14 @@ import net.msrandom.minecraftcodev.remapper.RemapperExtension
 import net.msrandom.minecraftcodev.remapper.loadMappings
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.MapProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.*
 import org.gradle.api.tasks.bundling.Jar
 import org.gradle.language.base.plugins.LifecycleBasePlugin
+import org.gradle.process.ExecOperations
+import java.io.File
+import javax.inject.Inject
 
 abstract class RemapJar : Jar() {
     abstract val input: RegularFileProperty
@@ -35,6 +39,12 @@ abstract class RemapJar : Jar() {
         @CompileClasspath
         get
 
+    abstract val extraFiles: MapProperty<String, File>
+        @InputFiles get
+
+    abstract val execOperations: ExecOperations
+        @Inject get
+
     init {
         run {
             group = LifecycleBasePlugin.BUILD_GROUP
@@ -50,7 +60,8 @@ abstract class RemapJar : Jar() {
                 .extension<MinecraftCodevExtension>()
                 .extension<RemapperExtension>()
 
-        val mappings = loadMappings(mappings)
+
+        val mappings = loadMappings(mappings, execOperations, extraFiles.get())
 
         JarRemapper.remap(
             mappings,
