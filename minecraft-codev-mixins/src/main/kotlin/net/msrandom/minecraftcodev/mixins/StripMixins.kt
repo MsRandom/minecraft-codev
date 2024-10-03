@@ -1,7 +1,6 @@
-package net.msrandom.minecraftcodev.mixins.task
+package net.msrandom.minecraftcodev.mixins
 
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
-import net.msrandom.minecraftcodev.mixins.mixinListingRules
 import org.gradle.api.artifacts.transform.*
 import org.gradle.api.file.FileCollection
 import org.gradle.api.file.FileSystemLocation

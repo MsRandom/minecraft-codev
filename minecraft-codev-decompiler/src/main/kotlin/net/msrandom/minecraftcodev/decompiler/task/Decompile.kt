@@ -3,56 +3,40 @@ package net.msrandom.minecraftcodev.decompiler.task
 import net.msrandom.minecraftcodev.decompiler.SourcesGenerator
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
-import org.gradle.api.file.DirectoryProperty
-import org.gradle.api.file.FileCollection
+import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.tasks.*
-import org.gradle.work.ChangeType
-import org.gradle.work.InputChanges
 import java.io.File
-import kotlin.io.path.deleteExisting
-import kotlin.io.path.deleteIfExists
-import kotlin.io.path.extension
-import kotlin.io.path.nameWithoutExtension
 
+@CacheableTask
 abstract class Decompile : DefaultTask() {
-    abstract val libraryFiles: ConfigurableFileCollection
-        @SkipWhenEmpty
+    abstract val inputFile: RegularFileProperty
         @Classpath
-        @InputFiles
+        @InputFile
         get
 
     abstract val classpath: ConfigurableFileCollection
-        @SkipWhenEmpty
         @CompileClasspath
         @InputFiles
         get
 
-    abstract val outputDirectory: DirectoryProperty
-        @OutputDirectory get
-
-    val outputFiles: FileCollection
-        @Internal get() = project.fileTree(outputDirectory)
+    abstract val outputFile: RegularFileProperty
+        @OutputFile get
 
     init {
-        outputDirectory.convention(project.layout.dir(project.provider { temporaryDir }))
+        outputFile.convention(
+            project.layout.file(
+                inputFile.map {
+                    temporaryDir.resolve("${it.asFile.nameWithoutExtension}-sources.${it.asFile.extension}")
+                },
+            ),
+        )
     }
 
     @TaskAction
-    private fun decompile(inputChanges: InputChanges) {
-        for (fileChange in inputChanges.getFileChanges(libraryFiles)) {
-            val input = fileChange.file.toPath()
+    private fun decompile() {
+        val input = inputFile.asFile.get().toPath()
+        val output = outputFile.asFile.get().toPath()
 
-            val output = outputDirectory.asFile.get().toPath().resolve("${input.nameWithoutExtension}-sources.${input.extension}")
-
-            if (fileChange.changeType == ChangeType.REMOVED) {
-                output.deleteIfExists()
-
-                continue
-            } else if (fileChange.changeType == ChangeType.MODIFIED) {
-                output.deleteExisting()
-            }
-
-            SourcesGenerator.decompile(input, output, classpath.map(File::toPath))
-        }
+        SourcesGenerator.decompile(input, output, classpath.map(File::toPath))
     }
 }

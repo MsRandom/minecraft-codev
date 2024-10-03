@@ -6,11 +6,9 @@ import net.msrandom.minecraftcodev.core.utils.walk
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
-import org.gradle.api.file.DirectoryProperty
-import org.gradle.api.file.FileCollection
+import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.*
-import org.gradle.work.ChangeType
 import org.gradle.work.InputChanges
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassWriter
@@ -21,10 +19,9 @@ import kotlin.io.path.*
 
 @CacheableTask
 abstract class AccessWiden : DefaultTask() {
-    abstract val inputFiles: ConfigurableFileCollection
-        @InputFiles
+    abstract val inputFile: RegularFileProperty
+        @InputFile
         @Classpath
-        @SkipWhenEmpty
         get
 
     abstract val accessWideners: ConfigurableFileCollection
@@ -37,21 +34,30 @@ abstract class AccessWiden : DefaultTask() {
         @Optional
         get
 
-    abstract val outputDirectory: DirectoryProperty
-        @OutputDirectory get
-
-    val outputFiles: FileCollection
-        @Internal get() = project.fileTree(outputDirectory)
+    abstract val outputFile: RegularFileProperty
+        @OutputFile get
 
     init {
-        outputDirectory.convention(project.layout.dir(project.provider { temporaryDir }))
+        outputFile.convention(
+            project.layout.file(
+                inputFile.map {
+                    temporaryDir.resolve("${it.asFile.nameWithoutExtension}-access-widened.${it.asFile.extension}")
+                },
+            ),
+        )
     }
 
-    private fun accessWiden(
-        accessModifiers: AccessModifiers,
-        input: Path,
-        output: Path,
-    ) {
+    @TaskAction
+    private fun accessWiden(inputChanges: InputChanges) {
+        val accessModifiers =
+            project
+                .extension<MinecraftCodevExtension>()
+                .extension<AccessWidenerExtension>()
+                .loadAccessWideners(accessWideners, namespace.takeIf(Property<*>::isPresent)?.get())
+
+        val input = inputFile.asFile.get().toPath()
+        val output = inputFile.asFile.get().toPath()
+
         zipFileSystem(input).use { inputZip ->
             zipFileSystem(output, true).use { outputZip ->
                 inputZip.base.getPath("/").walk {
@@ -79,30 +85,6 @@ abstract class AccessWiden : DefaultTask() {
                     }
                 }
             }
-        }
-    }
-
-    @TaskAction
-    private fun accessWiden(inputChanges: InputChanges) {
-        val accessWidener =
-            project
-                .extension<MinecraftCodevExtension>()
-                .extension<AccessWidenerExtension>()
-                .loadAccessWideners(accessWideners, namespace.takeIf(Property<*>::isPresent)?.get())
-
-        for (inputChange in inputChanges.getFileChanges(inputFiles)) {
-            val input = inputChange.file.toPath()
-            val output = outputDirectory.asFile.get().toPath().resolve("${input.nameWithoutExtension}-access-widened.${input.extension}")
-
-            if (inputChange.changeType == ChangeType.MODIFIED) {
-                output.deleteExisting()
-            } else if (inputChange.changeType == ChangeType.REMOVED) {
-                output.deleteExisting()
-
-                continue
-            }
-
-            accessWiden(accessWidener, input, output)
         }
     }
 }

@@ -6,12 +6,9 @@ import net.msrandom.minecraftcodev.mixins.mixin.GradleMixinService
 import net.msrandom.minecraftcodev.mixins.mixinListingRules
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
-import org.gradle.api.file.DirectoryProperty
-import org.gradle.api.file.FileCollection
+import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.*
-import org.gradle.work.ChangeType
-import org.gradle.work.InputChanges
 import org.spongepowered.asm.mixin.MixinEnvironment.Side
 import org.spongepowered.asm.mixin.Mixins
 import org.spongepowered.asm.service.MixinService
@@ -22,10 +19,9 @@ import kotlin.io.path.*
 
 @CacheableTask
 abstract class Mixin : DefaultTask() {
-    abstract val inputFiles: ConfigurableFileCollection
-        @InputFiles
+    abstract val inputFile: RegularFileProperty
+        @InputFile
         @Classpath
-        @SkipWhenEmpty
         get
 
     abstract val mixinFiles: ConfigurableFileCollection
@@ -41,22 +37,25 @@ abstract class Mixin : DefaultTask() {
     abstract val side: Property<Side>
         @Input get
 
-    abstract val outputDirectory: DirectoryProperty
-        @OutputDirectory get
-
-    val outputFiles: FileCollection
-        @Internal get() = project.fileTree(outputDirectory)
+    abstract val outputFile: RegularFileProperty
+        @OutputFile get
 
     init {
-        outputDirectory.convention(project.layout.dir(project.provider { temporaryDir }))
+        outputFile.convention(
+            project.layout.file(
+                inputFile.map {
+                    temporaryDir.resolve("${it.asFile.nameWithoutExtension}-with-mixins.${it.asFile.extension}")
+                },
+            ),
+        )
 
         side.convention(Side.UNKNOWN)
     }
 
-    private fun mixin(
-        input: Path,
-        output: Path,
-    ) {
+    @TaskAction
+    private fun mixin() {
+        val input = inputFile.asFile.get().toPath()
+        val output = outputFile.asFile.get().toPath()
         (MixinService.getService() as GradleMixinService).use(classpath + mixinFiles + project.files(input), side.get()) {
             CLASSPATH@ for (mixinFile in mixinFiles + project.files(input)) {
                 zipFileSystem(mixinFile.toPath()).use fs@{
@@ -102,28 +101,6 @@ abstract class Mixin : DefaultTask() {
                     }
                 }
             }
-        }
-    }
-
-    @TaskAction
-    private fun mixin(inputChanges: InputChanges) {
-        for (inputChange in inputChanges.getFileChanges(inputFiles)) {
-            val input = inputChange.file.toPath()
-            val output =
-                outputDirectory.asFile
-                    .get()
-                    .toPath()
-                    .resolve("${input.nameWithoutExtension}-with-mixins.${input.extension}")
-
-            if (inputChange.changeType == ChangeType.MODIFIED) {
-                output.deleteExisting()
-            } else if (inputChange.changeType == ChangeType.REMOVED) {
-                output.deleteExisting()
-
-                continue
-            }
-
-            mixin(input, output)
         }
     }
 }
