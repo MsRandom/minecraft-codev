@@ -63,7 +63,6 @@ abstract class RemapAction : TransformAction<RemapAction.Parameters> {
         val input = inputFile.get().asFile
 
         if (parameters.filterMods.get() && !isMod(input.toPath())) {
-            println("Skipping remapping non-mod $input")
             outputs.file(inputFile)
 
             return

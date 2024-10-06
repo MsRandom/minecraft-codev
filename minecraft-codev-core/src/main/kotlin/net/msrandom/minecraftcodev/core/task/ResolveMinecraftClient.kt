@@ -24,7 +24,7 @@ abstract class ResolveMinecraftClient : DefaultTask() {
         output.convention(
             project.layout.file(
                 version.map {
-                    temporaryDir.resolve("client-$it.jar")
+                    temporaryDir.resolve("minecraft-client-$it.jar")
                 },
             ),
         )

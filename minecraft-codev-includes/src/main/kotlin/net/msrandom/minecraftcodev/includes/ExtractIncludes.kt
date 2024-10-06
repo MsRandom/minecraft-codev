@@ -61,6 +61,8 @@ abstract class ExtractIncludes : TransformAction<TransformParameters.None> {
                                     val path = it.base.getPath(includedJar)
                                     val hash = hashFile(path)
 
+                                    println("Skipping extracting $path because hash $hash is in dependencies")
+
                                     if (hash !in inputHashes) {
                                         val includeOutput = outputs.file(path.fileName.toString()).toPath()
 

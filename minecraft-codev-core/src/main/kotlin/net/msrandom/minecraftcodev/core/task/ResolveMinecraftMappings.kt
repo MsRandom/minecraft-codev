@@ -4,7 +4,6 @@ import kotlinx.coroutines.runBlocking
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.resolve.MinecraftDownloadVariant
 import net.msrandom.minecraftcodev.core.resolve.downloadMinecraftFile
-import net.msrandom.minecraftcodev.core.resolve.minecraftFilePath
 import net.msrandom.minecraftcodev.core.utils.extension
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.RegularFileProperty
@@ -17,7 +16,7 @@ import java.nio.file.StandardCopyOption
 import kotlin.io.path.copyTo
 
 @CacheableTask
-abstract class DownloadMinecraftMappings : DefaultTask() {
+abstract class ResolveMinecraftMappings : DefaultTask() {
     abstract val version: Property<String>
         @Input get
 
@@ -33,7 +32,7 @@ abstract class DownloadMinecraftMappings : DefaultTask() {
                 version.zip(server, ::Pair).map { (v, s) ->
                     val variant = if (s) "server" else "client"
 
-                    temporaryDir.resolve("$variant-mappings-$v.txt")
+                    temporaryDir.resolve("minecraft-$variant-mappings-$v.txt")
                 },
             ),
         )

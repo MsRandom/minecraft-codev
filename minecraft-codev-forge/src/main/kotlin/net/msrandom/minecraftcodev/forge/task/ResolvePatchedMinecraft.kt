@@ -59,7 +59,7 @@ abstract class ResolvePatchedMinecraft : DefaultTask() {
         output.convention(
             project.layout.file(
                 version.map {
-                    temporaryDir.resolve("patched-$it.jar")
+                    temporaryDir.resolve("minecraft-$it-patched.jar")
                 },
             ),
         )

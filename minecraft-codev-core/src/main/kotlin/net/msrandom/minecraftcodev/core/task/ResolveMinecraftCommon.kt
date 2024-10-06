@@ -24,7 +24,7 @@ abstract class ResolveMinecraftCommon : DefaultTask() {
         output.convention(
             project.layout.file(
                 version.map {
-                    temporaryDir.resolve("common-$it.jar")
+                    temporaryDir.resolve("minecraft-common-$it.jar")
                 },
             ),
         )
