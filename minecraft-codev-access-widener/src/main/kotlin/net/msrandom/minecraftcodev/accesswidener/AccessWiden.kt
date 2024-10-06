@@ -9,7 +9,6 @@ import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.*
-import org.gradle.work.InputChanges
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassWriter
 import org.objectweb.asm.Opcodes
@@ -48,7 +47,7 @@ abstract class AccessWiden : DefaultTask() {
     }
 
     @TaskAction
-    private fun accessWiden(inputChanges: InputChanges) {
+    private fun accessWiden() {
         val accessModifiers =
             project
                 .extension<MinecraftCodevExtension>()
@@ -56,7 +55,9 @@ abstract class AccessWiden : DefaultTask() {
                 .loadAccessWideners(accessWideners, namespace.takeIf(Property<*>::isPresent)?.get())
 
         val input = inputFile.asFile.get().toPath()
-        val output = inputFile.asFile.get().toPath()
+        val output = outputFile.asFile.get().toPath()
+
+        output.deleteIfExists()
 
         zipFileSystem(input).use { inputZip ->
             zipFileSystem(output, true).use { outputZip ->

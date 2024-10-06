@@ -3,6 +3,7 @@ package net.msrandom.minecraftcodev.remapper.task
 import net.msrandom.minecraftcodev.remapper.JarRemapper
 import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
 import net.msrandom.minecraftcodev.remapper.loadMappings
+import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.MapProperty
@@ -14,8 +15,8 @@ import org.gradle.process.ExecOperations
 import java.io.File
 import javax.inject.Inject
 
-abstract class RemapJar : Jar() {
-    abstract val input: RegularFileProperty
+abstract class RemapTask : DefaultTask() {
+    abstract val inputFile: RegularFileProperty
         @InputFile
         @PathSensitive(PathSensitivity.RELATIVE)
         get
@@ -29,6 +30,7 @@ abstract class RemapJar : Jar() {
     abstract val mappings: ConfigurableFileCollection
         @InputFiles
         @PathSensitive(PathSensitivity.NONE)
+        @SkipWhenEmpty
         get
 
     abstract val classpath: ConfigurableFileCollection
@@ -42,9 +44,20 @@ abstract class RemapJar : Jar() {
     abstract val execOperations: ExecOperations
         @Inject get
 
+    abstract val outputFile: RegularFileProperty
+        @OutputFile get
+
     init {
         run {
-            group = LifecycleBasePlugin.BUILD_GROUP
+            outputFile.convention(
+                project.layout.file(
+                    inputFile.flatMap { file ->
+                        targetNamespace.map { namespace ->
+                            temporaryDir.resolve("${file.asFile.nameWithoutExtension}-$namespace.${file.asFile.extension}")
+                        }
+                    },
+                ),
+            )
 
             sourceNamespace.convention(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
         }
@@ -58,8 +71,8 @@ abstract class RemapJar : Jar() {
             mappings,
             sourceNamespace.get(),
             targetNamespace.get(),
-            input.asFile.get().toPath(),
-            archiveFile.get().asFile.toPath(),
+            inputFile.asFile.get().toPath(),
+            outputFile.asFile.get().toPath(),
             classpath,
         )
     }

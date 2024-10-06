@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.resolve.MinecraftDownloadVariant
 import net.msrandom.minecraftcodev.core.resolve.downloadMinecraftFile
+import net.msrandom.minecraftcodev.core.resolve.minecraftFilePath
 import net.msrandom.minecraftcodev.core.utils.extension
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.RegularFileProperty
@@ -12,6 +13,7 @@ import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
+import java.nio.file.StandardCopyOption
 import kotlin.io.path.copyTo
 
 @CacheableTask
@@ -50,7 +52,7 @@ abstract class DownloadMinecraftMappings : DefaultTask() {
             val downloadPath = downloadMinecraftFile(project, version, variant)
                 ?: throw IllegalArgumentException("${version.id} does not have variant $variant")
 
-            downloadPath.copyTo(output)
+            downloadPath.copyTo(output, StandardCopyOption.REPLACE_EXISTING)
         }
     }
 }

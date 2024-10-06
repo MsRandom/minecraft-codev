@@ -1,8 +1,8 @@
 package net.msrandom.minecraftcodev.mixins
 
 import net.msrandom.minecraftcodev.core.FileListingRules
-import java.util.ServiceLoader
+import net.msrandom.minecraftcodev.core.utils.serviceLoader
 
 interface MixinListingRule : FileListingRules
 
-val mixinListingRules = ServiceLoader.load(MixinListingRule::class.java).toList()
+val mixinListingRules = serviceLoader<MixinListingRule>()

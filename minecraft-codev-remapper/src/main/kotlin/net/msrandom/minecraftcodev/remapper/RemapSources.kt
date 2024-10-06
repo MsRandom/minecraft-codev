@@ -38,7 +38,9 @@ abstract class RemapSources : TransformAction<RemapSources.Parameters> {
     }
 
     abstract val inputFile: Provider<FileSystemLocation>
-        @InputArtifact get
+        @InputArtifact
+        @PathSensitive(PathSensitivity.NONE)
+        get
 
     override fun transform(outputs: TransformOutputs) {
         outputs.file(inputFile)

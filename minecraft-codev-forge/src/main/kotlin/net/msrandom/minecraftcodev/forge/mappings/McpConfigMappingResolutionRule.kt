@@ -19,7 +19,6 @@ import net.msrandom.minecraftcodev.forge.Userdev
 import net.msrandom.minecraftcodev.forge.task.McpAction
 import net.msrandom.minecraftcodev.forge.task.resolveFile
 import net.msrandom.minecraftcodev.remapper.*
-import net.msrandom.minecraftcodev.remapper.dependency.getNamespaceId
 import org.gradle.api.Project
 import org.gradle.api.file.FileCollection
 import org.gradle.api.file.RegularFile
@@ -27,25 +26,24 @@ import org.gradle.api.provider.Provider
 import java.io.File
 import java.nio.file.FileSystem
 import java.nio.file.Path
-import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 
-fun mcpConfigFile(
+fun mcpConfigDependency(
     project: Project,
     userdevFiles: FileCollection,
-): Provider<File> {
-    val userdev = Userdev.fromFile(userdevFiles.singleFile)!!
-
+): Provider<String> {
     return project.provider {
-        resolveFile(project, userdev.config.mcp)
+        val userdev = Userdev.fromFile(userdevFiles.singleFile)!!
+
+        userdev.config.mcp
     }
 }
 
 fun mcpConfigExtraRemappingFiles(
     project: Project,
-    mcpConfigFile: File,
+    mcpConfigFile: String,
 ): Provider<Map<String, File>> {
-    val mcp = McpConfigFile.fromFile(mcpConfigFile)!!
+    val mcp = McpConfigFile.fromFile(resolveFile(project, mcpConfigFile))!!
 
     val metadata =
         project.lazyProvider {

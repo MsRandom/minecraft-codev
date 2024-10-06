@@ -19,6 +19,7 @@ import net.msrandom.minecraftcodev.runs.task.DownloadAssets
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
 import org.gradle.api.Action
 import org.gradle.api.artifacts.Configuration
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.file.FileCollection
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
@@ -103,12 +104,23 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
                 project.extension<MinecraftCodevExtension>().extension<RunsContainer>().assetsDirectory.asFile
             }
 
-            "modules" ->
-                config.modules.flatMapTo(mutableSetOf()) {
-                    project.configurations
-                        .detachedConfiguration(project.dependencies.create(it))
-                        .setTransitive(false)
-                }.joinToString(File.pathSeparator)
+            "modules" -> {
+                val configuration = project.configurations.getByName(sourceSet.get().runtimeClasspathConfigurationName)
+
+                val moduleDependencies = config.modules.map {
+                    val dependency = project.dependencies.create(it)
+
+                    dependency.group to dependency.name
+                }
+
+                val moduleArtifactView = configuration.incoming.artifactView { viewConfiguration ->
+                    viewConfiguration.componentFilter { component ->
+                        component is ModuleComponentIdentifier && (component.group to component.module) in moduleDependencies
+                    }
+                }
+
+                moduleArtifactView.files.joinToString(File.pathSeparator)
+            }
 
             "MC_VERSION" -> manifest.id
             "mcp_mappings" -> "minecraft-codev.mappings"
@@ -208,7 +220,7 @@ open class ForgeRunsDefaultsContainer(private val defaults: RunConfigurationDefa
             }
 
             "minecraft_classpath_file" -> {
-                val path = project.layout.buildDirectory.dir("legacyClasspath").get().file("legacyClasspath.txt").asFile.toPath()
+                val path = project.layout.buildDirectory.dir("legacyClasspath").get().file("${sourceSet.get().name}.txt").asFile.toPath()
 
                 path.parent.createDirectories()
                 path.writeLines(runtimeClasspath.map(File::getAbsolutePath))

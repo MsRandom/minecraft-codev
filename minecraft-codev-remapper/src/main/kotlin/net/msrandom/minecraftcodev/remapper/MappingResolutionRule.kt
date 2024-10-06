@@ -8,6 +8,7 @@ import net.fabricmc.mappingio.tree.MappingTreeView
 import net.fabricmc.mappingio.tree.MemoryMappingTree
 import net.msrandom.minecraftcodev.core.*
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
+import net.msrandom.minecraftcodev.core.utils.serviceLoader
 import org.gradle.api.Action
 import org.gradle.api.file.FileCollection
 import org.gradle.process.ExecOperations
@@ -15,7 +16,6 @@ import java.io.File
 import java.nio.file.FileSystem
 import java.nio.file.Path
 import java.security.MessageDigest
-import java.util.ServiceLoader
 import kotlin.io.path.inputStream
 import kotlin.io.path.notExists
 
@@ -121,7 +121,7 @@ class ParchmentZipMappingResolutionRule : ZipMappingResolutionRule {
     }
 }
 
-val mappingResolutionRules = ServiceLoader.load(MappingResolutionRule::class.java).toList()
+val mappingResolutionRules = serviceLoader<MappingResolutionRule>()
 
 fun loadMappings(
     files: FileCollection,

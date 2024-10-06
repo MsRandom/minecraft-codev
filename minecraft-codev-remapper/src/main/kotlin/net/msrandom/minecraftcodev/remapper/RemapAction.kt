@@ -13,7 +13,7 @@ import java.io.File
 import javax.inject.Inject
 
 @CacheableTransform
-abstract class Remap : TransformAction<Remap.Parameters> {
+abstract class RemapAction : TransformAction<RemapAction.Parameters> {
     abstract class Parameters : TransformParameters {
         abstract val mappings: ConfigurableFileCollection
             @InputFiles
@@ -26,15 +26,22 @@ abstract class Remap : TransformAction<Remap.Parameters> {
         abstract val targetNamespace: Property<String>
             @Input get
 
+        abstract val extraClasspath: ConfigurableFileCollection
+            @CompileClasspath
+            @InputFiles
+            get
+
         abstract val filterMods: Property<Boolean>
             @Input get
 
         abstract val extraFiles: MapProperty<String, File>
-            @InputFiles get
+            @Input get
 
         init {
             apply {
                 targetNamespace.convention(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
+
+                filterMods.convention(true)
             }
         }
     }
@@ -43,7 +50,9 @@ abstract class Remap : TransformAction<Remap.Parameters> {
         @Inject get
 
     abstract val inputFile: Provider<FileSystemLocation>
-        @InputArtifact get
+        @InputArtifact
+        @PathSensitive(PathSensitivity.NONE)
+        get
 
     abstract val classpath: FileCollection
         @Classpath
@@ -54,6 +63,7 @@ abstract class Remap : TransformAction<Remap.Parameters> {
         val input = inputFile.get().asFile
 
         if (parameters.filterMods.get() && !isMod(input.toPath())) {
+            println("Skipping remapping non-mod $input")
             outputs.file(inputFile)
 
             return
@@ -61,6 +71,8 @@ abstract class Remap : TransformAction<Remap.Parameters> {
 
         val sourceNamespace = parameters.sourceNamespace.get()
         val targetNamespace = parameters.targetNamespace.get()
+
+        println("Remapping mod $input from $sourceNamespace to $targetNamespace")
 
         val output = outputs.file("${input.nameWithoutExtension}-$targetNamespace.${input.extension}")
 
@@ -72,7 +84,7 @@ abstract class Remap : TransformAction<Remap.Parameters> {
             targetNamespace,
             input.toPath(),
             output.toPath(),
-            classpath,
+            classpath + parameters.extraClasspath,
         )
     }
 }

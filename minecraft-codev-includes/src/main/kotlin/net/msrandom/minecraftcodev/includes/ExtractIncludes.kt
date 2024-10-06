@@ -1,8 +1,6 @@
 package net.msrandom.minecraftcodev.includes
 
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
 import net.msrandom.minecraftcodev.core.utils.*
 import org.gradle.api.artifacts.transform.CacheableTransform
 import org.gradle.api.artifacts.transform.InputArtifact
@@ -20,7 +18,9 @@ import kotlin.io.path.*
 @CacheableTransform
 abstract class ExtractIncludes : TransformAction<TransformParameters.None> {
     abstract val inputFile: Provider<FileSystemLocation>
-        @InputArtifact get
+        @InputArtifact
+        @PathSensitive(PathSensitivity.NONE)
+        get
 
     abstract val classpath: FileCollection
         @Classpath
@@ -29,19 +29,9 @@ abstract class ExtractIncludes : TransformAction<TransformParameters.None> {
 
     override fun transform(outputs: TransformOutputs) {
         val input = inputFile.get().asFile.toPath()
-        val output = outputs.file(input.fileName.toString()).toPath()
 
         val handler =
             runBlocking {
-                val inputHashes =
-                    classpath
-                        .map {
-                            async {
-                                hashFile(it.toPath())
-                            }
-                        }.awaitAll()
-                        .toHashSet()
-
                 zipFileSystem(input).use {
                     val root = it.base.getPath("/")
 
@@ -51,22 +41,31 @@ abstract class ExtractIncludes : TransformAction<TransformParameters.None> {
                         }
 
                     if (handler == null) {
-                        outputs.file(input)
-
                         return@runBlocking null
                     }
+
+                    val inputHashes =
+                        classpath
+                            .map {
+                                async {
+                                    hashFile(it.toPath())
+                                }
+                            }.awaitAll()
+                            .toHashSet()
 
                     handler
                         .list(root)
                         .map { includedJar ->
                             async {
-                                val path = it.base.getPath(includedJar)
-                                val includeOutput = outputs.file(path.fileName.toString()).toPath()
+                                withContext(Dispatchers.IO) {
+                                    val path = it.base.getPath(includedJar)
+                                    val hash = hashFile(path)
 
-                                val hash = hashFile(path)
+                                    if (hash !in inputHashes) {
+                                        val includeOutput = outputs.file(path.fileName.toString()).toPath()
 
-                                if (hash !in inputHashes) {
-                                    path.copyTo(includeOutput, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
+                                        path.copyTo(includeOutput, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
+                                    }
                                 }
                             }
                         }.awaitAll()
@@ -76,8 +75,12 @@ abstract class ExtractIncludes : TransformAction<TransformParameters.None> {
             }
 
         if (handler == null) {
+            outputs.file(inputFile)
+
             return
         }
+
+        val output = outputs.file(input.fileName.toString()).toPath()
 
         input.copyTo(output, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
 

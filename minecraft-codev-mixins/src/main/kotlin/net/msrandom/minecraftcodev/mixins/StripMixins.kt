@@ -6,6 +6,8 @@ import org.gradle.api.file.FileCollection
 import org.gradle.api.file.FileSystemLocation
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.Classpath
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
 import java.nio.file.StandardCopyOption
 import kotlin.io.path.copyTo
 import kotlin.io.path.deleteExisting
@@ -15,7 +17,9 @@ import kotlin.io.path.nameWithoutExtension
 @CacheableTransform
 abstract class StripMixins : TransformAction<TransformParameters.None> {
     abstract val inputFile: Provider<FileSystemLocation>
-        @InputArtifact get
+        @InputArtifact
+        @PathSensitive(PathSensitivity.NONE)
+        get
 
     abstract val classpath: FileCollection
         @Classpath

@@ -1,8 +1,8 @@
 package net.msrandom.minecraftcodev.remapper
 
 import net.fabricmc.mappingio.tree.MappingTreeView
+import net.msrandom.minecraftcodev.core.utils.serviceLoader
 import java.nio.file.FileSystem
-import java.util.*
 
 fun interface ExtraFileRemapper {
     operator fun invoke(
@@ -13,7 +13,7 @@ fun interface ExtraFileRemapper {
     )
 }
 
-val extraFileRemappers = ServiceLoader.load(ExtraFileRemapper::class.java).toList()
+val extraFileRemappers = serviceLoader<ExtraFileRemapper>()
 
 fun remapFiles(
     mappings: MappingTreeView,

@@ -1,8 +1,8 @@
 package net.msrandom.minecraftcodev.includes
 
 import net.msrandom.minecraftcodev.core.FileListingRules
-import java.util.ServiceLoader
+import net.msrandom.minecraftcodev.core.utils.serviceLoader
 
 interface IncludedJarListingRule : FileListingRules
 
-val includedJarListingRules = ServiceLoader.load(IncludedJarListingRule::class.java).toList()
+val includedJarListingRules = serviceLoader<IncludedJarListingRule>()

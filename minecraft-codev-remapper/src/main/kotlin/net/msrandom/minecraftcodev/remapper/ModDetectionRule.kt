@@ -1,9 +1,9 @@
 package net.msrandom.minecraftcodev.remapper
 
+import net.msrandom.minecraftcodev.core.utils.serviceLoader
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import java.nio.file.FileSystem
 import java.nio.file.Path
-import java.util.*
 import kotlin.io.path.exists
 import kotlin.io.path.extension
 
@@ -20,7 +20,7 @@ class VanillaModDetectionRule : ModDetectionRule {
             fileSystem.getPath("assets/lang/en_US.lang").exists()
 }
 
-val modDetectionRules = ServiceLoader.load(ModDetectionRule::class.java).toList()
+val modDetectionRules = serviceLoader<ModDetectionRule>()
 
 fun isMod(path: Path): Boolean {
     val extension = path.extension
