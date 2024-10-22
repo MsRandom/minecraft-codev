@@ -18,8 +18,7 @@ class McpFileMappingResolutionRule : ZipMappingResolutionRule {
     private fun readMcp(
         path: Path,
         source: String,
-        data: MappingResolutionData,
-    ) = path.takeIf(Path::exists)?.inputStream()?.let(data::decorate)?.reader()?.let { NamedCsvReader.builder().build(it) }?.use {
+    ) = path.takeIf(Path::exists)?.inputStream()?.reader()?.let { NamedCsvReader.builder().build(it) }?.use {
         buildMap {
             if (it.header.contains("desc")) {
                 for (row in it.stream()) {
@@ -49,9 +48,9 @@ class McpFileMappingResolutionRule : ZipMappingResolutionRule {
 
         val params = fileSystem.getPath("params.csv")
 
-        val methodsMap = readMcp(methods, "searge", data)
-        val fieldsMap = readMcp(fields, "searge", data)
-        val paramsMap = readMcp(params, "param", data)
+        val methodsMap = readMcp(methods, "searge")
+        val fieldsMap = readMcp(fields, "searge")
+        val paramsMap = readMcp(params, "param")
 
         data.visitor.withTree(SRG_MAPPINGS_NAMESPACE) { tree ->
             tree.accept(

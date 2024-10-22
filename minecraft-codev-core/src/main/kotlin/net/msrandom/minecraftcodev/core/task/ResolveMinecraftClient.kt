@@ -1,10 +1,8 @@
 package net.msrandom.minecraftcodev.core.task
 
 import kotlinx.coroutines.runBlocking
-import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.resolve.setupClient
-import net.msrandom.minecraftcodev.core.utils.extension
-import org.gradle.api.DefaultTask
+import net.msrandom.minecraftcodev.core.utils.getAsPath
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.CacheableTask
@@ -13,7 +11,7 @@ import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
 
 @CacheableTask
-abstract class ResolveMinecraftClient : DefaultTask() {
+abstract class ResolveMinecraftClient : CachedMinecraftTask() {
     abstract val version: Property<String>
         @Input get
 
@@ -33,11 +31,18 @@ abstract class ResolveMinecraftClient : DefaultTask() {
     @TaskAction
     private fun extract() {
         runBlocking {
-            val versionList = project.extension<MinecraftCodevExtension>().getVersionList()
+            val versionList = cacheParameters.versionList()
 
             val version = versionList.version(version.get())
 
-            setupClient(project, output.asFile.get().toPath(), version)
+            setupClient(
+                cacheParameters.directory.asFile
+                    .get()
+                    .toPath(),
+                output.getAsPath(),
+                version,
+                cacheParameters.isOffline.get(),
+            )
         }
     }
 }

@@ -1,9 +1,9 @@
 package net.msrandom.minecraftcodev.fabric.runs
 
 import kotlinx.coroutines.runBlocking
-import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
 import net.msrandom.minecraftcodev.core.utils.extension
+import net.msrandom.minecraftcodev.core.utils.toPath
 import net.msrandom.minecraftcodev.fabric.FabricInstaller
 import net.msrandom.minecraftcodev.fabric.loadFabricInstaller
 import net.msrandom.minecraftcodev.runs.*
@@ -36,7 +36,7 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
                     val file = directory.file("classpath.txt")
                     val runtimeClasspath = sourceSet.runtimeClasspath
 
-                    file.asFile.toPath().parent.createDirectories()
+                    file.toPath().parent.createDirectories()
                     file.asFile.writeText(runtimeClasspath.files.joinToString("\n", transform = File::getAbsolutePath))
 
                     MinecraftRunConfiguration.Argument("-Dfabric.remapClasspathFile=", file.asFile)
@@ -51,14 +51,13 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
         defaults(FabricInstaller.MainClass::client)
 
         defaults.builder.action {
-            val codev = project.extension<MinecraftCodevExtension>()
-            val runs = codev.extension<RunsContainer>()
+            val runs = project.extension<RunsContainer>()
 
             val assetIndex =
                 version.map {
                     runBlocking {
-                        codev
-                            .getVersionList()
+                        cacheParameters
+                            .versionList()
                             .version(it)
                             .assetIndex
                     }

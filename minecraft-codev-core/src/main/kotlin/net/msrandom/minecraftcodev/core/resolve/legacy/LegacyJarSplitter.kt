@@ -6,6 +6,7 @@ import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
 import net.msrandom.minecraftcodev.core.resolve.downloadMinecraftClient
 import net.msrandom.minecraftcodev.core.utils.*
 import org.gradle.api.Project
+import org.gradle.api.file.Directory
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassWriter
 import org.objectweb.asm.Handle
@@ -131,7 +132,7 @@ object LegacyJarSplitter {
         }
     }
 
-    fun MethodNode.collectTypeReferences() =
+    private fun MethodNode.collectTypeReferences() =
         buildList {
             val descriptor = Type.getMethodType(desc)
             add(descriptor.returnType)
@@ -210,14 +211,15 @@ object LegacyJarSplitter {
             }
         }
 
-    suspend fun split(
-        project: Project,
+    internal suspend fun split(
+        cacheDirectory: Path,
         metadata: MinecraftVersionMetadata,
         server: Path,
+        isOffline: Boolean,
     ): JarSplittingResult {
-        val client = downloadMinecraftClient(project, metadata)
-        val outputCommon = commonJarPath(project, metadata.id)
-        val outputClient = clientJarPath(project, metadata.id)
+        val client = downloadMinecraftClient(cacheDirectory, metadata, isOffline)
+        val outputCommon = commonJarPath(cacheDirectory, metadata.id)
+        val outputClient = clientJarPath(cacheDirectory, metadata.id)
 
         outputCommon.parent.createDirectories()
         outputClient.parent.createDirectories()
@@ -347,7 +349,7 @@ object LegacyJarSplitter {
         )
     }
 
-    fun copyAssets(
+    private fun copyAssets(
         client: FileSystem,
         server: FileSystem,
         commonOut: FileSystem,

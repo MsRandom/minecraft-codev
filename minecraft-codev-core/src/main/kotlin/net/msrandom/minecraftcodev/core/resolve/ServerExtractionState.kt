@@ -5,17 +5,20 @@ import net.msrandom.minecraftcodev.core.resolve.legacy.ServerFixer
 import net.msrandom.minecraftcodev.core.utils.getCacheDirectory
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.gradle.api.Project
+import org.gradle.api.file.Directory
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import kotlin.io.path.*
 
+// TODO Optimize IO operations here using coroutines
 suspend fun getExtractionState(
-    project: Project,
+    cacheDirectory: Path,
     manifest: MinecraftVersionMetadata,
+    isOffline: Boolean,
 ): ServerExtractionResult? {
     val extractedServerData =
-        getCacheDirectory(project)
+        cacheDirectory
             .resolve("extracted-servers")
             .resolve(manifest.id)
 
@@ -32,9 +35,10 @@ suspend fun getExtractionState(
 
     val serverJar =
         downloadMinecraftFile(
-            project,
+            cacheDirectory,
             manifest,
             MinecraftDownloadVariant.Server,
+            isOffline,
         ) ?: return null
 
     val temporaryServer = Files.createTempFile("server-", ".tmp.jar")
@@ -67,7 +71,7 @@ suspend fun getExtractionState(
                     manifest,
                     temporaryServer,
                     serverFs.base,
-                    downloadMinecraftClient(project, manifest),
+                    downloadMinecraftClient(cacheDirectory, manifest, isOffline),
                 )
         }
     }

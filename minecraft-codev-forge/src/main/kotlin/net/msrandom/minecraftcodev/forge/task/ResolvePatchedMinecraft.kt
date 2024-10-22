@@ -2,43 +2,54 @@ package net.msrandom.minecraftcodev.forge.task
 
 import kotlinx.coroutines.runBlocking
 import net.minecraftforge.accesstransformer.TransformerProcessor
-import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
+import net.msrandom.minecraftcodev.core.resolve.addMinecraftMarker
 import net.msrandom.minecraftcodev.core.resolve.downloadMinecraftClient
 import net.msrandom.minecraftcodev.core.resolve.getClientDependencies
 import net.msrandom.minecraftcodev.core.resolve.getExtractionState
-import net.msrandom.minecraftcodev.core.utils.extension
+import net.msrandom.minecraftcodev.core.task.CachedMinecraftTask
+import net.msrandom.minecraftcodev.core.utils.getAsPath
+import net.msrandom.minecraftcodev.core.utils.toPath
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.forge.McpConfigFile
 import net.msrandom.minecraftcodev.forge.Userdev
-import org.gradle.api.DefaultTask
 import org.gradle.api.Project
+import org.gradle.api.artifacts.ConfigurationContainer
+import org.gradle.api.artifacts.dsl.DependencyHandler
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.*
-import org.gradle.configurationcache.extensions.serviceOf
+import org.gradle.jvm.toolchain.JavaToolchainService
+import org.gradle.process.ExecOperations
 import java.io.Closeable
 import java.io.File
 import java.io.OutputStream
 import java.io.PrintStream
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import javax.inject.Inject
 import kotlin.io.path.copyTo
 import kotlin.io.path.isDirectory
 import kotlin.io.path.listDirectoryEntries
 import kotlin.io.path.writeLines
 
 internal fun resolveFile(
-    project: Project,
+    configurationContainer: ConfigurationContainer,
+    dependencyHandler: DependencyHandler,
     name: String,
 ): File =
-    project.configurations
-        .detachedConfiguration(project.dependencies.create(name))
+    configurationContainer
+        .detachedConfiguration(dependencyHandler.create(name))
         .apply { isTransitive = false }
         .singleFile
 
+internal fun resolveFile(
+    project: Project,
+    name: String,
+) = resolveFile(project.configurations, project.dependencies, name)
+
 @CacheableTask
-abstract class ResolvePatchedMinecraft : DefaultTask() {
+abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
     abstract val version: Property<String>
         @Input get
 
@@ -55,6 +66,18 @@ abstract class ResolvePatchedMinecraft : DefaultTask() {
     abstract val output: RegularFileProperty
         @OutputFile get
 
+    abstract val configurationContainer: ConfigurationContainer
+        @Inject get
+
+    abstract val dependencyHandler: DependencyHandler
+        @Inject get
+
+    abstract val javaToolchainService: JavaToolchainService
+        @Inject get
+
+    abstract val execOperations: ExecOperations
+        @Inject get
+
     init {
         output.convention(
             project.layout.file(
@@ -68,26 +91,35 @@ abstract class ResolvePatchedMinecraft : DefaultTask() {
     @TaskAction
     private fun resolve() {
         runBlocking {
-            val metadata = project.extension<MinecraftCodevExtension>().getVersionList().version(version.get())
+            val cacheDirectory = cacheParameters.directory.getAsPath()
+            val isOffline = cacheParameters.isOffline.get()
+            val clientMappings = clientMappings.getAsPath()
 
-            val clientJar = downloadMinecraftClient(project, metadata)
+            val metadata = cacheParameters.versionList().version(version.get())
 
-            val clientMappings = clientMappings.asFile.get().toPath()
+            val clientJar = downloadMinecraftClient(cacheDirectory, metadata, isOffline)
 
-            val extractionState = getExtractionState(project, metadata)!!
+            val extractionState = getExtractionState(cacheDirectory, metadata, isOffline)!!
 
             val serverJar = extractionState.result
 
-            val libraries = project.configurations.detachedConfiguration(*getClientDependencies(project, metadata).toTypedArray())
+            val libraries =
+                configurationContainer.detachedConfiguration(
+                    *getClientDependencies(cacheDirectory, metadata, isOffline).map(dependencyHandler::create).toTypedArray(),
+                )
 
             val userdev = Userdev.fromFile(patches.singleFile)!!
 
             val mcpConfigFile =
                 McpConfigFile.fromFile(
-                    project.configurations.detachedConfiguration(project.dependencies.create(userdev.config.mcp)).singleFile,
+                    configurationContainer.detachedConfiguration(dependencyHandler.create(userdev.config.mcp)).singleFile,
                 )!!
 
-            val javaExecutable = metadata.javaVersion.executable(project).get().asFile
+            val javaExecutable =
+                metadata.javaVersion
+                    .executable(javaToolchainService)
+                    .get()
+                    .asFile
 
             fun mcpAction(
                 name: String,
@@ -97,9 +129,9 @@ abstract class ResolvePatchedMinecraft : DefaultTask() {
                 val function = mcpConfigFile.config.functions.getValue(name)
 
                 return McpAction(
-                    project.serviceOf(),
+                    execOperations,
                     javaExecutable,
-                    resolveFile(project, function.version),
+                    resolveFile(configurationContainer, dependencyHandler, function.version),
                     mcpConfigFile,
                     function.args,
                     template,
@@ -140,7 +172,16 @@ abstract class ResolvePatchedMinecraft : DefaultTask() {
                             renameLog,
                         )
 
-                    val patch = PatchMcpAction(project, javaExecutable, mcpConfigFile, userdev, patchLog)
+                    val patch =
+                        PatchMcpAction(
+                            execOperations,
+                            javaExecutable,
+                            mcpConfigFile,
+                            userdev,
+                            patchLog,
+                            configurationContainer,
+                            dependencyHandler,
+                        )
 
                     val official = mcpConfigFile.config.official
                     val notchObf = userdev.config.notchObf
@@ -156,13 +197,13 @@ abstract class ResolvePatchedMinecraft : DefaultTask() {
                                     it,
                                 )
 
-                            merge.execute()
+                            merge
+                                .execute()
                                 .let { merged ->
                                     mergeMappings.execute().let { mappings ->
                                         rename.execute("input" to merged, "mappings" to mappings)
                                     }
-                                }
-                                .let(patch::execute)
+                                }.let(patch::execute)
                         }
                     } else {
                         val inject =
@@ -176,11 +217,13 @@ abstract class ResolvePatchedMinecraft : DefaultTask() {
 
                         val base =
                             if (notchObf) {
-                                merge.execute()
+                                merge
+                                    .execute()
                                     .let(patch::execute)
                                     .let(rename::execute)
                             } else {
-                                merge.execute()
+                                merge
+                                    .execute()
                                     .let(rename::execute)
                                     .let(patch::execute)
                             }
@@ -224,14 +267,17 @@ abstract class ResolvePatchedMinecraft : DefaultTask() {
                         patched.toAbsolutePath().toString(),
                         "--outJar",
                         outputFile.toString(),
-                        *atFiles.flatMap { at ->
-                            listOf("--atFile", at.toAbsolutePath().toString())
-                        }.toTypedArray(),
+                        *atFiles
+                            .flatMap { at ->
+                                listOf("--atFile", at.toAbsolutePath().toString())
+                            }.toTypedArray(),
                     )
                 }
             } finally {
                 System.setErr(err)
             }
+
+            addMinecraftMarker(outputFile.toPath())
         }
     }
 }

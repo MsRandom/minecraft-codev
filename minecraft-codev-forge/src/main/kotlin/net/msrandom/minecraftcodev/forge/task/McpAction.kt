@@ -6,6 +6,8 @@ import net.msrandom.minecraftcodev.forge.McpConfigFile
 import net.msrandom.minecraftcodev.forge.Userdev
 import net.msrandom.minecraftcodev.forge.mappings.injectForgeMappingService
 import org.gradle.api.Project
+import org.gradle.api.artifacts.ConfigurationContainer
+import org.gradle.api.artifacts.dsl.DependencyHandler
 import org.gradle.api.file.RegularFile
 import org.gradle.configurationcache.extensions.serviceOf
 import org.gradle.process.ExecOperations
@@ -58,7 +60,7 @@ open class McpAction(
                 it.mainClass.set(mainClass)
 
                 val args =
-                    zipFileSystem(mcpConfig.source.toPath()).use { (fs) ->
+                    zipFileSystem(mcpConfig.source).use { (fs) ->
                         args.map { arg ->
                             if (!arg.startsWith('{')) {
                                 return@map arg
@@ -107,15 +109,17 @@ open class McpAction(
 }
 
 class PatchMcpAction(
-    private val project: Project,
+    execOperations: ExecOperations,
     javaExecutable: File,
     mcpConfig: McpConfigFile,
     private val userdev: Userdev,
     logFile: OutputStream,
+    private val configurationContainer: ConfigurationContainer,
+    private val dependencyHandler: DependencyHandler,
 ) : McpAction(
-    project.serviceOf(),
+    execOperations,
     javaExecutable,
-    resolveFile(project, userdev.config.binpatcher.version),
+    resolveFile(configurationContainer, dependencyHandler, userdev.config.binpatcher.version),
     mcpConfig,
     userdev.config.binpatcher.args,
     emptyMap(),
@@ -155,7 +159,7 @@ class PatchMcpAction(
                 }
             }
 
-            val universal = resolveFile(project, userdevConfig.universal)
+            val universal = resolveFile(configurationContainer, dependencyHandler, userdevConfig.universal)
 
             val filters = userdevConfig.universalFilters.map(::Regex)
 

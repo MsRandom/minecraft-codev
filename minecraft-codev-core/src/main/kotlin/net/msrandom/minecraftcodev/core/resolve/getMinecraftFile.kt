@@ -1,14 +1,6 @@
 package net.msrandom.minecraftcodev.core.resolve
 
-import kotlinx.coroutines.runBlocking
-import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.utils.download
-import net.msrandom.minecraftcodev.core.utils.extension
-import net.msrandom.minecraftcodev.core.utils.getCacheDirectory
-import org.gradle.api.InvalidUserCodeException
-import org.gradle.api.Project
-import org.gradle.api.file.RegularFile
-import org.gradle.api.provider.Provider
 import java.nio.file.Path
 
 enum class MinecraftDownloadVariant(val download: String) {
@@ -21,76 +13,57 @@ enum class MinecraftDownloadVariant(val download: String) {
 }
 
 suspend fun downloadMinecraftClient(
-    project: Project,
+    cacheDirectory: Path,
     metadata: MinecraftVersionMetadata,
+    isOffline: Boolean,
 ) = downloadMinecraftFile(
-    project,
+    cacheDirectory,
     metadata.id,
     MinecraftDownloadVariant.Client.download,
     metadata.downloads.getValue(MinecraftDownloadVariant.Client.download),
+    isOffline,
 )
 
 suspend fun downloadMinecraftFile(
-    project: Project,
+    cacheDirectory: Path,
     metadata: MinecraftVersionMetadata,
     variant: MinecraftDownloadVariant,
+    isOffline: Boolean,
 ) = metadata.downloads[variant.download]?.let {
     downloadMinecraftFile(
-        project,
+        cacheDirectory,
         metadata.id,
         variant.download,
         it,
+        isOffline,
     )
 }
 
 private suspend fun downloadMinecraftFile(
-    project: Project,
+    cacheDirectory: Path,
     version: String,
     downloadName: String,
     variantDownload: MinecraftVersionMetadata.Download,
+    isOffline: Boolean,
 ): Path {
-    val downloadPath = minecraftFilePath(project, version, downloadName, variantDownload)
+    val downloadPath = minecraftFilePath(cacheDirectory, version, downloadName, variantDownload)
 
     download(
-        project,
         variantDownload.url,
         variantDownload.sha1,
         downloadPath,
+        isOffline,
     )
 
     return downloadPath
 }
 
-fun minecraftFilePath(
-    project: Project,
-    version: String,
-    variant: MinecraftDownloadVariant,
-): Provider<RegularFile> {
-    val fileProvider =
-        project.provider {
-            runBlocking {
-                val versionList = project.extension<MinecraftCodevExtension>().getVersionList()
-
-                val variantDownload =
-                    versionList.version(version).downloads[variant.download]
-                        ?: throw InvalidUserCodeException(
-                            "Tried to access ${variant.download} download for version $version, " +
-                                "but it does not have a ${variant.download} download.",
-                        )
-
-                minecraftFilePath(project, version, variant.download, variantDownload).toFile()
-            }
-        }
-
-    return project.layout.file(fileProvider)
-}
-
 private fun minecraftFilePath(
-    project: Project,
+    cacheDirectory: Path,
     version: String,
     downloadName: String,
     variantDownload: MinecraftVersionMetadata.Download,
-) = getCacheDirectory(project)
+) = cacheDirectory
     .resolve("download-cache")
     .resolve(variantDownload.sha1)
     .resolve("$downloadName-$version.${variantDownload.url.path.substringAfterLast('.')}")

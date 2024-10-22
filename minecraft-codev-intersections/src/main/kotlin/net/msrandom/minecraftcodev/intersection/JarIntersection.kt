@@ -1,5 +1,6 @@
 package net.msrandom.minecraftcodev.intersection
 
+import net.msrandom.minecraftcodev.core.utils.getAsPath
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
@@ -234,7 +235,7 @@ abstract class JarIntersection : DefaultTask() {
 
     @TaskAction
     private fun intersection() {
-        val output = output.get().asFile.toPath()
+        val output = output.getAsPath()
 
         output.deleteIfExists()
 

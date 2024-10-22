@@ -1,15 +1,14 @@
 package net.msrandom.minecraftcodev.runs.task
 
 import kotlinx.coroutines.*
-import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.resolve.rulesMatch
-import net.msrandom.minecraftcodev.core.utils.extension
-import net.msrandom.minecraftcodev.core.utils.osName
-import net.msrandom.minecraftcodev.core.utils.walk
-import net.msrandom.minecraftcodev.core.utils.zipFileSystem
-import org.gradle.api.DefaultTask
+import net.msrandom.minecraftcodev.core.task.CachedMinecraftTask
+import net.msrandom.minecraftcodev.core.utils.*
+import org.gradle.api.artifacts.ConfigurationContainer
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.dsl.DependencyHandler
 import org.gradle.api.file.Directory
+import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.CacheableTask
@@ -18,25 +17,35 @@ import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import javax.inject.Inject
 import kotlin.io.path.copyTo
 import kotlin.io.path.createDirectories
 import kotlin.io.path.isRegularFile
 
 @CacheableTask
-abstract class ExtractNatives : DefaultTask() {
+abstract class ExtractNatives : CachedMinecraftTask() {
     abstract val version: Property<String>
         @Input get
 
-    val destinationDirectory: Provider<Directory>
-        @OutputDirectory
-        get() = project.layout.dir(project.provider { temporaryDir })
+    abstract val destinationDirectory: DirectoryProperty
+        @OutputDirectory get
+
+    abstract val configurationContainer: ConfigurationContainer
+        @Inject get
+
+    abstract val dependencyHandler: DependencyHandler
+        @Inject get
+
+    init {
+        destinationDirectory.convention(project.layout.dir(project.provider { temporaryDir }))
+    }
 
     @TaskAction
     private fun extract() {
-        val output = destinationDirectory.get().asFile.toPath()
+        val output = destinationDirectory.getAsPath()
 
         runBlocking {
-            val metadata = project.extension<MinecraftCodevExtension>().getVersionList().version(version.get())
+            val metadata = cacheParameters.versionList().version(version.get())
 
             val libs =
                 metadata.libraries.filter { library ->
@@ -48,11 +57,11 @@ abstract class ExtractNatives : DefaultTask() {
                 }.associate {
                     val classifier = it.natives.getValue(osName())
 
-                    project.dependencies.create("${it.name}:$classifier") to it.extract
+                    dependencyHandler.create("${it.name}:$classifier") to it.extract
                 }
 
             withContext(Dispatchers.IO) {
-                val config = project.configurations.detachedConfiguration(*libs.keys.toTypedArray())
+                val config = configurationContainer.detachedConfiguration(*libs.keys.toTypedArray())
 
                 val fileResolution = libs.flatMap { (dependency, extractionRules) ->
                     val artifactView = config.incoming.artifactView { view ->

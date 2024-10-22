@@ -35,7 +35,9 @@ abstract class RemapAction : TransformAction<RemapAction.Parameters> {
             @Input get
 
         abstract val extraFiles: MapProperty<String, File>
-            @Input get
+            @Optional
+            @Input
+            get
 
         init {
             apply {
@@ -62,7 +64,7 @@ abstract class RemapAction : TransformAction<RemapAction.Parameters> {
     override fun transform(outputs: TransformOutputs) {
         val input = inputFile.get().asFile
 
-        if (parameters.filterMods.get() && !isMod(input.toPath())) {
+        if (parameters.mappings.isEmpty || parameters.filterMods.get() && !isMod(input.toPath())) {
             outputs.file(inputFile)
 
             return
@@ -75,7 +77,7 @@ abstract class RemapAction : TransformAction<RemapAction.Parameters> {
 
         val output = outputs.file("${input.nameWithoutExtension}-$targetNamespace.${input.extension}")
 
-        val mappings = loadMappings(parameters.mappings, execOperations, parameters.extraFiles.get())
+        val mappings = loadMappings(parameters.mappings, execOperations, parameters.extraFiles.getOrElse(emptyMap()))
 
         JarRemapper.remap(
             mappings,

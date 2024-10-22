@@ -1,27 +1,23 @@
 package net.msrandom.minecraftcodev.runs
 
-import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.utils.applyPlugin
 import net.msrandom.minecraftcodev.core.utils.createSourceSetElements
-import net.msrandom.minecraftcodev.core.utils.extension
 import net.msrandom.minecraftcodev.core.utils.getCacheDirectory
 import net.msrandom.minecraftcodev.runs.task.DownloadAssets
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
 import org.apache.commons.lang3.StringUtils
 import org.gradle.api.Plugin
-import org.gradle.api.artifacts.Configuration
 import org.gradle.api.plugins.ApplicationPlugin
 import org.gradle.api.plugins.PluginAware
 import org.gradle.api.tasks.JavaExec
 import org.gradle.api.tasks.SourceSet
-import java.nio.file.Path
 
 class MinecraftCodevRunsPlugin<T : PluginAware> : Plugin<T> {
     override fun apply(target: T) =
         applyPlugin(target) {
             // Log4j configs
             val cache = getCacheDirectory(this)
-            val logging: Path = cache.resolve("logging")
+            // val logging: Path = cache.resolve("logging")
 
             fun addSourceElements(
                 extractNativesTaskName: String,
@@ -38,10 +34,7 @@ class MinecraftCodevRunsPlugin<T : PluginAware> : Plugin<T> {
                 )
             }
 
-            val runs =
-                extension<MinecraftCodevExtension>()
-                    .extensions
-                    .create(RunsContainer::class.java, "runs", RunsContainerImpl::class.java, cache)
+            val runs = project.extensions.create(RunsContainer::class.java, "minecraftRuns", RunsContainerImpl::class.java, cache)
 
             runs.extensions.create("defaults", RunConfigurationDefaultsContainer::class.java)
 

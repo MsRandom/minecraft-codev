@@ -1,5 +1,6 @@
 package net.msrandom.minecraftcodev.decompiler.task
 
+import net.msrandom.minecraftcodev.core.utils.getAsPath
 import net.msrandom.minecraftcodev.decompiler.SourcesGenerator
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
@@ -34,8 +35,8 @@ abstract class Decompile : DefaultTask() {
 
     @TaskAction
     private fun decompile() {
-        val input = inputFile.asFile.get().toPath()
-        val output = outputFile.asFile.get().toPath()
+        val input = inputFile.getAsPath()
+        val output = outputFile.getAsPath()
 
         SourcesGenerator.decompile(input, output, classpath.map(File::toPath))
     }

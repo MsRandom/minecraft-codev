@@ -3,10 +3,11 @@ package net.msrandom.minecraftcodev.core.resolve
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata.Rule.OperatingSystem
 import net.msrandom.minecraftcodev.core.resolve.bundled.BundledClientJarSplitter
 import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter
-import net.msrandom.minecraftcodev.core.utils.*
+import net.msrandom.minecraftcodev.core.utils.clientJarPath
+import net.msrandom.minecraftcodev.core.utils.commonJarPath
+import net.msrandom.minecraftcodev.core.utils.osName
+import net.msrandom.minecraftcodev.core.utils.osVersion
 import org.apache.commons.lang3.SystemUtils
-import org.gradle.api.Project
-import org.gradle.api.artifacts.Dependency
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import kotlin.io.path.copyTo
@@ -14,44 +15,48 @@ import kotlin.io.path.deleteIfExists
 import kotlin.io.path.exists
 import kotlin.io.path.notExists
 
-suspend fun setupCommon(
-    project: Project,
+internal suspend fun setupCommon(
+    cacheDirectory: Path,
     metadata: MinecraftVersionMetadata,
+    isOffline: Boolean,
     output: Path? = null,
-): List<String> {
+): Iterable<String> {
     output?.deleteIfExists()
 
-    val (extractedServer, isBundled, libraries) = getExtractionState(project, metadata)!!
+    val (extractedServer, isBundled, libraries) = getExtractionState(cacheDirectory, metadata, isOffline)!!
 
     return if (isBundled) {
         if (output != null) {
             extractedServer.copyTo(output, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES)
+            addMinecraftMarker(output)
         }
 
         libraries
     } else {
-        val commonJarPath = commonJarPath(project, metadata.id)
+        val commonJarPath = commonJarPath(cacheDirectory, metadata.id)
 
-        if (commonJarPath.notExists() && clientJarPath(project, metadata.id).notExists()) {
-            LegacyJarSplitter.split(project, metadata, extractedServer)
+        if (commonJarPath.notExists() && clientJarPath(cacheDirectory, metadata.id).notExists()) {
+            LegacyJarSplitter.split(cacheDirectory, metadata, extractedServer, isOffline)
         }
 
         if (output != null) {
             commonJarPath.copyTo(output)
+            addMinecraftMarker(output)
         }
 
         libraries + "net.msrandom:side-annotations:1.0.0"
     }
 }
 
-suspend fun setupClient(
-    project: Project,
+internal suspend fun setupClient(
+    cacheDirectory: Path,
     output: Path,
     metadata: MinecraftVersionMetadata,
+    isOffline: Boolean,
 ) {
     output.deleteIfExists()
 
-    val clientJarPath = clientJarPath(project, metadata.id)
+    val clientJarPath = clientJarPath(cacheDirectory, metadata.id)
 
     if (clientJarPath.exists()) {
         clientJarPath.copyTo(output)
@@ -61,19 +66,37 @@ suspend fun setupClient(
 
     val (extractedServer, isBundled) =
         getExtractionState(
-            project,
+            cacheDirectory,
             metadata,
+            isOffline,
         )!!
 
     if (isBundled) {
-        BundledClientJarSplitter.split(project, metadata, extractedServer)
+        BundledClientJarSplitter.split(cacheDirectory, metadata, extractedServer, isOffline)
 
         clientJarPath.copyTo(output)
+        addMinecraftMarker(output)
     } else {
-        LegacyJarSplitter.split(project, metadata, extractedServer).client
+        LegacyJarSplitter.split(cacheDirectory, metadata, extractedServer, isOffline).client
 
         clientJarPath.copyTo(output)
+        addMinecraftMarker(output)
     }
+}
+
+fun getAllDependencies(metadata: MinecraftVersionMetadata) =
+    metadata.libraries.filter { rulesMatch(it.rules) }.map(MinecraftVersionMetadata.Library::name)
+
+private fun osMatches(os: OperatingSystem): Boolean {
+    if (os.name != null && os.name != osName()) {
+        return false
+    }
+
+    if (os.version != null && !(osVersion() matches Regex(os.version))) {
+        return false
+    }
+
+    return os.arch == null || os.arch == SystemUtils.OS_ARCH
 }
 
 fun rulesMatch(rules: List<MinecraftVersionMetadata.Rule>): Boolean {
@@ -98,26 +121,12 @@ fun rulesMatch(rules: List<MinecraftVersionMetadata.Rule>): Boolean {
     return allowed
 }
 
-fun getAllDependencies(metadata: MinecraftVersionMetadata) =
-    metadata.libraries.filter { rulesMatch(it.rules) }.map(MinecraftVersionMetadata.Library::name)
-
 suspend fun getClientDependencies(
-    project: Project,
+    cacheDirectory: Path,
     metadata: MinecraftVersionMetadata,
-): List<Dependency> {
-    val (_, _, serverLibraries) = getExtractionState(project, metadata)!!
+    isOffline: Boolean,
+): Iterable<String> {
+    val (_, _, serverLibraries) = getExtractionState(cacheDirectory, metadata, isOffline)!!
 
-    return (getAllDependencies(metadata) - serverLibraries.toSet()).map(project.dependencies::create)
-}
-
-private fun osMatches(os: OperatingSystem): Boolean {
-    if (os.name != null && os.name != osName()) {
-        return false
-    }
-
-    if (os.version != null && !(osVersion() matches Regex(os.version))) {
-        return false
-    }
-
-    return os.arch == null || os.arch == SystemUtils.OS_ARCH
+    return getAllDependencies(metadata) - serverLibraries.toSet()
 }

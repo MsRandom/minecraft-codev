@@ -6,28 +6,38 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import net.msrandom.minecraftcodev.core.AssetsIndex
-import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
+import net.msrandom.minecraftcodev.core.task.CachedMinecraftTask
 import net.msrandom.minecraftcodev.core.utils.checkHash
 import net.msrandom.minecraftcodev.core.utils.extension
+import net.msrandom.minecraftcodev.core.utils.toPath
 import net.msrandom.minecraftcodev.runs.RunsContainer
-import org.gradle.api.DefaultTask
+import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFile
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
 import java.net.URI
 import kotlin.io.path.inputStream
 
-abstract class DownloadAssets : DefaultTask() {
+abstract class DownloadAssets : CachedMinecraftTask() {
     abstract val version: Property<String>
         @Input get
 
+    abstract val assetsDirectory: DirectoryProperty
+        @Internal get
+
+    abstract val resourcesDirectory: DirectoryProperty
+        @Internal get
+
+    init {
+        assetsDirectory.convention(project.extension<RunsContainer>().assetsDirectory)
+        resourcesDirectory.convention(project.extension<RunsContainer>().resourcesDirectory)
+    }
+
     @TaskAction
     private fun download() {
-        val codev = project.extension<MinecraftCodevExtension>()
-        val runs = codev.extension<RunsContainer>()
-        val assetsDirectory = runs.assetsDirectory
-        val resourcesDirectory = runs.resourcesDirectory.get()
+        val resourcesDirectory = resourcesDirectory.get()
         val indexesDirectory = assetsDirectory.dir("indexes").get()
         val objectsDirectory = assetsDirectory.dir("objects").get()
 
@@ -36,26 +46,26 @@ abstract class DownloadAssets : DefaultTask() {
             sha1: String?,
             output: RegularFile,
         ) {
-            val outputPath = output.asFile.toPath()
+            val outputPath = output.toPath()
 
             net.msrandom.minecraftcodev.core.utils.download(
-                project,
                 url,
                 sha1,
                 outputPath,
+                cacheParameters.isOffline.get(),
             )
         }
 
         runBlocking {
-            val metadata = codev.getVersionList().version(version.get())
+            val metadata = cacheParameters.versionList().version(version.get())
             val assetIndex = metadata.assetIndex
-            val assetIndexJson = indexesDirectory.file("${assetIndex.id}.json").asFile.toPath()
+            val assetIndexJson = indexesDirectory.file("${assetIndex.id}.json").toPath()
 
             net.msrandom.minecraftcodev.core.utils.download(
-                project,
                 assetIndex.url,
                 assetIndex.sha1,
                 assetIndexJson,
+                cacheParameters.isOffline.get(),
             )
 
             val index = assetIndexJson.inputStream().use { Json.decodeFromStream<AssetsIndex>(it) }
@@ -73,7 +83,7 @@ abstract class DownloadAssets : DefaultTask() {
 
                     async {
                         if (file.asFile.exists()) {
-                            if (checkHash(file.asFile.toPath(), asset.hash)) {
+                            if (checkHash(file.toPath(), asset.hash)) {
                                 return@async
                             } else {
                                 file.asFile.delete()

@@ -8,15 +8,10 @@ import java.nio.file.FileSystem
 import java.nio.file.Path
 import java.security.DigestInputStream
 import java.security.MessageDigest
-import java.util.ServiceLoader
-import kotlin.reflect.KClass
 
 open class ResolutionData<T>(
     val visitor: T,
-    private val messageDigest: MessageDigest,
-) {
-    fun decorate(inputStream: InputStream): InputStream = DigestInputStream(inputStream, messageDigest)
-}
+)
 
 fun interface ResolutionRule<T : ResolutionData<*>> {
     fun load(
@@ -59,10 +54,8 @@ fun <T : ResolutionData<*>> handleZipRules(
 }
 
 abstract class ZipResolutionRuleHandler<T : ResolutionData<*>, U : ZipResolutionRule<T>>(
-    zipType: KClass<U>,
+    private val zipResolutionRules: Iterable<U>,
 ) : ResolutionRule<T> {
-    private val zipResolutionRules = ServiceLoader.load(zipType.java)
-
     override fun load(
         path: Path,
         extension: String,

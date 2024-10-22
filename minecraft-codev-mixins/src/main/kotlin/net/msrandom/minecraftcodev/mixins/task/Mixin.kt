@@ -1,5 +1,6 @@
 package net.msrandom.minecraftcodev.mixins.task
 
+import net.msrandom.minecraftcodev.core.utils.getAsPath
 import net.msrandom.minecraftcodev.core.utils.walk
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.mixins.mixin.GradleMixinService
@@ -54,8 +55,8 @@ abstract class Mixin : DefaultTask() {
 
     @TaskAction
     private fun mixin() {
-        val input = inputFile.asFile.get().toPath()
-        val output = outputFile.asFile.get().toPath()
+        val input = inputFile.getAsPath()
+        val output = outputFile.getAsPath()
         (MixinService.getService() as GradleMixinService).use(classpath + mixinFiles + project.files(input), side.get()) {
             CLASSPATH@ for (mixinFile in mixinFiles + project.files(input)) {
                 zipFileSystem(mixinFile.toPath()).use fs@{

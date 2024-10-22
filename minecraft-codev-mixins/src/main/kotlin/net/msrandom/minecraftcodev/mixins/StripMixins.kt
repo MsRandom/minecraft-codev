@@ -1,5 +1,6 @@
 package net.msrandom.minecraftcodev.mixins
 
+import net.msrandom.minecraftcodev.core.utils.toPath
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.gradle.api.artifacts.transform.*
 import org.gradle.api.file.FileCollection
@@ -21,13 +22,8 @@ abstract class StripMixins : TransformAction<TransformParameters.None> {
         @PathSensitive(PathSensitivity.NONE)
         get
 
-    abstract val classpath: FileCollection
-        @Classpath
-        @InputArtifactDependencies
-        get
-
     override fun transform(outputs: TransformOutputs) {
-        val input = inputFile.get().asFile.toPath()
+        val input = inputFile.get().toPath()
 
         val handler =
             zipFileSystem(input).use {

@@ -11,13 +11,14 @@ import java.nio.file.StandardCopyOption
 import kotlin.io.path.*
 
 object BundledClientJarSplitter {
-    suspend fun split(
-        project: Project,
+    internal suspend fun split(
+        cacheDirectory: Path,
         metadata: MinecraftVersionMetadata,
         server: Path,
+        isOffline: Boolean,
     ): Path {
-        val client = downloadMinecraftClient(project, metadata)
-        val outputClient = clientJarPath(project, metadata.id)
+        val client = downloadMinecraftClient(cacheDirectory, metadata, isOffline)
+        val outputClient = clientJarPath(cacheDirectory, metadata.id)
 
         outputClient.parent.createDirectories()
 

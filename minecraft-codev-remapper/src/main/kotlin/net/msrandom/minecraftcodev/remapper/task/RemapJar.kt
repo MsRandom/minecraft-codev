@@ -1,5 +1,7 @@
 package net.msrandom.minecraftcodev.remapper.task
 
+import net.msrandom.minecraftcodev.core.utils.getAsPath
+import net.msrandom.minecraftcodev.core.utils.toPath
 import net.msrandom.minecraftcodev.remapper.JarRemapper
 import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
 import net.msrandom.minecraftcodev.remapper.loadMappings
@@ -37,7 +39,9 @@ abstract class RemapJar : Jar() {
         get
 
     abstract val extraFiles: MapProperty<String, File>
-        @Input get
+        @Optional
+        @Input
+        get
 
     abstract val execOperations: ExecOperations
         @Inject get
@@ -58,8 +62,8 @@ abstract class RemapJar : Jar() {
             mappings,
             sourceNamespace.get(),
             targetNamespace.get(),
-            input.asFile.get().toPath(),
-            archiveFile.get().asFile.toPath(),
+            input.getAsPath(),
+            archiveFile.get().toPath(),
             classpath,
         )
     }

@@ -1,10 +1,8 @@
 package net.msrandom.minecraftcodev.forge
 
 import kotlinx.serialization.json.decodeFromStream
-import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
 import net.msrandom.minecraftcodev.core.utils.*
-import net.msrandom.minecraftcodev.forge.accesswidener.setupForgeAccessWidenerIntegration
 import net.msrandom.minecraftcodev.forge.runs.setupForgeRunsIntegration
 import org.gradle.api.Plugin
 import org.gradle.api.plugins.PluginAware
@@ -21,9 +19,6 @@ open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
         applyPlugin(target) {
             createSourceSetConfigurations(PATCHES_CONFIGURATION)
 
-            extension<MinecraftCodevExtension>().extensions.create("forge", MinecraftCodevForgeExtension::class.java)
-
-            setupForgeAccessWidenerIntegration()
             setupForgeRunsIntegration()
         }
 

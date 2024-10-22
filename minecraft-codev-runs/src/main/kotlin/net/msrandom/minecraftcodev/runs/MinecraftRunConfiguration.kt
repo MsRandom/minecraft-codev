@@ -1,22 +1,19 @@
 package net.msrandom.minecraftcodev.runs
 
+import net.msrandom.minecraftcodev.core.task.CachedMinecraftParameters
 import net.msrandom.minecraftcodev.core.utils.extension
 import org.gradle.api.Project
 import org.gradle.api.Task
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.FileSystemLocation
 import org.gradle.api.provider.*
-import org.gradle.api.tasks.Input
-import org.gradle.api.tasks.InputDirectory
-import org.gradle.api.tasks.SourceSet
-import org.gradle.api.tasks.SourceSetContainer
+import org.gradle.api.tasks.*
 import java.io.File
 import java.nio.file.Path
 import javax.inject.Inject
 
-abstract class MinecraftRunConfiguration
-@Inject
-constructor(val project: Project) {
+abstract class MinecraftRunConfiguration @Inject constructor(val project: Project) {
     abstract val mainClass: Property<String>
         @Input
         get
@@ -53,6 +50,10 @@ constructor(val project: Project) {
         @InputDirectory
         get
 
+    abstract val cacheParameters: CachedMinecraftParameters
+        @Nested
+        get
+
     val modClasspaths = mutableMapOf<String, ConfigurableFileCollection>()
 
     init {
@@ -68,8 +69,10 @@ constructor(val project: Project) {
             environment.finalizeValueOnRead()
 
             executableDirectory
-                .convention(project.layout.projectDirectory.dir("bin"))
+                .convention(project.layout.projectDirectory.dir("run"))
                 .finalizeValueOnRead()
+
+            cacheParameters.convention(project)
         }
     }
 
@@ -95,6 +98,7 @@ constructor(val project: Project) {
                 when (part) {
                     is Path -> part.toAbsolutePath().toString()
                     is File -> part.absolutePath
+                    is FileSystemLocation -> part.toString()
                     is Argument -> part.compile()
                     else -> part.toString()
                 }

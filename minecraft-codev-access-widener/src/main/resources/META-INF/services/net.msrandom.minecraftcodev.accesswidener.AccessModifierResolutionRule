@@ -1,0 +1,3 @@
+net.msrandom.minecraftcodev.accesswidener.AccessWidenerResolutionRule
+net.msrandom.minecraftcodev.accesswidener.AccessModifierJsonResolutionRule
+net.msrandom.minecraftcodev.accesswidener.ZipAccessModifierResolutionRuleHandler

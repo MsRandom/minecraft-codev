@@ -1,13 +1,14 @@
 package net.msrandom.minecraftcodev.accesswidener
 
-import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
-import net.msrandom.minecraftcodev.core.utils.extension
+import net.msrandom.minecraftcodev.core.resolve.isCodevGeneratedMinecraftJar
+import net.msrandom.minecraftcodev.core.utils.toPath
 import net.msrandom.minecraftcodev.core.utils.walk
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
-import org.gradle.api.DefaultTask
+import org.gradle.api.artifacts.transform.*
 import org.gradle.api.file.ConfigurableFileCollection
-import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.file.FileSystemLocation
 import org.gradle.api.provider.Property
+import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.*
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassWriter
@@ -16,48 +17,39 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import kotlin.io.path.*
 
-@CacheableTask
-abstract class AccessWiden : DefaultTask() {
-    abstract val inputFile: RegularFileProperty
-        @InputFile
-        @Classpath
-        get
+@CacheableTransform
+abstract class AccessWiden : TransformAction<AccessWiden.Parameters> {
+    abstract class Parameters : TransformParameters {
+        abstract val accessWideners: ConfigurableFileCollection
+            @InputFiles
+            @PathSensitive(PathSensitivity.RELATIVE)
+            get
 
-    abstract val accessWideners: ConfigurableFileCollection
-        @InputFiles
-        @PathSensitive(PathSensitivity.RELATIVE)
-        get
-
-    abstract val namespace: Property<String>
-        @Input
-        @Optional
-        get
-
-    abstract val outputFile: RegularFileProperty
-        @OutputFile get
-
-    init {
-        outputFile.convention(
-            project.layout.file(
-                inputFile.map {
-                    temporaryDir.resolve("${it.asFile.nameWithoutExtension}-access-widened.${it.asFile.extension}")
-                },
-            ),
-        )
+        abstract val namespace: Property<String>
+            @Input
+            @Optional
+            get
     }
 
-    @TaskAction
-    private fun accessWiden() {
-        val accessModifiers =
-            project
-                .extension<MinecraftCodevExtension>()
-                .extension<AccessWidenerExtension>()
-                .loadAccessWideners(accessWideners, namespace.takeIf(Property<*>::isPresent)?.get())
+    abstract val inputFile: Provider<FileSystemLocation>
+        @InputArtifact
+        @PathSensitive(PathSensitivity.NONE)
+        get
 
-        val input = inputFile.asFile.get().toPath()
-        val output = outputFile.asFile.get().toPath()
+    override fun transform(outputs: TransformOutputs) {
+        val input = inputFile.get().toPath()
 
-        output.deleteIfExists()
+        if (parameters.accessWideners.isEmpty || !isCodevGeneratedMinecraftJar(input)) {
+            outputs.file(inputFile)
+
+            return
+        }
+
+        println("Access widening $input")
+
+        val accessModifiers = loadAccessWideners(parameters.accessWideners, parameters.namespace.takeIf(Property<*>::isPresent)?.get())
+
+        val output = outputs.file("${input.nameWithoutExtension}-access-widened.${input.extension}").toPath()
 
         zipFileSystem(input).use { inputZip ->
             zipFileSystem(output, true).use { outputZip ->
@@ -67,22 +59,24 @@ abstract class AccessWiden : DefaultTask() {
                         val outputPath = outputZip.base.getPath(name)
                         outputPath.parent?.createDirectories()
 
-                        if (name.endsWith(".class")) {
-                            val className = name.substring(1, name.length - ".class".length)
-
-                            if (accessModifiers.canModifyAccess(className)) {
-                                val reader = path.inputStream().use(::ClassReader)
-                                val writer = ClassWriter(0)
-
-                                reader.accept(AccessModifierClassVisitor(Opcodes.ASM9, writer, accessModifiers), 0)
-
-                                outputPath.writeBytes(writer.toByteArray())
-                            } else {
-                                path.copyTo(outputPath, StandardCopyOption.COPY_ATTRIBUTES)
-                            }
-                        } else {
+                        if (!name.endsWith(".class")) {
                             path.copyTo(outputPath, StandardCopyOption.COPY_ATTRIBUTES)
+                            continue
                         }
+
+                        val className = name.substring(1, name.length - ".class".length)
+
+                        if (!accessModifiers.canModifyAccess(className)) {
+                            path.copyTo(outputPath, StandardCopyOption.COPY_ATTRIBUTES)
+                            continue
+                        }
+
+                        val reader = path.inputStream().use(::ClassReader)
+                        val writer = ClassWriter(0)
+
+                        reader.accept(AccessModifierClassVisitor(Opcodes.ASM9, writer, accessModifiers), 0)
+
+                        outputPath.writeBytes(writer.toByteArray())
                     }
                 }
             }

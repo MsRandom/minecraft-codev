@@ -1,9 +1,6 @@
 package net.msrandom.minecraftcodev.fabric
 
-import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.utils.applyPlugin
-import net.msrandom.minecraftcodev.core.utils.extension
-import net.msrandom.minecraftcodev.fabric.accesswidener.setupFabricAccessWidenerIntegration
 import net.msrandom.minecraftcodev.fabric.runs.setupFabricRunsIntegration
 import org.gradle.api.Plugin
 import org.gradle.api.plugins.PluginAware
@@ -11,9 +8,6 @@ import org.gradle.api.plugins.PluginAware
 class MinecraftCodevFabricPlugin<T : PluginAware> : Plugin<T> {
     override fun apply(target: T) =
         applyPlugin(target) {
-            extension<MinecraftCodevExtension>().extensions.create("fabric", MinecraftCodevFabricExtension::class.java)
-
-            setupFabricAccessWidenerIntegration()
             setupFabricRunsIntegration()
         }
 

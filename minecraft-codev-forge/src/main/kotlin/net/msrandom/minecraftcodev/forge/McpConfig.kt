@@ -9,10 +9,14 @@ import kotlinx.serialization.Serializer
 import kotlinx.serialization.UseSerializers
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.json.*
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.decodeFromStream
+import kotlinx.serialization.json.jsonObject
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import java.io.File
+import java.nio.file.FileSystem
 import java.nio.file.Path
 import kotlin.io.path.exists
 import kotlin.io.path.inputStream
@@ -51,19 +55,27 @@ data class McpConfig(
 
 data class McpConfigFile(
     val config: McpConfig,
-    val source: File,
+    val source: Path,
 ) {
     companion object {
-        private val cache = hashMapOf<File, McpConfig?>()
+        private val cache = hashMapOf<Path, McpConfig?>()
 
         fun fromFile(file: File) =
-            cache.computeIfAbsent(file) {
-                zipFileSystem(it.toPath()).use { fs ->
+            cache.computeIfAbsent(file.toPath()) {
+                zipFileSystem(it).use { fs ->
                     fs.base.getPath("config.json")
                         .takeIf(Path::exists)
                         ?.inputStream()
                         ?.use(json::decodeFromStream)
                 }
+            }?.let { McpConfigFile(it, file.toPath()) }
+
+        fun fromFile(file: Path, fileSystem: FileSystem) =
+            cache.computeIfAbsent(file) {
+                    fileSystem.getPath("config.json")
+                        .takeIf(Path::exists)
+                        ?.inputStream()
+                        ?.use(json::decodeFromStream)
             }?.let { McpConfigFile(it, file) }
     }
 }

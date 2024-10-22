@@ -61,6 +61,7 @@ childProjects.values.forEach { project ->
                         "-opt-in=kotlin.ExperimentalStdlibApi",
                         "-opt-in=kotlinx.serialization.ExperimentalSerializationApi",
                         "-Xunrestricted-builder-inference",
+                        "-Xjvm-default=all",
                     )
 
                 apiVersion = "1.6"

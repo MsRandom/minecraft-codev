@@ -28,7 +28,7 @@ abstract class ExtractIncludes : TransformAction<TransformParameters.None> {
         get
 
     override fun transform(outputs: TransformOutputs) {
-        val input = inputFile.get().asFile.toPath()
+        val input = inputFile.get().toPath()
 
         val handler =
             runBlocking {

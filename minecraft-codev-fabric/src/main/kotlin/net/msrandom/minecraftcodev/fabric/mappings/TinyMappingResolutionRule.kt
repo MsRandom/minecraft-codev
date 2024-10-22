@@ -20,7 +20,7 @@ private fun readTiny(
     data: MappingResolutionData,
     path: Path,
 ) {
-    data.decorate(path.inputStream()).bufferedReader().use { reader ->
+    path.inputStream().bufferedReader().use { reader ->
         reader.mark(16)
 
         val parts = reader.readLine().split('\t')

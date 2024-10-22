@@ -10,8 +10,6 @@ open class MinecraftCodevPlugin<T : PluginAware> : Plugin<T> {
     override fun apply(target: T) =
         applyPlugin(target) {
             plugins.apply(JavaPlugin::class.java)
-
-            extensions.create("minecraft", MinecraftCodevExtension::class.java)
         }
 
     companion object {

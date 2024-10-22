@@ -15,7 +15,8 @@ import org.gradle.process.ExecOperations
 import java.io.File
 import java.nio.file.FileSystem
 import java.nio.file.Path
-import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.io.path.extension
 import kotlin.io.path.inputStream
 import kotlin.io.path.notExists
 
@@ -43,17 +44,16 @@ class MappingTreeProvider(
 
 class MappingResolutionData(
     visitor: MappingTreeProvider,
-    messageDigest: MessageDigest,
     val execOperations: ExecOperations,
     val extraFiles: Map<String, File>,
-) : ResolutionData<MappingTreeProvider>(visitor, messageDigest)
+) : ResolutionData<MappingTreeProvider>(visitor)
 
 interface MappingResolutionRule : ResolutionRule<MappingResolutionData>
 
 interface ZipMappingResolutionRule : ZipResolutionRule<MappingResolutionData>
 
 class ZipMappingResolutionRuleHandler :
-    ZipResolutionRuleHandler<MappingResolutionData, ZipMappingResolutionRule>(ZipMappingResolutionRule::class),
+    ZipResolutionRuleHandler<MappingResolutionData, ZipMappingResolutionRule>(serviceLoader()),
     MappingResolutionRule
 
 class ProguardMappingResolutionRule : MappingResolutionRule {
@@ -73,7 +73,7 @@ class ProguardMappingResolutionRule : MappingResolutionRule {
             return false
         }
 
-        data.decorate(path.inputStream()).reader().use {
+        path.inputStream().reader().use {
             ProGuardReader.read(
                 it,
                 MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE,
@@ -123,26 +123,37 @@ class ParchmentZipMappingResolutionRule : ZipMappingResolutionRule {
 
 val mappingResolutionRules = serviceLoader<MappingResolutionRule>()
 
+private val mappingsCache = ConcurrentHashMap<Set<File>, MappingTreeView>()
+
+fun loadMappingFile(
+    file: Path,
+    data: MappingResolutionData,
+) {
+    for (rule in mappingResolutionRules) {
+        if (rule.load(file, file.extension, data)) {
+            return
+        }
+    }
+
+    throw UnsupportedOperationException("Unknown mapping file format $file")
+}
+
 fun loadMappings(
     files: FileCollection,
     execOperations: ExecOperations,
     extraFiles: Map<String, File>,
-): MappingTreeView {
-    val tree = MemoryMappingTree()
-    val md = MessageDigest.getInstance("SHA1")
+): MappingTreeView =
+    mappingsCache.computeIfAbsent(files.files) {
+        val tree = MemoryMappingTree()
 
-    val data = MappingResolutionData(MappingTreeProvider(tree), md, execOperations, extraFiles)
+        val data = MappingResolutionData(MappingTreeProvider(tree), execOperations, extraFiles)
 
-    for (file in files) {
-        for (rule in mappingResolutionRules) {
-            if (rule.load(file.toPath(), file.extension, data)) {
-                break
-            }
+        for (file in files) {
+            loadMappingFile(file.toPath(), data)
         }
-    }
 
-    return tree
-}
+        tree
+    }
 
 private fun handleParchment(
     data: MappingResolutionData,
@@ -151,7 +162,7 @@ private fun handleParchment(
     data.visitor.withTree(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE) {
         val visitor = it
         val parchment =
-            data.decorate(path.inputStream()).use {
+            path.inputStream().use {
                 json.decodeFromStream<Parchment>(it)
             }
 

@@ -1,6 +1,5 @@
 package net.msrandom.minecraftcodev.runs
 
-import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
 import net.msrandom.minecraftcodev.core.utils.extension
 import org.gradle.api.Project
@@ -19,8 +18,7 @@ fun Project.integrateIdeaRuns() {
     allprojects { otherProject ->
         otherProject.plugins.withType(MinecraftCodevPlugin::class.java) {
             otherProject.plugins.withType(MinecraftCodevRunsPlugin::class.java) {
-                otherProject.extension<MinecraftCodevExtension>()
-                    .extension<RunsContainer>()
+                otherProject.extension<RunsContainer>()
                     .all { builder ->
                         runConfigurations.register(builder.friendlyName, Application::class.java) { application ->
                             val config = builder.build()

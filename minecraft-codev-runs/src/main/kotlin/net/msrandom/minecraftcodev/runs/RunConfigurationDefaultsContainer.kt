@@ -1,9 +1,12 @@
 package net.msrandom.minecraftcodev.runs
 
 import kotlinx.coroutines.runBlocking
-import net.msrandom.minecraftcodev.core.MinecraftCodevExtension
-import net.msrandom.minecraftcodev.core.resolve.*
-import net.msrandom.minecraftcodev.core.utils.*
+import net.msrandom.minecraftcodev.core.resolve.MinecraftDownloadVariant
+import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
+import net.msrandom.minecraftcodev.core.resolve.downloadMinecraftFile
+import net.msrandom.minecraftcodev.core.resolve.rulesMatch
+import net.msrandom.minecraftcodev.core.utils.getAsPath
+import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.runs.task.DownloadAssets
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
 import org.gradle.api.file.Directory
@@ -32,13 +35,15 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
 
             val extractNativesTask =
                 sourceSet.flatMap {
-                    project.tasks.withType(ExtractNatives::class.java)
+                    project.tasks
+                        .withType(ExtractNatives::class.java)
                         .named(it.extractNativesTaskName)
                 }
 
             val downloadAssetsTask =
                 sourceSet.flatMap {
-                    project.tasks.withType(DownloadAssets::class.java)
+                    project.tasks
+                        .withType(DownloadAssets::class.java)
                         .named(it.downloadAssetsTaskName)
                 }
 
@@ -64,18 +69,23 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
                         if (argument.rules.isEmpty()) {
                             for (value in argument.value) {
                                 if (value.startsWith("\${") && value.endsWith("}")) {
-                                    val runs =
-                                        project.extension<MinecraftCodevExtension>().extension<RunsContainer>()
-
                                     when (value.subSequence(2, value.length - 1)) {
                                         "version_name" -> fixedArguments.add(MinecraftRunConfiguration.Argument(it.id))
                                         "assets_root" -> {
-                                            fixedArguments.add(MinecraftRunConfiguration.Argument(runs.assetsDirectory.asFile.get()))
+                                            fixedArguments.add(
+                                                MinecraftRunConfiguration.Argument(
+                                                    downloadAssetsTask.flatMap(DownloadAssets::assetsDirectory),
+                                                ),
+                                            )
                                         }
 
                                         "assets_index_name" -> fixedArguments.add(MinecraftRunConfiguration.Argument(it.assets))
                                         "game_assets" -> {
-                                            fixedArguments.add(MinecraftRunConfiguration.Argument(runs.resourcesDirectory.asFile.get()))
+                                            fixedArguments.add(
+                                                MinecraftRunConfiguration.Argument(
+                                                    downloadAssetsTask.flatMap(DownloadAssets::resourcesDirectory),
+                                                ),
+                                            )
                                         }
 
                                         "auth_access_token" -> fixedArguments.add(MinecraftRunConfiguration.Argument(Random.nextLong()))
@@ -161,9 +171,10 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
                         val serverJar =
                             runBlocking {
                                 downloadMinecraftFile(
-                                    project,
+                                    cacheParameters.directory.getAsPath(),
                                     manifest,
                                     MinecraftDownloadVariant.Server,
+                                    cacheParameters.isOffline.get(),
                                 ) ?: throw UnsupportedOperationException("Version ${manifest.id} does not have a server.")
                             }
 
@@ -172,9 +183,13 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
                             if (mainPath.exists()) {
                                 String(mainPath.readBytes())
                             } else {
-                                it.base.getPath(
-                                    JarFile.MANIFEST_NAME,
-                                ).inputStream().use(::Manifest).mainAttributes.getValue(Attributes.Name.MAIN_CLASS)
+                                it.base
+                                    .getPath(
+                                        JarFile.MANIFEST_NAME,
+                                    ).inputStream()
+                                    .use(::Manifest)
+                                    .mainAttributes
+                                    .getValue(Attributes.Name.MAIN_CLASS)
                             }
                         }
                     },
@@ -185,13 +200,10 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
     }
 
     companion object {
-        fun MinecraftRunConfiguration.getManifest(minecraftVersion: Provider<String>) =
+        fun MinecraftRunConfiguration.getManifest(minecraftVersion: Provider<String>): Provider<MinecraftVersionMetadata> =
             minecraftVersion.map {
                 runBlocking {
-                    project
-                        .extension<MinecraftCodevExtension>()
-                        .getVersionList()
-                        .version(it)
+                    cacheParameters.versionList().version(it)
                 }
             }
     }
@@ -211,7 +223,9 @@ interface DatagenRunConfigurationData {
         val moduleName = runConfiguration.sourceSet.map(SourceSet::getName)
 
         return outputDirectory.orElse(
-            runConfiguration.project.layout.buildDirectory.dir("generatedResources").flatMap { moduleName.map(it::dir) },
+            runConfiguration.project.layout.buildDirectory
+                .dir("generatedResources")
+                .flatMap { moduleName.map(it::dir) },
         )
     }
 }
