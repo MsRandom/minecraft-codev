@@ -2,7 +2,7 @@ package net.msrandom.minecraftcodev.runs
 
 import net.msrandom.minecraftcodev.core.utils.applyPlugin
 import net.msrandom.minecraftcodev.core.utils.createSourceSetElements
-import net.msrandom.minecraftcodev.core.utils.getCacheDirectory
+import net.msrandom.minecraftcodev.core.utils.getCacheDirectoryProvider
 import net.msrandom.minecraftcodev.runs.task.DownloadAssets
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
 import org.apache.commons.lang3.StringUtils
@@ -11,12 +11,15 @@ import org.gradle.api.plugins.ApplicationPlugin
 import org.gradle.api.plugins.PluginAware
 import org.gradle.api.tasks.JavaExec
 import org.gradle.api.tasks.SourceSet
+import org.gradle.configurationcache.extensions.serviceOf
+import org.gradle.jvm.toolchain.JavaLanguageVersion
+import org.gradle.jvm.toolchain.JavaToolchainService
 
 class MinecraftCodevRunsPlugin<T : PluginAware> : Plugin<T> {
     override fun apply(target: T) =
         applyPlugin(target) {
             // Log4j configs
-            val cache = getCacheDirectory(this)
+            val cache = getCacheDirectoryProvider(this)
             // val logging: Path = cache.resolve("logging")
 
             fun addSourceElements(
@@ -42,14 +45,19 @@ class MinecraftCodevRunsPlugin<T : PluginAware> : Plugin<T> {
 
             runs.all { builder ->
                 val name = "${ApplicationPlugin.TASK_RUN_NAME}${StringUtils.capitalize(builder.name)}"
+
                 tasks.register(name, JavaExec::class.java) { javaExec ->
                     val configuration = builder.build()
 
-                    javaExec.doFirst { task ->
-                        (task as JavaExec).environment = configuration.environment.get().mapValues { it.value.compile() }
+                    javaExec.environment = configuration.environment.get().mapValues {
+                        object {
+                            override fun toString() = it.value.compile()
+                        }
                     }
 
-                    // TODO Set java version
+                    javaExec.javaLauncher.set(project.serviceOf<JavaToolchainService>().launcherFor {
+                        it.languageVersion.set(configuration.jvmVersion.map(JavaLanguageVersion::of))
+                    })
 
                     javaExec.argumentProviders.add(
                         configuration.arguments.map { arguments -> arguments.map(MinecraftRunConfiguration.Argument::compile) }::get,

@@ -3,15 +3,15 @@ package net.msrandom.minecraftcodev.core.utils
 import org.gradle.api.Project
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.file.Directory
-import org.gradle.api.internal.GradleInternal
 import org.gradle.api.provider.Provider
-import org.gradle.cache.scopes.GlobalScopedCacheBuilderFactory
-import org.gradle.configurationcache.extensions.serviceOf
 import java.io.File
 import java.nio.file.Path
 
-fun getCacheDirectory(project: Project): Provider<Directory> =
-    project.layout.dir(project.provider { project.gradle.gradleUserHomeDir.resolve("caches/minecraft-coedv") })
+fun getCacheDirectoryProvider(project: Project): Provider<Directory> =
+    project.layout.dir(project.provider { project.gradle.gradleUserHomeDir.resolve("caches/minecraft-codev") })
+
+fun getCacheDirectory(project: Project): File =
+    project.gradle.gradleUserHomeDir.resolve("caches/minecraft-codev")
 
 private fun getVanillaExtractJarPath(
     cacheDirectory: Path,

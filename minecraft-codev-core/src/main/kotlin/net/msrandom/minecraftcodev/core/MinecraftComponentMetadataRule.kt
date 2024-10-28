@@ -4,14 +4,14 @@ import kotlinx.coroutines.runBlocking
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionList
 import net.msrandom.minecraftcodev.core.resolve.getClientDependencies
 import net.msrandom.minecraftcodev.core.resolve.setupCommon
-import net.msrandom.minecraftcodev.core.utils.toPath
+import org.gradle.api.artifacts.CacheableRule
 import org.gradle.api.artifacts.ComponentMetadataContext
 import org.gradle.api.artifacts.ComponentMetadataRule
 import org.gradle.api.attributes.Attribute
 import org.gradle.api.attributes.Category
-import org.gradle.api.file.Directory
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.Provider
+import java.io.File
 import java.nio.file.Path
 import javax.inject.Inject
 
@@ -24,8 +24,9 @@ suspend fun getVersionList(
     isOffline: Boolean,
 ) = MinecraftVersionList.load(cacheDirectory, url, isOffline)
 
+@CacheableRule
 abstract class MinecraftComponentMetadataRule<T : Any> @Inject constructor(
-    private val cacheDirectory: Provider<Directory>,
+    private val cacheDirectory: File,
     private val version: Provider<String>,
     private val versionManifestUrl: Provider<String>,
     private val isOffline: Provider<Boolean>,
@@ -47,12 +48,12 @@ abstract class MinecraftComponentMetadataRule<T : Any> @Inject constructor(
 
             it.withDependencies {
                 runBlocking {
-                    val versionMetadata = getVersionList(cacheDirectory.get().toPath(), versionManifestUrl.get(), isOffline.get()).version(version.get())
+                    val versionMetadata = getVersionList(cacheDirectory.toPath(), versionManifestUrl.get(), isOffline.get()).version(version.get())
 
                     if (client) {
-                        setupCommon(cacheDirectory.get().toPath(), versionMetadata, isOffline.get())
+                        setupCommon(cacheDirectory.toPath(), versionMetadata, isOffline.get())
                     } else {
-                        getClientDependencies(cacheDirectory.get().toPath(), versionMetadata, isOffline.get())
+                        getClientDependencies(cacheDirectory.toPath(), versionMetadata, isOffline.get())
                     }
                 }
             }

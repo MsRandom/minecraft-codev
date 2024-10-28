@@ -2,10 +2,7 @@ package net.msrandom.minecraftcodev.core.resolve
 
 import net.msrandom.minecraftcodev.core.resolve.bundled.ServerExtractor
 import net.msrandom.minecraftcodev.core.resolve.legacy.ServerFixer
-import net.msrandom.minecraftcodev.core.utils.getCacheDirectory
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
-import org.gradle.api.Project
-import org.gradle.api.file.Directory
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption

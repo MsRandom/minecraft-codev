@@ -18,11 +18,9 @@ import net.msrandom.minecraftcodev.runs.RunConfigurationDefaultsContainer.Compan
 import net.msrandom.minecraftcodev.runs.task.DownloadAssets
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
 import org.gradle.api.Action
-import org.gradle.api.artifacts.Configuration
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.FileCollection
-import org.gradle.api.provider.ListProperty
-import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.*
 import java.io.File
@@ -34,24 +32,30 @@ import kotlin.io.path.writeLines
 open class ForgeRunsDefaultsContainer(
     private val defaults: RunConfigurationDefaultsContainer,
 ) {
-    private fun MinecraftRunConfiguration.getUserdevData(patchesConfiguration: Provider<Configuration>?): Provider<UserdevConfig> {
-        val provider =
-            patchesConfiguration ?: sourceSet.flatMap {
-                project.configurations.named(it.patchesConfigurationName)
-            }
+    private fun loadUserdev(patches: FileCollection): UserdevConfig {
+        var config: UserdevConfig? = null
 
-        return provider.map { patches ->
-            var config: UserdevConfig? = null
-            for (file in patches) {
-                val isUserdev =
-                    MinecraftCodevForgePlugin.userdevConfig(file) {
-                        config = it
-                    }
+        for (file in patches) {
+            val isUserdev =
+                MinecraftCodevForgePlugin.userdevConfig(file) {
+                    config = it
+                }
 
-                if (isUserdev) break
-            }
+            if (isUserdev) break
+        }
 
-            config ?: throw UnsupportedOperationException("Patches $patches did not contain Forge userdev.")
+        return config ?: throw UnsupportedOperationException("Patches $patches did not contain Forge userdev.")
+    }
+
+    private fun MinecraftRunConfiguration.getUserdevData(patches: FileCollection): Provider<UserdevConfig> {
+        if (patches.isEmpty) {
+            val configuration = sourceSet.flatMap { project.configurations.named(it.patchesConfigurationName) }
+
+            return configuration.map(::loadUserdev)
+        }
+
+        return project.provider {
+            loadUserdev(patches)
         }
     }
 
@@ -260,7 +264,7 @@ open class ForgeRunsDefaultsContainer(
         runType: (UserdevConfig.Runs) -> UserdevConfig.Run?,
         addLwjglNatives: Boolean = false,
     ) {
-        val configProvider = getUserdevData(data.patchesConfiguration.takeIf(Property<*>::isPresent))
+        val configProvider = getUserdevData(data.patches)
 
         val extractNativesTaskName = sourceSet.get().extractNativesTaskName
         val downloadAssetsTaskName = sourceSet.get().downloadAssetsTaskName
@@ -327,8 +331,8 @@ open class ForgeRunsDefaultsContainer(
                     downloadAssetsTaskName,
                 )
 
-                for (mixinConfig in data.mixinConfigs.get()) {
-                    arguments.add(MinecraftRunConfiguration.Argument("--mixin.config=", mixinConfig))
+                for (mixinConfig in data.mixinConfigs) {
+                    arguments.add(MinecraftRunConfiguration.Argument("--mixin.config=", mixinConfig.absolutePath))
                 }
 
                 arguments
@@ -456,12 +460,11 @@ open class ForgeRunsDefaultsContainer(
 }
 
 abstract class ForgeRunConfigurationData {
-    abstract val patchesConfiguration: Property<Configuration>
-        @Optional
-        @Input
+    abstract val patches: ConfigurableFileCollection
+        @InputFiles
         get
 
-    abstract val mixinConfigs: ListProperty<String>
+    abstract val mixinConfigs: ConfigurableFileCollection
         @InputFiles
         get
 }

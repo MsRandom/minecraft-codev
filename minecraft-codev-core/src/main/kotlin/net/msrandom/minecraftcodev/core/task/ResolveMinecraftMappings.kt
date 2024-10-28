@@ -1,14 +1,9 @@
 package net.msrandom.minecraftcodev.core.task
 
 import kotlinx.coroutines.runBlocking
-import net.msrandom.minecraftcodev.core.VERSION_MANIFEST_URL
-import net.msrandom.minecraftcodev.core.getVersionList
 import net.msrandom.minecraftcodev.core.resolve.MinecraftDownloadVariant
 import net.msrandom.minecraftcodev.core.resolve.downloadMinecraftFile
 import net.msrandom.minecraftcodev.core.utils.getAsPath
-import net.msrandom.minecraftcodev.core.utils.getCacheDirectory
-import org.gradle.api.DefaultTask
-import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.*

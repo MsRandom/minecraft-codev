@@ -5,20 +5,21 @@ import kotlinx.serialization.json.decodeFromStream
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
 import net.msrandom.minecraftcodev.core.getVersionList
 import net.msrandom.minecraftcodev.core.resolve.getAllDependencies
-import net.msrandom.minecraftcodev.core.utils.toPath
+import org.gradle.api.artifacts.CacheableRule
 import org.gradle.api.artifacts.ComponentMetadataContext
 import org.gradle.api.artifacts.ComponentMetadataRule
 import org.gradle.api.artifacts.repositories.RepositoryResourceAccessor
 import org.gradle.api.attributes.Attribute
 import org.gradle.api.attributes.Category
-import org.gradle.api.file.FileSystemLocation
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.Provider
+import java.io.File
 import java.util.zip.ZipInputStream
 import javax.inject.Inject
 
+@CacheableRule
 abstract class MinecraftForgeComponentMetadataRule<T : Any> @Inject constructor(
-    private val cacheDirectory: Provider<FileSystemLocation>,
+    private val cacheDirectory: File,
     private val version: Provider<String>,
     private val versionManifestUrl: Provider<String>,
     private val isOffline: Provider<Boolean>,
@@ -73,7 +74,7 @@ abstract class MinecraftForgeComponentMetadataRule<T : Any> @Inject constructor(
 
             variant.withDependencies {
                 runBlocking {
-                    val versionMetadata = getVersionList(cacheDirectory.get().toPath(), versionManifestUrl.get(), isOffline.get())
+                    val versionMetadata = getVersionList(cacheDirectory.toPath(), versionManifestUrl.get(), isOffline.get())
                         .version(version.get())
 
                     (getAllDependencies(versionMetadata) + userdevJar.libraries).forEach(it::add)

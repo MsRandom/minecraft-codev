@@ -2,10 +2,7 @@ package net.msrandom.minecraftcodev.forge.task
 
 import kotlinx.coroutines.runBlocking
 import net.minecraftforge.accesstransformer.TransformerProcessor
-import net.msrandom.minecraftcodev.core.resolve.addMinecraftMarker
-import net.msrandom.minecraftcodev.core.resolve.downloadMinecraftClient
-import net.msrandom.minecraftcodev.core.resolve.getClientDependencies
-import net.msrandom.minecraftcodev.core.resolve.getExtractionState
+import net.msrandom.minecraftcodev.core.resolve.*
 import net.msrandom.minecraftcodev.core.task.CachedMinecraftTask
 import net.msrandom.minecraftcodev.core.utils.getAsPath
 import net.msrandom.minecraftcodev.core.utils.toPath
@@ -53,11 +50,6 @@ abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
     abstract val version: Property<String>
         @Input get
 
-    abstract val clientMappings: RegularFileProperty
-        @PathSensitive(PathSensitivity.RELATIVE)
-        @InputFile
-        get
-
     abstract val patches: ConfigurableFileCollection
         @InputFiles
         @PathSensitive(PathSensitivity.ABSOLUTE)
@@ -93,7 +85,6 @@ abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
         runBlocking {
             val cacheDirectory = cacheParameters.directory.getAsPath()
             val isOffline = cacheParameters.isOffline.get()
-            val clientMappings = clientMappings.getAsPath()
 
             val metadata = cacheParameters.versionList().version(version.get())
 
@@ -187,6 +178,8 @@ abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
                     val notchObf = userdev.config.notchObf
 
                     if (official) {
+                        val clientMappings = downloadMinecraftFile(cacheDirectory, metadata, MinecraftDownloadVariant.ClientMappings, cacheParameters.isOffline.get())!!
+
                         temporaryDir.resolve("patch.log").outputStream().use {
                             val mergeMappings =
                                 mcpAction(

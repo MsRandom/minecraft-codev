@@ -144,12 +144,12 @@ class PatchMcpAction(
 
         val input = inputs.getValue("clean")
 
-        zipFileSystem(patched).use { patchedZip ->
+        zipFileSystem(patched).use { (patchedZip) ->
             // Add missing non-patched files
             zipFileSystem(input).use { inputZip ->
                 inputZip.base.getPath("/").walk {
                     for (path in filter(Path::isRegularFile)) {
-                        val output = patchedZip.base.getPath(path.toString())
+                        val output = patchedZip.getPath(path.toString())
 
                         if (output.notExists()) {
                             output.parent?.createDirectories()
@@ -170,7 +170,7 @@ class PatchMcpAction(
                         val name = root.relativize(path).toString()
 
                         if (filters.all { name matches it }) {
-                            val output = patchedZip.base.getPath(name)
+                            val output = patchedZip.getPath(name)
 
                             output.parent?.createDirectories()
                             path.copyTo(output, StandardCopyOption.COPY_ATTRIBUTES)
@@ -183,7 +183,7 @@ class PatchMcpAction(
             val inject = userdevConfig.inject
 
             if (inject == null) {
-                injectForgeMappingService(patched)
+                injectForgeMappingService(patchedZip)
 
                 return patched
             }
@@ -197,16 +197,16 @@ class PatchMcpAction(
 
                 injectPath.walk {
                     for (path in filter(Path::isRegularFile)) {
-                        val output = patchedZip.base.getPath(injectPath.relativize(path).toString())
+                        val output = patchedZip.getPath(injectPath.relativize(path).toString())
 
                         output.parent?.createDirectories()
                         path.copyTo(output, StandardCopyOption.COPY_ATTRIBUTES)
                     }
                 }
             }
-        }
 
-        injectForgeMappingService(patched)
+            injectForgeMappingService(patchedZip)
+        }
 
         return patched
     }

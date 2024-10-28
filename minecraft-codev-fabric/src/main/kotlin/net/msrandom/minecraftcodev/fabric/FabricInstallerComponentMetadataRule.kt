@@ -2,6 +2,7 @@ package net.msrandom.minecraftcodev.fabric
 
 import kotlinx.serialization.json.decodeFromStream
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
+import org.gradle.api.artifacts.CacheableRule
 import org.gradle.api.artifacts.ComponentMetadataContext
 import org.gradle.api.artifacts.ComponentMetadataRule
 import org.gradle.api.artifacts.VariantMetadata
@@ -24,6 +25,7 @@ fun loadFabricInstaller(
     }
 }
 
+@CacheableRule
 abstract class FabricInstallerComponentMetadataRule<T : Any> @Inject constructor(
     private val sideAttribute: Attribute<T>,
     private val commonValue: T,
@@ -57,7 +59,7 @@ abstract class FabricInstallerComponentMetadataRule<T : Any> @Inject constructor
         }
 
         context.details.withVariant("compile") {
-            it.withSidedDependencies { common + server + development }
+            it.withSidedDependencies { common + development }
 
             it.attributes { attributes ->
                 attributes.attribute(sideAttribute, commonValue)
