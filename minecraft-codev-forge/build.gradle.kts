@@ -11,8 +11,6 @@ gradlePlugin {
 }
 
 dependencies {
-    implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version = "1.3.3")
-
     implementation(group = "io.arrow-kt", name = "arrow-core", version = "1.2.4")
     implementation(group = "io.arrow-kt", name = "arrow-core-serialization", version = "1.2.4")
 
