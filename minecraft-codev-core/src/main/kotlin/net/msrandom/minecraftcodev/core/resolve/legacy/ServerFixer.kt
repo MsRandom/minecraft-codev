@@ -39,7 +39,7 @@ object ServerFixer {
         return entry.value.firstOrNull { path.startsWith(it.first) }?.second
     }
 
-    fun removeLibraries(
+    suspend fun removeLibraries(
         manifest: MinecraftVersionMetadata,
         newServer: Path,
         serverFs: FileSystem,
@@ -69,8 +69,8 @@ object ServerFixer {
             zipFileSystem(client).use { clientFs ->
                 val root = serverFs.getPath("/")
                 WALK@ for (path in Files.walk(root).filter(Path::isRegularFile)) {
-                    val newPath = fixedFs.base.getPath(path.toString())
-                    if (clientFs.base.getPath(path.toString()).notExists()) {
+                    val newPath = fixedFs.getPath(path.toString())
+                    if (clientFs.getPath(path.toString()).notExists()) {
                         for (entry in libraryGroups) {
                             val library = testLibraryPath(path, entry)
 

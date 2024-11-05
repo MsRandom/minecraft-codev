@@ -55,6 +55,7 @@ abstract class FabricInstallerComponentMetadataRule<T : Any> @Inject constructor
         ) = withDependencies { dependencies ->
             val libraries = installerJson.libraries
 
+            dependencies.clear()
             libraries.sidedLibraries().map(FabricInstaller.FabricLibrary::name).forEach(dependencies::add)
         }
 
@@ -74,14 +75,16 @@ abstract class FabricInstallerComponentMetadataRule<T : Any> @Inject constructor
             }
         }
 
-        context.details.addVariant("client") {
+        context.details.addVariant("clientCompile", "compile") {
             it.withSidedDependencies { common + client + development }
 
-            it.withFiles { files ->
-                val id = context.details.id
-
-                files.addFile("${id.name}-${id.version}.jar")
+            it.attributes { attributes ->
+                attributes.attribute(sideAttribute, clientValue)
             }
+        }
+
+        context.details.addVariant("clientRuntime", "compile") {
+            it.withSidedDependencies { common + client + development }
 
             it.attributes { attributes ->
                 attributes.attribute(sideAttribute, clientValue)

@@ -14,7 +14,7 @@ open class ResolutionData<T>(
 )
 
 fun interface ResolutionRule<T : ResolutionData<*>> {
-    fun load(
+    suspend fun load(
         path: Path,
         extension: String,
         data: T,
@@ -22,7 +22,7 @@ fun interface ResolutionRule<T : ResolutionData<*>> {
 }
 
 fun interface ZipResolutionRule<T : ResolutionData<*>> {
-    fun load(
+    suspend fun load(
         path: Path,
         fileSystem: FileSystem,
         isJar: Boolean,
@@ -30,7 +30,7 @@ fun interface ZipResolutionRule<T : ResolutionData<*>> {
     ): Boolean
 }
 
-fun <T : ResolutionData<*>> handleZipRules(
+suspend fun <T : ResolutionData<*>> handleZipRules(
     zipResolutionRules: Iterable<ZipResolutionRule<T>>,
     path: Path,
     extension: String,
@@ -44,7 +44,7 @@ fun <T : ResolutionData<*>> handleZipRules(
 
     zipFileSystem(path).use {
         for (rule in zipResolutionRules) {
-            if (rule.load(path, it.base, isJar, data)) {
+            if (rule.load(path, it, isJar, data)) {
                 return true
             }
         }
@@ -56,7 +56,7 @@ fun <T : ResolutionData<*>> handleZipRules(
 abstract class ZipResolutionRuleHandler<T : ResolutionData<*>, U : ZipResolutionRule<T>>(
     private val zipResolutionRules: Iterable<U>,
 ) : ResolutionRule<T> {
-    override fun load(
+    override suspend fun load(
         path: Path,
         extension: String,
         data: T,

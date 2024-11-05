@@ -1,5 +1,6 @@
 package net.msrandom.minecraftcodev.accesswidener
 
+import kotlinx.coroutines.runBlocking
 import net.msrandom.minecraftcodev.core.resolve.isCodevGeneratedMinecraftJar
 import net.msrandom.minecraftcodev.core.utils.toPath
 import net.msrandom.minecraftcodev.core.utils.walk
@@ -36,13 +37,13 @@ abstract class AccessWiden : TransformAction<AccessWiden.Parameters> {
         @PathSensitive(PathSensitivity.NONE)
         get
 
-    override fun transform(outputs: TransformOutputs) {
+    override fun transform(outputs: TransformOutputs) = runBlocking {
         val input = inputFile.get().toPath()
 
         if (parameters.accessWideners.isEmpty || !isCodevGeneratedMinecraftJar(input)) {
             outputs.file(inputFile)
 
-            return
+            return@runBlocking
         }
 
         println("Access widening $input")
@@ -53,10 +54,10 @@ abstract class AccessWiden : TransformAction<AccessWiden.Parameters> {
 
         zipFileSystem(input).use { inputZip ->
             zipFileSystem(output, true).use { outputZip ->
-                inputZip.base.getPath("/").walk {
+                inputZip.getPath("/").walk {
                     for (path in filter(Path::isRegularFile)) {
                         val name = path.toString()
-                        val outputPath = outputZip.base.getPath(name)
+                        val outputPath = outputZip.getPath(name)
                         outputPath.parent?.createDirectories()
 
                         if (!name.endsWith(".class")) {

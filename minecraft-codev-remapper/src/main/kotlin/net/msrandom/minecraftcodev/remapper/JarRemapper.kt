@@ -1,8 +1,15 @@
 package net.msrandom.minecraftcodev.remapper
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import net.fabricmc.mappingio.MappedElementKind
 import net.fabricmc.mappingio.MappingVisitor
+import net.fabricmc.mappingio.adapter.MappingNsCompleter
 import net.fabricmc.mappingio.adapter.MappingSourceNsSwitch
+import net.fabricmc.mappingio.format.ProGuardReader
+import net.fabricmc.mappingio.format.Tiny2Reader
 import net.fabricmc.mappingio.tree.MappingTreeView
 import net.fabricmc.mappingio.tree.MemoryMappingTree
 import net.fabricmc.tinyremapper.IMappingProvider
@@ -14,17 +21,20 @@ import net.msrandom.minecraftcodev.remapper.dependency.getNamespaceId
 import org.objectweb.asm.commons.Remapper
 import java.io.File
 import java.nio.file.Path
+import kotlin.io.path.Path
+import kotlin.io.path.bufferedReader
 
 object JarRemapper {
-    @Synchronized
-    fun remap(
+    private val lock = Mutex()
+
+    suspend fun remap(
         mappings: MappingTreeView,
         sourceNamespace: String,
         targetNamespace: String,
         input: Path,
         output: Path,
         classpath: Iterable<File>,
-    ) {
+    ) = lock.withLock {
         val remapper =
             TinyRemapper
                 .newRemapper()
@@ -181,20 +191,22 @@ object JarRemapper {
                     }
                 }.build()
 
-        try {
-            OutputConsumerPath.Builder(output).build().use {
-                it.addNonClassFiles(input, NonClassCopyMode.FIX_META_INF, remapper)
+        withContext(Dispatchers.IO) {
+            try {
+                OutputConsumerPath.Builder(output).build().use {
+                    it.addNonClassFiles(input, NonClassCopyMode.FIX_META_INF, remapper)
 
-                remapper.readClassPath(*classpath.map(File::toPath).toTypedArray())
+                    remapper.readClassPath(*classpath.map(File::toPath).toTypedArray())
 
-                remapper.readInputs(input)
-                remapper.apply(it)
+                    remapper.readInputs(input)
+                    remapper.apply(it)
+                }
+            } finally {
+                remapper.finish()
             }
-        } finally {
-            remapper.finish()
         }
 
-        zipFileSystem(output).use { (fs) ->
+        zipFileSystem(output).use { fs ->
             remapFiles(mappings, fs, sourceNamespace, targetNamespace)
         }
     }

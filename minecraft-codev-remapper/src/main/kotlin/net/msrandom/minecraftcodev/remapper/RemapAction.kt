@@ -1,9 +1,12 @@
 package net.msrandom.minecraftcodev.remapper
 
+import kotlinx.coroutines.runBlocking
+import net.fabricmc.mappingio.format.Tiny2Writer
 import org.gradle.api.artifacts.transform.*
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.FileCollection
 import org.gradle.api.file.FileSystemLocation
+import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.MapProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
@@ -11,6 +14,8 @@ import org.gradle.api.tasks.*
 import org.gradle.process.ExecOperations
 import java.io.File
 import javax.inject.Inject
+import kotlin.io.path.Path
+import kotlin.io.path.writer
 
 @CacheableTransform
 abstract class RemapAction : TransformAction<RemapAction.Parameters> {
@@ -51,6 +56,9 @@ abstract class RemapAction : TransformAction<RemapAction.Parameters> {
     abstract val execOperations: ExecOperations
         @Inject get
 
+    abstract val objectFactory: ObjectFactory
+        @Inject get
+
     abstract val inputFile: Provider<FileSystemLocation>
         @InputArtifact
         @PathSensitive(PathSensitivity.NONE)
@@ -64,28 +72,30 @@ abstract class RemapAction : TransformAction<RemapAction.Parameters> {
     override fun transform(outputs: TransformOutputs) {
         val input = inputFile.get().asFile
 
-        if (parameters.mappings.isEmpty || parameters.filterMods.get() && !isMod(input.toPath())) {
-            outputs.file(inputFile)
+        runBlocking {
+            if (parameters.mappings.isEmpty || parameters.filterMods.get() && !isMod(input.toPath())) {
+                outputs.file(inputFile)
 
-            return
+                return@runBlocking
+            }
+
+            val sourceNamespace = parameters.sourceNamespace.get()
+            val targetNamespace = parameters.targetNamespace.get()
+
+            println("Remapping mod $input from $sourceNamespace to $targetNamespace")
+
+            val output = outputs.file("${input.nameWithoutExtension}-$targetNamespace.${input.extension}")
+
+            val mappings = loadMappings(parameters.mappings, execOperations, parameters.extraFiles.getOrElse(emptyMap()))
+
+            JarRemapper.remap(
+                mappings,
+                sourceNamespace,
+                targetNamespace,
+                input.toPath(),
+                output.toPath(),
+                classpath + parameters.extraClasspath - objectFactory.fileTree().apply { from(inputFile) },
+            )
         }
-
-        val sourceNamespace = parameters.sourceNamespace.get()
-        val targetNamespace = parameters.targetNamespace.get()
-
-        println("Remapping mod $input from $sourceNamespace to $targetNamespace")
-
-        val output = outputs.file("${input.nameWithoutExtension}-$targetNamespace.${input.extension}")
-
-        val mappings = loadMappings(parameters.mappings, execOperations, parameters.extraFiles.getOrElse(emptyMap()))
-
-        JarRemapper.remap(
-            mappings,
-            sourceNamespace,
-            targetNamespace,
-            input.toPath(),
-            output.toPath(),
-            classpath + parameters.extraClasspath,
-        )
     }
 }

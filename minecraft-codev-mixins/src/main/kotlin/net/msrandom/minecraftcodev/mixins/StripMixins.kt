@@ -1,5 +1,6 @@
 package net.msrandom.minecraftcodev.mixins
 
+import kotlinx.coroutines.runBlocking
 import net.msrandom.minecraftcodev.core.utils.toPath
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.gradle.api.artifacts.transform.*
@@ -22,12 +23,12 @@ abstract class StripMixins : TransformAction<TransformParameters.None> {
         @PathSensitive(PathSensitivity.NONE)
         get
 
-    override fun transform(outputs: TransformOutputs) {
+    override fun transform(outputs: TransformOutputs) = runBlocking {
         val input = inputFile.get().toPath()
 
         val handler =
             zipFileSystem(input).use {
-                val root = it.base.getPath("/")
+                val root = it.getPath("/")
 
                 mixinListingRules.firstNotNullOfOrNull { rule ->
                     rule.load(root)
@@ -37,7 +38,7 @@ abstract class StripMixins : TransformAction<TransformParameters.None> {
         if (handler == null) {
             outputs.file(inputFile)
 
-            return
+            return@runBlocking
         }
 
         val output = outputs.file("${input.nameWithoutExtension}-no-mixins.${input.extension}").toPath()
@@ -45,7 +46,7 @@ abstract class StripMixins : TransformAction<TransformParameters.None> {
         input.copyTo(output, StandardCopyOption.COPY_ATTRIBUTES)
 
         zipFileSystem(output).use {
-            val root = it.base.getPath("/")
+            val root = it.getPath("/")
             handler.list(root).forEach { path -> root.resolve(path).deleteExisting() }
             handler.remove(root)
         }

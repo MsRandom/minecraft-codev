@@ -1,5 +1,6 @@
 package net.msrandom.minecraftcodev.remapper.task
 
+import kotlinx.coroutines.runBlocking
 import net.msrandom.minecraftcodev.core.utils.getAsPath
 import net.msrandom.minecraftcodev.remapper.JarRemapper
 import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
@@ -67,7 +68,7 @@ abstract class RemapTask : DefaultTask() {
     }
 
     @TaskAction
-    fun remap() {
+    fun remap() = runBlocking {
         val mappings = loadMappings(mappings, execOperations, extraFiles.get())
 
         JarRemapper.remap(

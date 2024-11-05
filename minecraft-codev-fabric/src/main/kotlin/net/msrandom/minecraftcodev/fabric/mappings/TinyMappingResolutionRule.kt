@@ -1,5 +1,7 @@
 package net.msrandom.minecraftcodev.fabric.mappings
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import net.fabricmc.mappingio.adapter.MappingNsCompleter
 import net.fabricmc.mappingio.adapter.MappingNsRenamer
 import net.fabricmc.mappingio.format.Tiny1Reader
@@ -65,26 +67,30 @@ private fun readTiny(
 }
 
 class TinyMappingResolutionRule : MappingResolutionRule {
-    override fun load(path: Path, extension: String, data: MappingResolutionData): Boolean {
+    override suspend fun load(path: Path, extension: String, data: MappingResolutionData): Boolean {
         if (extension != "tiny") {
             return false
         }
 
-        readTiny(data, path)
+        withContext(Dispatchers.IO) {
+            readTiny(data, path)
+        }
+
         return true
     }
 }
 
 class TinyZipMappingResolutionRule : ZipMappingResolutionRule {
-    override fun load(path: Path, fileSystem: FileSystem, isJar: Boolean, data: MappingResolutionData): Boolean {
+    override suspend fun load(path: Path, fileSystem: FileSystem, isJar: Boolean, data: MappingResolutionData) = withContext(Dispatchers.IO) {
         val tiny = fileSystem.getPath("mappings/mappings.tiny")
 
         if (!tiny.exists()) {
-            return false
+            return@withContext false
         }
 
         // Assuming tiny
         readTiny(data, tiny)
-        return true
+
+        true
     }
 }

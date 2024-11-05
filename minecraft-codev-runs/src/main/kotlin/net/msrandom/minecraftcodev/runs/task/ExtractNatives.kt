@@ -81,7 +81,7 @@ abstract class ExtractNatives : CachedMinecraftTask() {
                             val extension = artifact.extension
                             if (extension == "jar" || extension == "zip") {
                                 zipFileSystem(artifact.toPath()).use {
-                                    val root = it.base.getPath("/")
+                                    val root = it.getPath("/")
                                     root.walk {
                                         for (path in filter(Path::isRegularFile)) {
                                             val name = root.relativize(path).toString()

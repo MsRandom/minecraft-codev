@@ -1,5 +1,7 @@
 package net.msrandom.minecraftcodev.core.resolve
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import net.msrandom.minecraftcodev.core.resolve.bundled.ServerExtractor
 import net.msrandom.minecraftcodev.core.resolve.legacy.ServerFixer
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
@@ -8,7 +10,6 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import kotlin.io.path.*
 
-// TODO Optimize IO operations here using coroutines
 suspend fun getExtractionState(
     cacheDirectory: Path,
     manifest: MinecraftVersionMetadata,
@@ -38,12 +39,15 @@ suspend fun getExtractionState(
             isOffline,
         ) ?: return null
 
-    val temporaryServer = Files.createTempFile("server-", ".tmp.jar")
+    val temporaryServer = withContext(Dispatchers.IO) {
+        Files.createTempFile("server-", ".tmp.jar")
+    }
+
     val commonLibraries: List<String>
     val isBundled: Boolean
 
     zipFileSystem(serverJar).use { serverFs ->
-        val librariesPath = serverFs.base.getPath("META-INF/libraries.list")
+        val librariesPath = serverFs.getPath("META-INF/libraries.list")
 
         if (librariesPath.exists()) {
             // New server Jar, just extract it and populate the library list
@@ -52,7 +56,7 @@ suspend fun getExtractionState(
                 ServerExtractor.extract(
                     manifest.id,
                     temporaryServer,
-                    serverFs.base,
+                    serverFs,
                     librariesPath,
                 )
         } else {
@@ -67,7 +71,7 @@ suspend fun getExtractionState(
                 ServerFixer.removeLibraries(
                     manifest,
                     temporaryServer,
-                    serverFs.base,
+                    serverFs,
                     downloadMinecraftClient(cacheDirectory, manifest, isOffline),
                 )
         }
@@ -84,7 +88,9 @@ suspend fun getExtractionState(
     libraries.writeLines(commonLibraries)
 
     if (isBundled) {
-        Files.createFile(bundledMark)
+        withContext(Dispatchers.IO) {
+            Files.createFile(bundledMark)
+        }
     }
 
     return ServerExtractionResult(extractedJar, isBundled, commonLibraries)

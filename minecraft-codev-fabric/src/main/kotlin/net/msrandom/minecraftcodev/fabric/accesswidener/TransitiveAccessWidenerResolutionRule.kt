@@ -14,7 +14,7 @@ import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 
 class TransitiveAccessWidenerResolutionRule : ZipAccessModifierResolutionRule {
-    override fun load(path: Path, fileSystem: FileSystem, isJar: Boolean, data: AccessModifierResolutionData): Boolean {
+    override suspend fun load(path: Path, fileSystem: FileSystem, isJar: Boolean, data: AccessModifierResolutionData): Boolean {
         val mod = fileSystem.getPath(MinecraftCodevFabricPlugin.MOD_JSON)
 
         if (!mod.exists()) {

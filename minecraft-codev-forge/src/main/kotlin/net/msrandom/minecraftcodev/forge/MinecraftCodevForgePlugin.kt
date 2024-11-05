@@ -29,13 +29,13 @@ open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
         internal const val FORGE_MODS_TOML = "mods.toml"
         internal const val NEOFORGE_MODS_TOML = "neoforge.mods.toml"
 
-        internal fun userdevConfig(
+        internal suspend fun userdevConfig(
             file: File,
             action: FileSystem.(config: UserdevConfig) -> Unit,
         ) = zipFileSystem(file.toPath()).use { fs ->
-            val configPath = fs.base.getPath("config.json")
+            val configPath = fs.getPath("config.json")
             if (configPath.exists()) {
-                fs.base.action(configPath.inputStream().use(json::decodeFromStream))
+                fs.action(configPath.inputStream().use(json::decodeFromStream))
                 true
             } else {
                 false

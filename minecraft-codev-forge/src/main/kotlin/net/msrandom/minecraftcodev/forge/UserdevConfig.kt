@@ -8,9 +8,11 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.*
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
+import net.msrandom.minecraftcodev.core.utils.computeSuspendIfAbsent
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import java.io.File
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.exists
 import kotlin.io.path.inputStream
 
@@ -74,17 +76,30 @@ data class UserdevConfig(
 }
 
 data class Userdev(val config: UserdevConfig, val source: File) {
-    companion object {
-        private val cache = hashMapOf<File, UserdevConfig?>()
+    private sealed interface CacheEntry {
+        val value: UserdevConfig?
 
-        fun fromFile(file: File) =
-            cache.computeIfAbsent(file) {
+        object Absent : CacheEntry {
+            override val value: UserdevConfig? = null
+        }
+
+        @JvmInline
+        value class Present(override val value: UserdevConfig) : CacheEntry
+    }
+
+    companion object {
+        private val cache = ConcurrentHashMap<File, CacheEntry>()
+
+        suspend fun fromFile(file: File) =
+            cache.computeSuspendIfAbsent(file) {
                 zipFileSystem(it.toPath()).use { fs ->
-                    fs.base.getPath("config.json")
+                    fs.getPath("config.json")
                         .takeIf(Path::exists)
                         ?.inputStream()
-                        ?.use(json::decodeFromStream)
+                        ?.use { json.decodeFromStream<UserdevConfig>(it) }
+                        ?.let(CacheEntry::Present)
+                        ?: CacheEntry.Absent
                 }
-            }?.let { Userdev(it, file) }
+            }.value?.let { Userdev(it, file) }
     }
 }

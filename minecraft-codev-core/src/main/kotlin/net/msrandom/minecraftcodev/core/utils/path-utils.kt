@@ -1,48 +1,69 @@
 package net.msrandom.minecraftcodev.core.utils
 
-import org.gradle.api.file.*
-import org.jetbrains.annotations.Blocking
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import org.gradle.api.file.FileSystemLocation
+import org.gradle.api.file.FileSystemLocationProperty
+import org.slf4j.LoggerFactory
 import java.net.URI
 import java.nio.file.*
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.locks.Lock
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.streams.asSequence
+import kotlin.time.Duration.Companion.seconds
 
-private val fileSystemLocks = ConcurrentHashMap<Path, ReentrantLock>()
+private val logger = LoggerFactory.getLogger("path-utils")
 
-@Blocking
-fun zipFileSystem(
-    file: Path,
-    create: Boolean = false,
-): LockingFileSystem {
-    val uri = URI.create("jar:${file.toUri()}")
+private val mutexes = ConcurrentHashMap<Any?, Mutex>()
 
-    val lock =
-        fileSystemLocks.computeIfAbsent(file.toAbsolutePath()) {
-            ReentrantLock()
+private fun objectMutex(obj: Any?) = mutexes.computeIfAbsent(obj) { Mutex() }
+
+suspend fun <K : Any, V : Any> ConcurrentHashMap<K, V>.computeSuspendIfAbsent(key: K, compute: suspend (K) -> V): V {
+    get(key)?.let {
+        return it
+    }
+
+    return objectMutex(this).withLock {
+        get(key)?.let {
+            return it
         }
 
-    lock.lock()
+        val value = compute(key)
 
-    var owned = true
+        put(key, value)
 
-    val base =
+        value
+    }
+}
+
+suspend fun zipFileSystem(
+    file: Path,
+    create: Boolean = false,
+): FileSystem {
+    val uri = URI.create("jar:${file.toUri()}")
+
+    return withContext(Dispatchers.IO) {
         if (create) {
             FileSystems.newFileSystem(uri, mapOf("create" to true.toString()))
         } else {
-            try {
-                val fileSystem = FileSystems.getFileSystem(uri)
+            while (true) {
+                try {
+                    return@withContext FileSystems.newFileSystem(uri, emptyMap<String, Any>())
+                } catch (e: FileSystemAlreadyExistsException) {
+                    logger.info("Couldn't acquire access to $file file-system, waiting", e)
 
-                owned = false
-
-                fileSystem
-            } catch (exception: FileSystemNotFoundException) {
-                FileSystems.newFileSystem(uri, emptyMap<String, Any>())
+                    delay(1.seconds)
+                }
             }
-        }
 
-    return LockingFileSystem(base, lock, owned)
+            // Unreachable
+            @Suppress("UNREACHABLE_CODE")
+            throw IllegalStateException()
+        }
+    }
 }
 
 fun <T> Path.walk(action: Sequence<Path>.() -> T) =
@@ -52,15 +73,3 @@ fun <T> Path.walk(action: Sequence<Path>.() -> T) =
 
 fun FileSystemLocation.toPath(): Path = asFile.toPath()
 fun FileSystemLocationProperty<*>.getAsPath(): Path = asFile.get().toPath()
-
-class LockingFileSystem(val base: FileSystem, private val lock: Lock, private val owned: Boolean) : AutoCloseable {
-    operator fun component1() = base
-
-    override fun close() {
-        if (owned) {
-            base.close()
-        }
-
-        lock.unlock()
-    }
-}

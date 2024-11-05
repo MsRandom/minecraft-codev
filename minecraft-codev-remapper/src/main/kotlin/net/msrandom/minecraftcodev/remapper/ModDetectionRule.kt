@@ -22,14 +22,14 @@ class VanillaModDetectionRule : ModDetectionRule {
 
 val modDetectionRules = serviceLoader<ModDetectionRule>()
 
-fun isMod(path: Path): Boolean {
+suspend fun isMod(path: Path): Boolean {
     val extension = path.extension
 
     if (extension != "zip" && extension != "jar") {
         return false
     }
 
-    return zipFileSystem(path).use { (fs) ->
+    return zipFileSystem(path).use { fs ->
         modDetectionRules.any { it(fs) }
     }
 }

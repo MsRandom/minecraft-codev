@@ -1,5 +1,6 @@
 package net.msrandom.minecraftcodev.forge.runs
 
+import kotlinx.coroutines.runBlocking
 import net.fabricmc.mappingio.format.Tiny2Reader
 import net.fabricmc.mappingio.tree.MappingTreeView
 import net.fabricmc.mappingio.tree.MemoryMappingTree
@@ -36,10 +37,11 @@ open class ForgeRunsDefaultsContainer(
         var config: UserdevConfig? = null
 
         for (file in patches) {
-            val isUserdev =
+            val isUserdev = runBlocking {
                 MinecraftCodevForgePlugin.userdevConfig(file) {
                     config = it
                 }
+            }
 
             if (isUserdev) break
         }
@@ -193,27 +195,29 @@ open class ForgeRunsDefaultsContainer(
                     // Compiler doesn't like working with MemoryMappingTree for some reason
                     val treeView: MappingTreeView = mappings
 
-                    zipFileSystem(mappingsArtifact).use {
-                        it.base.getPath("mappings/mappings.tiny").reader().use { reader ->
-                            Tiny2Reader.read(reader, mappings)
-                        }
-
-                        val sourceNamespace = treeView.getNamespaceId(MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE)
-                        val targetNamespace = treeView.getNamespaceId(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
-
-                        for (type in treeView.classes) {
-                            val addedClass = srgMappings.addClass(type.getName(targetNamespace), type.getName(sourceNamespace))
-
-                            for (field in type.fields) {
-                                addedClass.field(field.getName(sourceNamespace), field.getName(targetNamespace))
+                    runBlocking {
+                        zipFileSystem(mappingsArtifact).use {
+                            it.getPath("mappings/mappings.tiny").reader().use { reader ->
+                                Tiny2Reader.read(reader, mappings)
                             }
 
-                            for (method in type.methods) {
-                                addedClass.method(
-                                    method.getDesc(sourceNamespace),
-                                    method.getName(sourceNamespace),
-                                    method.getName(targetNamespace),
-                                )
+                            val sourceNamespace = treeView.getNamespaceId(MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE)
+                            val targetNamespace = treeView.getNamespaceId(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
+
+                            for (type in treeView.classes) {
+                                val addedClass = srgMappings.addClass(type.getName(targetNamespace), type.getName(sourceNamespace))
+
+                                for (field in type.fields) {
+                                    addedClass.field(field.getName(sourceNamespace), field.getName(targetNamespace))
+                                }
+
+                                for (method in type.methods) {
+                                    addedClass.method(
+                                        method.getDesc(sourceNamespace),
+                                        method.getName(sourceNamespace),
+                                        method.getName(targetNamespace),
+                                    )
+                                }
                             }
                         }
                     }

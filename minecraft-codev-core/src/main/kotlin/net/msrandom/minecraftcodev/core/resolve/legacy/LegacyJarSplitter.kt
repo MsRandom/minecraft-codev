@@ -1,12 +1,12 @@
 package net.msrandom.minecraftcodev.core.resolve.legacy
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import net.msrandom.minecraftcodev.annotations.UnsafeForClient
 import net.msrandom.minecraftcodev.annotations.UnsafeForCommon
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
 import net.msrandom.minecraftcodev.core.resolve.downloadMinecraftClient
 import net.msrandom.minecraftcodev.core.utils.*
-import org.gradle.api.Project
-import org.gradle.api.file.Directory
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassWriter
 import org.objectweb.asm.Handle
@@ -95,18 +95,20 @@ object LegacyJarSplitter {
         value.add(AnnotationNode(Type.getObjectType(annotation).descriptor))
     }
 
-    fun <R> useFileSystems(action: ((LockingFileSystem) -> Unit) -> R): R {
-        val fileSystems = mutableListOf<LockingFileSystem>()
+    suspend fun <R> useFileSystems(action: suspend ((FileSystem) -> Unit) -> R): R {
+        val fileSystems = mutableListOf<FileSystem>()
         try {
             return action(fileSystems::add)
         } finally {
             val throwables = mutableListOf<Throwable>()
 
-            for (fileSystem in fileSystems) {
-                try {
-                    fileSystem.close()
-                } catch (throwable: Throwable) {
-                    throwables.add(throwable)
+            withContext(Dispatchers.IO) {
+                for (fileSystem in fileSystems) {
+                    try {
+                        fileSystem.close()
+                    } catch (throwable: Throwable) {
+                        throwables.add(throwable)
+                    }
                 }
             }
 
@@ -235,13 +237,13 @@ object LegacyJarSplitter {
 
             val extraCommonTypes = hashSetOf<Type>()
 
-            clientFs.base.getPath("/").walk {
+            clientFs.getPath("/").walk {
                 for (clientEntry in filter(Path::isRegularFile)) {
                     val pathName = clientEntry.toString()
-                    val clientTargetPath = newClientFs.base.getPath(pathName)
+                    val clientTargetPath = newClientFs.getPath(pathName)
 
                     if (pathName.endsWith(".class")) {
-                        val serverEntry = serverFs.base.getPath(pathName)
+                        val serverEntry = serverFs.getPath(pathName)
 
                         if (serverEntry.exists()) {
                             // Shared entry
@@ -273,7 +275,7 @@ object LegacyJarSplitter {
                             val writer = ClassWriter(serverReader, 0)
                             serverNode.accept(writer)
 
-                            val path = commonFs.base.getPath(pathName)
+                            val path = commonFs.getPath(pathName)
 
                             path.parent.createDirectories()
 
@@ -299,8 +301,8 @@ object LegacyJarSplitter {
                 if (extraCommonType.sort == Type.OBJECT) {
                     val name = "${extraCommonType.internalName}.class"
 
-                    val clientPath = clientFs.base.getPath(name)
-                    val commonPath = commonFs.base.getPath(name)
+                    val clientPath = clientFs.getPath(name)
+                    val commonPath = commonFs.getPath(name)
                     if (clientPath.exists() && commonPath.notExists()) {
                         val reader = clientPath.inputStream().use(::ClassReader)
                         val node = ClassNode()
@@ -316,10 +318,10 @@ object LegacyJarSplitter {
                 }
             }
 
-            serverFs.base.getPath("/").walk {
+            serverFs.getPath("/").walk {
                 for (serverEntry in filter(Path::isRegularFile)) {
                     val name = serverEntry.toString()
-                    val output = commonFs.base.getPath(name)
+                    val output = commonFs.getPath(name)
 
                     if (name.endsWith(".class")) {
                         if (output.notExists()) {
@@ -340,7 +342,7 @@ object LegacyJarSplitter {
                 }
             }
 
-            copyAssets(clientFs.base, serverFs.base, commonFs.base, newClientFs.base)
+            copyAssets(clientFs, serverFs, commonFs, newClientFs)
         }
 
         return JarSplittingResult(

@@ -37,7 +37,7 @@ fun mcpConfigDependency(
     userdevFiles: FileCollection,
 ): Provider<String> =
     project.provider {
-        val userdev = Userdev.fromFile(userdevFiles.singleFile)!!
+        val userdev = runBlocking { Userdev.fromFile(userdevFiles.singleFile)!! }
 
         userdev.config.mcp
     }
@@ -49,7 +49,7 @@ fun mcpConfigExtraRemappingFiles(
     metadataUrl: Provider<String> = project.provider { VERSION_MANIFEST_URL },
     isOffline: Provider<Boolean> = project.provider { project.gradle.startParameter.isOffline },
 ): Provider<Map<String, File>> {
-    val mcp = McpConfigFile.fromFile(resolveFile(project, mcpConfigFile))!!
+    val mcp = runBlocking { McpConfigFile.fromFile(resolveFile(project, mcpConfigFile))!! }
 
     val metadata =
         project.lazyProvider {
@@ -95,7 +95,7 @@ fun mcpConfigExtraRemappingFiles(
 }
 
 class McpConfigMappingResolutionRule : ZipMappingResolutionRule {
-    override fun load(
+    override suspend fun load(
         path: Path,
         fileSystem: FileSystem,
         isJar: Boolean,
@@ -127,7 +127,7 @@ class McpConfigMappingResolutionRule : ZipMappingResolutionRule {
                         )
                     }
 
-                mergeMappings.execute()
+                mergeMappings.execute(fileSystem)
             } else {
                 fileSystem.getPath(mcpConfigFile.config.data.getValue("mappings")!!)
             }

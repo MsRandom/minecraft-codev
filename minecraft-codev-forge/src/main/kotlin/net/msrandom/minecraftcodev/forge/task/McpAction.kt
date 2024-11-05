@@ -1,5 +1,7 @@
 package net.msrandom.minecraftcodev.forge.task
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import net.msrandom.minecraftcodev.core.utils.walk
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.forge.McpConfigFile
@@ -13,6 +15,7 @@ import org.gradle.configurationcache.extensions.serviceOf
 import org.gradle.process.ExecOperations
 import java.io.File
 import java.io.OutputStream
+import java.nio.file.FileSystem
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
@@ -35,12 +38,14 @@ open class McpAction(
 ) {
     open val inputName = "input"
 
-    fun execute(input: Path) = execute(mapOf(inputName to input))
+    suspend fun execute(fileSystem: FileSystem, input: Path) = execute(fileSystem, mapOf(inputName to input))
 
-    fun execute(vararg inputs: Pair<String, Path>) = execute(mapOf(*inputs))
+    suspend fun execute(fileSystem: FileSystem, vararg inputs: Pair<String, Path>) = execute(fileSystem, mapOf(*inputs))
 
-    protected open fun execute(inputs: Map<String, Path> = emptyMap()): Path {
-        val output = Files.createTempFile("mcp-step", ".out")
+    protected open suspend fun execute(fileSystem: FileSystem, inputs: Map<String, Path> = emptyMap()): Path {
+        val output = withContext(Dispatchers.IO) {
+            Files.createTempFile("mcp-step", ".out")
+        }
 
         val executionResult =
             execOperations.javaexec {
@@ -60,39 +65,37 @@ open class McpAction(
                 it.mainClass.set(mainClass)
 
                 val args =
-                    zipFileSystem(mcpConfig.source).use { (fs) ->
-                        args.map { arg ->
-                            if (!arg.startsWith('{')) {
-                                return@map arg
-                            }
+                    args.map { arg ->
+                        if (!arg.startsWith('{')) {
+                            return@map arg
+                        }
 
-                            val template = arg.subSequence(1, arg.length - 1)
+                        val template = arg.subSequence(1, arg.length - 1)
 
-                            val templateReplacement =
-                                output.takeIf { template == "output" }
-                                    ?: inputs[template]
-                                    ?: argumentTemplates[template]
-                                    ?: mcpConfig.config.data[template]?.let {
-                                        val dataOutput = Files.createTempFile("mcp-data", template.toString())
+                        val templateReplacement =
+                            output.takeIf { template == "output" }
+                                ?: inputs[template]
+                                ?: argumentTemplates[template]
+                                ?: mcpConfig.config.data[template]?.let {
+                                    val dataOutput = Files.createTempFile("mcp-data", template.toString())
 
-                                        fs.getPath(
-                                            it,
-                                        ).copyTo(
-                                            dataOutput,
-                                            StandardCopyOption.REPLACE_EXISTING,
-                                            StandardCopyOption.COPY_ATTRIBUTES,
-                                        )
+                                    fileSystem.getPath(
+                                        it,
+                                    ).copyTo(
+                                        dataOutput,
+                                        StandardCopyOption.REPLACE_EXISTING,
+                                        StandardCopyOption.COPY_ATTRIBUTES,
+                                    )
 
-                                        dataOutput
-                                    }
-                                    ?: throw UnsupportedOperationException("Unknown argument for MCP function $args: $template")
+                                    dataOutput
+                                }
+                                ?: throw UnsupportedOperationException("Unknown argument for MCP function $args: $template")
 
-                            when (templateReplacement) {
-                                is RegularFile -> templateReplacement.toString()
-                                is Path -> templateReplacement.toAbsolutePath().toString()
-                                is File -> templateReplacement.absolutePath
-                                else -> templateReplacement.toString()
-                            }
+                        when (templateReplacement) {
+                            is RegularFile -> templateReplacement.toString()
+                            is Path -> templateReplacement.toAbsolutePath().toString()
+                            is File -> templateReplacement.absolutePath
+                            else -> templateReplacement.toString()
                         }
                     }
 
@@ -128,7 +131,7 @@ class PatchMcpAction(
     override val inputName
         get() = "clean"
 
-    override fun execute(inputs: Map<String, Path>): Path {
+    override suspend fun execute(fileSystem: FileSystem, inputs: Map<String, Path>): Path {
         val userdevConfig = userdev.config
 
         val patched =
@@ -136,18 +139,18 @@ class PatchMcpAction(
                 val patches = Files.createTempFile("patches", "lzma")
 
                 zipFileSystem(userdev.source.toPath()).use {
-                    it.base.getPath(userdevConfig.binpatches).copyTo(patches, StandardCopyOption.REPLACE_EXISTING)
+                    it.getPath(userdevConfig.binpatches).copyTo(patches, StandardCopyOption.REPLACE_EXISTING)
                 }
 
-                super.execute(inputs + mapOf("patch" to patches))
+                super.execute(fileSystem, inputs + mapOf("patch" to patches))
             }
 
         val input = inputs.getValue("clean")
 
-        zipFileSystem(patched).use { (patchedZip) ->
+        zipFileSystem(patched).use { patchedZip ->
             // Add missing non-patched files
             zipFileSystem(input).use { inputZip ->
-                inputZip.base.getPath("/").walk {
+                inputZip.getPath("/").walk {
                     for (path in filter(Path::isRegularFile)) {
                         val output = patchedZip.getPath(path.toString())
 
@@ -164,7 +167,7 @@ class PatchMcpAction(
             val filters = userdevConfig.universalFilters.map(::Regex)
 
             zipFileSystem(universal.toPath()).use { universalZip ->
-                val root = universalZip.base.getPath("/")
+                val root = universalZip.getPath("/")
                 root.walk {
                     for (path in filter(Path::isRegularFile)) {
                         val name = root.relativize(path).toString()
@@ -189,7 +192,7 @@ class PatchMcpAction(
             }
 
             zipFileSystem(userdev.source.toPath()).use userdev@{ userdevZip ->
-                val injectPath = userdevZip.base.getPath("/$inject")
+                val injectPath = userdevZip.getPath("/$inject")
 
                 if (injectPath.notExists()) {
                     return@userdev

@@ -23,7 +23,7 @@ import java.util.jar.JarFile
 import java.util.jar.Manifest
 import kotlin.io.path.exists
 import kotlin.io.path.inputStream
-import kotlin.io.path.readBytes
+import kotlin.io.path.readText
 import kotlin.random.Random
 
 abstract class RunConfigurationDefaultsContainer : ExtensionAware {
@@ -168,28 +168,27 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
             mainClass.set(
                 manifestProvider
                     .map { manifest ->
-                        val serverJar =
-                            runBlocking {
+                        runBlocking {
+                            val serverJar =
                                 downloadMinecraftFile(
                                     cacheParameters.directory.getAsPath(),
                                     manifest,
                                     MinecraftDownloadVariant.Server,
                                     cacheParameters.isOffline.get(),
                                 ) ?: throw UnsupportedOperationException("Version ${manifest.id} does not have a server.")
-                            }
 
-                        zipFileSystem(serverJar).use {
-                            val mainPath = it.base.getPath("META-INF/main-class")
-                            if (mainPath.exists()) {
-                                String(mainPath.readBytes())
-                            } else {
-                                it.base
-                                    .getPath(
-                                        JarFile.MANIFEST_NAME,
-                                    ).inputStream()
-                                    .use(::Manifest)
-                                    .mainAttributes
-                                    .getValue(Attributes.Name.MAIN_CLASS)
+                            zipFileSystem(serverJar).use {
+                                val mainPath = it.getPath("META-INF/main-class")
+
+                                if (mainPath.exists()) {
+                                    mainPath.readText()
+                                } else {
+                                    it.getPath(JarFile.MANIFEST_NAME)
+                                        .inputStream()
+                                        .use(::Manifest)
+                                        .mainAttributes
+                                        .getValue(Attributes.Name.MAIN_CLASS)
+                                }
                             }
                         }
                     },

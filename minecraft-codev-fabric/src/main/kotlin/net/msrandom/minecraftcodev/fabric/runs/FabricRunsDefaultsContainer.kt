@@ -51,8 +51,6 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
         defaults(FabricInstaller.MainClass::client)
 
         defaults.builder.action {
-            val runs = project.extension<RunsContainer>()
-
             val assetIndex =
                 version.map {
                     runBlocking {
@@ -74,9 +72,10 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
                     project.tasks.withType(DownloadAssets::class.java).named(it.downloadAssetsTaskName)
                 }
 
-            val nativesDirectory = extractNativesTask.flatMap(ExtractNatives::destinationDirectory).map(Directory::getAsFile)
+            val nativesDirectory = extractNativesTask.flatMap(ExtractNatives::destinationDirectory)
+            val assetsDirectory = downloadAssetsTask.flatMap(DownloadAssets::assetsDirectory)
 
-            arguments.add(MinecraftRunConfiguration.Argument("--assetsDir=", runs.assetsDirectory.asFile))
+            arguments.add(MinecraftRunConfiguration.Argument("--assetsDir=", assetsDirectory))
             arguments.add(MinecraftRunConfiguration.Argument("--assetIndex=", assetIndex.map(MinecraftVersionMetadata.AssetIndex::id)))
 
             jvmArguments.add(MinecraftRunConfiguration.Argument("-Djava.library.path=", nativesDirectory))
@@ -107,9 +106,11 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
             action.execute(data)
 
             jvmArguments.add(MinecraftRunConfiguration.Argument("-Dfabric-api.datagen"))
+
             jvmArguments.add(
                 data.getOutputDirectory(this).map { MinecraftRunConfiguration.Argument("-Dfabric-api.datagen.output-dir=", it) },
             )
+
             jvmArguments.add(data.modId.map { MinecraftRunConfiguration.Argument("-Dfabric-api.datagen.modid=", it) })
         }
     }

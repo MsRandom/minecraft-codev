@@ -177,58 +177,60 @@ abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
                     val official = mcpConfigFile.config.official
                     val notchObf = userdev.config.notchObf
 
-                    if (official) {
-                        val clientMappings = downloadMinecraftFile(cacheDirectory, metadata, MinecraftDownloadVariant.ClientMappings, cacheParameters.isOffline.get())!!
+                    zipFileSystem(mcpConfigFile.source).use { fs ->
+                        if (official) {
+                            val clientMappings = downloadMinecraftFile(cacheDirectory, metadata, MinecraftDownloadVariant.ClientMappings, cacheParameters.isOffline.get())!!
 
-                        temporaryDir.resolve("patch.log").outputStream().use {
-                            val mergeMappings =
+                            temporaryDir.resolve("patch.log").outputStream().use {
+                                val mergeMappings =
+                                    mcpAction(
+                                        "mergeMappings",
+                                        mapOf(
+                                            "official" to clientMappings,
+                                        ),
+                                        it,
+                                    )
+
+                                merge
+                                    .execute(fs)
+                                    .let { merged ->
+                                        mergeMappings.execute(fs).let { mappings ->
+                                            rename.execute(fs, "input" to merged, "mappings" to mappings)
+                                        }
+                                    }.let { patch.execute(fs, it) }
+                            }
+                        } else {
+                            val inject =
                                 mcpAction(
-                                    "mergeMappings",
+                                    "mcinject",
                                     mapOf(
-                                        "official" to clientMappings,
+                                        "log" to temporaryDir.resolve("mcinject.log"),
                                     ),
-                                    it,
+                                    null,
                                 )
 
-                            merge
-                                .execute()
-                                .let { merged ->
-                                    mergeMappings.execute().let { mappings ->
-                                        rename.execute("input" to merged, "mappings" to mappings)
-                                    }
-                                }.let(patch::execute)
+                            val base =
+                                if (notchObf) {
+                                    merge
+                                        .execute(fs)
+                                        .let { patch.execute(fs, it) }
+                                        .let { rename.execute(fs, it) }
+                                } else {
+                                    merge
+                                        .execute(fs)
+                                        .let { rename.execute(fs, it) }
+                                        .let { patch.execute(fs, it) }
+                                }
+
+                            inject.execute(fs, base)
                         }
-                    } else {
-                        val inject =
-                            mcpAction(
-                                "mcinject",
-                                mapOf(
-                                    "log" to temporaryDir.resolve("mcinject.log"),
-                                ),
-                                null,
-                            )
-
-                        val base =
-                            if (notchObf) {
-                                merge
-                                    .execute()
-                                    .let(patch::execute)
-                                    .let(rename::execute)
-                            } else {
-                                merge
-                                    .execute()
-                                    .let(rename::execute)
-                                    .let(patch::execute)
-                            }
-
-                        inject.execute(base)
                     }
                 } finally {
                     logFiles.forEach(Closeable::close)
                 }
 
             val atFiles =
-                zipFileSystem(userdev.source.toPath()).use { (fs) ->
+                zipFileSystem(userdev.source.toPath()).use { fs ->
                     userdev.config.ats.flatMap {
                         val path = fs.getPath(it)
 

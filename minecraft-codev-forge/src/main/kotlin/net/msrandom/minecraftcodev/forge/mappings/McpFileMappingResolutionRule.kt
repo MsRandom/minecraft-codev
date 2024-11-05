@@ -32,7 +32,7 @@ class McpFileMappingResolutionRule : ZipMappingResolutionRule {
         }
     } ?: emptyMap()
 
-    override fun load(
+    override suspend fun load(
         path: Path,
         fileSystem: FileSystem,
         isJar: Boolean,

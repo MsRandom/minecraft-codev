@@ -27,66 +27,66 @@ abstract class ExtractIncludes : TransformAction<TransformParameters.None> {
         @InputArtifactDependencies
         get
 
-    override fun transform(outputs: TransformOutputs) {
+    override fun transform(outputs: TransformOutputs) = runBlocking {
         val input = inputFile.get().toPath()
 
         val handler =
-            runBlocking {
-                zipFileSystem(input).use {
-                    val root = it.base.getPath("/")
+            zipFileSystem(input).use {
+                val root = it.getPath("/")
 
-                    val handler =
-                        includedJarListingRules.firstNotNullOfOrNull { rule ->
-                            rule.load(root)
-                        }
-
-                    if (handler == null) {
-                        return@runBlocking null
+                val handler =
+                    includedJarListingRules.firstNotNullOfOrNull { rule ->
+                        rule.load(root)
                     }
 
-                    val inputHashes =
-                        classpath
-                            .map {
-                                async {
-                                    hashFile(it.toPath())
-                                }
-                            }.awaitAll()
-                            .toHashSet()
+                if (handler == null) {
+                    return@use null
+                }
 
-                    handler
-                        .list(root)
-                        .map { includedJar ->
+                val inputHashes =
+                    classpath
+                        .map {
                             async {
-                                withContext(Dispatchers.IO) {
-                                    val path = it.base.getPath(includedJar)
-                                    val hash = hashFile(path)
-
-                                    println("Skipping extracting $path because hash $hash is in dependencies")
-
-                                    if (hash !in inputHashes) {
-                                        val includeOutput = outputs.file(path.fileName.toString()).toPath()
-
-                                        path.copyTo(includeOutput, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
-                                    }
-                                }
+                                hashFile(it.toPath())
                             }
                         }.awaitAll()
+                        .toHashSet()
 
-                    handler
-                }
+                handler
+                    .list(root)
+                    .map { includedJar ->
+                        async {
+                            withContext(Dispatchers.IO) {
+                                val path = it.getPath(includedJar)
+                                val hash = hashFile(path)
+
+                                if (hash !in inputHashes) {
+                                    println("Extracting $path from $input")
+
+                                    val includeOutput = outputs.file(path.fileName.toString()).toPath()
+
+                                    path.copyTo(includeOutput, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
+                                } else {
+                                    println("Skipping extracting $path from $input because hash $hash is in dependencies")
+                                }
+                            }
+                        }
+                    }.awaitAll()
+
+                handler
             }
 
         if (handler == null) {
             outputs.file(inputFile)
 
-            return
+            return@runBlocking
         }
 
         val output = outputs.file(input.fileName.toString()).toPath()
 
         input.copyTo(output, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
 
-        zipFileSystem(output).use { (fs) ->
+        zipFileSystem(output).use { fs ->
             val root = fs.getPath("/")
 
             for (jar in handler.list(root)) {

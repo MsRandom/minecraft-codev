@@ -62,11 +62,13 @@ class MinecraftCodevRunsPlugin<T : PluginAware> : Plugin<T> {
                     javaExec.argumentProviders.add(
                         configuration.arguments.map { arguments -> arguments.map(MinecraftRunConfiguration.Argument::compile) }::get,
                     )
+
                     javaExec.jvmArgumentProviders.add(
                         configuration.jvmArguments.map { arguments ->
                             arguments.map(MinecraftRunConfiguration.Argument::compile)
                         }::get,
                     )
+
                     javaExec.workingDir(configuration.executableDirectory)
                     javaExec.mainClass.set(configuration.mainClass)
 

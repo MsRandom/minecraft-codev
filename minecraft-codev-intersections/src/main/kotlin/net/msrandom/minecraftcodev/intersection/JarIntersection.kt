@@ -1,5 +1,6 @@
 package net.msrandom.minecraftcodev.intersection
 
+import kotlinx.coroutines.runBlocking
 import net.msrandom.minecraftcodev.core.utils.getAsPath
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.gradle.api.DefaultTask
@@ -238,8 +239,7 @@ abstract class JarIntersection : DefaultTask() {
         val output = output.getAsPath()
 
         output.deleteIfExists()
-
-        val intersection =
+        val intersection = runBlocking {
             files.asSequence().map(File::toPath).reduce { acc, path ->
                 val intermediateOutput = Files.createTempFile("intermediate-intersection", ".jar")
 
@@ -248,19 +248,19 @@ abstract class JarIntersection : DefaultTask() {
                 zipFileSystem(acc).use { fileSystemA ->
                     zipFileSystem(path).use { fileSystemB ->
                         zipFileSystem(intermediateOutput, create = true).use { outputFileSystem ->
-                            val pathsA = Files.walk(fileSystemA.base.getPath("/")).asSequence().map(Path::toString)
-                            val pathsB = Files.walk(fileSystemB.base.getPath("/")).asSequence().map(Path::toString)
+                            val pathsA = Files.walk(fileSystemA.getPath("/")).asSequence().map(Path::toString)
+                            val pathsB = Files.walk(fileSystemB.getPath("/")).asSequence().map(Path::toString)
 
                             val cacheA = hashMapOf<Path, ClassNode>()
                             val cacheB = hashMapOf<Path, ClassNode>()
 
                             for (path in pathsA.toSet().intersect(pathsB.toSet())) {
                                 fileIntersection(
-                                    fileSystemA.base.getPath(path),
-                                    fileSystemB.base.getPath(path),
+                                    fileSystemA.getPath(path),
+                                    fileSystemB.getPath(path),
                                     cacheA,
                                     cacheB,
-                                    outputFileSystem.base.getPath(path),
+                                    outputFileSystem.getPath(path),
                                 )
                             }
                         }
@@ -269,6 +269,7 @@ abstract class JarIntersection : DefaultTask() {
 
                 intermediateOutput
             }
+        }
 
         intersection.moveTo(output)
     }
