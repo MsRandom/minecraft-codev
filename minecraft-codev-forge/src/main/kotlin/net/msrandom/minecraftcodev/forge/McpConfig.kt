@@ -3,8 +3,6 @@
 package net.msrandom.minecraftcodev.forge
 
 import arrow.core.serialization.EitherSerializer
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Serializer
@@ -16,7 +14,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.jsonObject
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
-import net.msrandom.minecraftcodev.core.utils.computeSuspendIfAbsent
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import java.io.File
 import java.nio.file.FileSystem
@@ -75,8 +72,10 @@ data class McpConfigFile(
     companion object {
         private val cache = ConcurrentHashMap<Path, CacheEntry>()
 
-        suspend fun fromFile(file: File) =
-            cache.computeSuspendIfAbsent(file.toPath()) {
+        fun fromFile(file: File) =
+            cache.computeIfAbsent(file.toPath()) {
+                println("Loading $it as MCP config")
+
                 zipFileSystem(it).use { fs ->
                     fs.getPath("config.json")
                         .takeIf(Path::exists)
@@ -87,16 +86,16 @@ data class McpConfigFile(
                 }
             }.value?.let { McpConfigFile(it, file.toPath()) }
 
-        suspend fun fromFile(file: Path, fileSystem: FileSystem) =
-            cache.computeSuspendIfAbsent(file) {
-                withContext(Dispatchers.IO) {
-                    fileSystem.getPath("config.json")
-                        .takeIf(Path::exists)
-                        ?.inputStream()
-                        ?.use { json.decodeFromStream<McpConfig>(it) }
-                        ?.let(CacheEntry::Present)
-                        ?: CacheEntry.Absent
-                }
+        fun fromFile(file: Path, fileSystem: FileSystem) =
+            cache.computeIfAbsent(file) {
+                println("Loading $it as MCP config")
+
+                fileSystem.getPath("config.json")
+                    .takeIf(Path::exists)
+                    ?.inputStream()
+                    ?.use { json.decodeFromStream<McpConfig>(it) }
+                    ?.let(CacheEntry::Present)
+                    ?: CacheEntry.Absent
             }.value?.let { McpConfigFile(it, file) }
     }
 }

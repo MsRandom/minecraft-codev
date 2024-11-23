@@ -67,30 +67,28 @@ private fun readTiny(
 }
 
 class TinyMappingResolutionRule : MappingResolutionRule {
-    override suspend fun load(path: Path, extension: String, data: MappingResolutionData): Boolean {
+    override fun load(path: Path, extension: String, data: MappingResolutionData): Boolean {
         if (extension != "tiny") {
             return false
         }
 
-        withContext(Dispatchers.IO) {
-            readTiny(data, path)
-        }
+        readTiny(data, path)
 
         return true
     }
 }
 
 class TinyZipMappingResolutionRule : ZipMappingResolutionRule {
-    override suspend fun load(path: Path, fileSystem: FileSystem, isJar: Boolean, data: MappingResolutionData) = withContext(Dispatchers.IO) {
+    override fun load(path: Path, fileSystem: FileSystem, isJar: Boolean, data: MappingResolutionData): Boolean {
         val tiny = fileSystem.getPath("mappings/mappings.tiny")
 
         if (!tiny.exists()) {
-            return@withContext false
+            return false
         }
 
         // Assuming tiny
         readTiny(data, tiny)
 
-        true
+        return true
     }
 }

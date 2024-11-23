@@ -7,6 +7,7 @@ import org.gradle.api.Task
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.FileSystemLocation
+import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.*
 import org.gradle.api.tasks.*
 import java.io.File
@@ -34,15 +35,15 @@ abstract class MinecraftRunConfiguration @Inject constructor(val project: Projec
         @Input
         get
 
-    abstract val arguments: SetProperty<Argument>
+    abstract val arguments: SetProperty<String>
         @Input
         get
 
-    abstract val jvmArguments: SetProperty<Argument>
+    abstract val jvmArguments: SetProperty<String>
         @Input
         get
 
-    abstract val environment: MapProperty<String, Argument>
+    abstract val environment: MapProperty<String, String>
         @Input
         get
 
@@ -53,8 +54,6 @@ abstract class MinecraftRunConfiguration @Inject constructor(val project: Projec
     abstract val cacheParameters: CachedMinecraftParameters
         @Nested
         get
-
-    val modClasspaths = mutableMapOf<String, ConfigurableFileCollection>()
 
     init {
         run {
@@ -76,32 +75,24 @@ abstract class MinecraftRunConfiguration @Inject constructor(val project: Projec
         }
     }
 
-    fun mod(name: String) =
-        modClasspaths.computeIfAbsent(name) {
-            project.objects.fileCollection().apply { finalizeValueOnRead() }
-        }
+    private fun mapArgumentPart(part: Any?) = when (part) {
+        is Path -> part.toAbsolutePath().toString()
+        is File -> part.absolutePath
+        is FileSystemLocation -> part.toString()
+        else -> part.toString()
+    }
 
-    class Argument(val parts: List<Any?>) {
-        constructor(vararg part: Any?) : this(listOf(*part))
-
-        fun compile(): String =
-            parts.joinToString("") {
-                if (it is Provider<*>) {
-                    map(it.get())
-                } else {
-                    map(it)
-                }
+    fun compileArguments(arguments: Iterable<Any?>): ListProperty<String> = project.objects.listProperty(String::class.java).apply {
+        for (argument in arguments) {
+            if (argument is Provider<*>) {
+                add(argument.map(::mapArgumentPart))
+            } else {
+                add(mapArgumentPart(argument))
             }
-
-        private companion object {
-            private fun map(part: Any?) =
-                when (part) {
-                    is Path -> part.toAbsolutePath().toString()
-                    is File -> part.absolutePath
-                    is FileSystemLocation -> part.toString()
-                    is Argument -> part.compile()
-                    else -> part.toString()
-                }
         }
+    }
+
+    fun compileArgument(vararg parts: Any?): Provider<String> = compileArguments(parts.toList()).map {
+        it.joinToString("")
     }
 }

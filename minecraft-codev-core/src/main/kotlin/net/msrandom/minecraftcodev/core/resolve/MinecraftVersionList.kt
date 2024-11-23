@@ -12,13 +12,7 @@ class MinecraftVersionList(private val cacheDirectory: Path, manifest: Minecraft
     private val versions = manifest.versions.associateBy(MinecraftVersionManifest.VersionInfo::id)
     private val versionInfoCache = hashMapOf<String, MinecraftVersionMetadata>()
 
-    suspend fun version(version: String): MinecraftVersionMetadata {
-        val it = versionInfoCache[version]
-
-        if (it != null) {
-            return it
-        }
-
+    fun version(version: String) = versionInfoCache.computeIfAbsent(version) {
         val versionInfo = versions[version] ?: throw InvalidUserCodeException("Minecraft version $version not found")
 
         val path =
@@ -33,15 +27,11 @@ class MinecraftVersionList(private val cacheDirectory: Path, manifest: Minecraft
             isOffline,
         )
 
-        val metadata: MinecraftVersionMetadata = path.inputStream().use(json::decodeFromStream)
-
-        versionInfoCache[version] = metadata
-
-        return metadata
+        path.inputStream().use(json::decodeFromStream)
     }
 
     companion object {
-        suspend fun load(
+        fun load(
             cacheDirectory: Path,
             metadataUrl: String,
             isOffline: Boolean,

@@ -56,6 +56,8 @@ childProjects.values.forEach { project ->
 
         tasks.compileKotlin {
             kotlinOptions {
+                jvmTarget = "11"
+
                 freeCompilerArgs =
                     listOf(
                         "-opt-in=kotlin.ExperimentalStdlibApi",

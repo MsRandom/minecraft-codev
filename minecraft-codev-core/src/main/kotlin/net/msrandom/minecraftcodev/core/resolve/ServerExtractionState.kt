@@ -10,7 +10,7 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import kotlin.io.path.*
 
-suspend fun getExtractionState(
+fun getExtractionState(
     cacheDirectory: Path,
     manifest: MinecraftVersionMetadata,
     isOffline: Boolean,
@@ -39,9 +39,7 @@ suspend fun getExtractionState(
             isOffline,
         ) ?: return null
 
-    val temporaryServer = withContext(Dispatchers.IO) {
-        Files.createTempFile("server-", ".tmp.jar")
-    }
+    val temporaryServer = Files.createTempFile("server-", ".tmp.jar")
 
     val commonLibraries: List<String>
     val isBundled: Boolean
@@ -88,9 +86,7 @@ suspend fun getExtractionState(
     libraries.writeLines(commonLibraries)
 
     if (isBundled) {
-        withContext(Dispatchers.IO) {
-            Files.createFile(bundledMark)
-        }
+        Files.createFile(bundledMark)
     }
 
     return ServerExtractionResult(extractedJar, isBundled, commonLibraries)

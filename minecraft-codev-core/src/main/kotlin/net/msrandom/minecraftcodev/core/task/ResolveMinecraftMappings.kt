@@ -1,6 +1,5 @@
 package net.msrandom.minecraftcodev.core.task
 
-import kotlinx.coroutines.runBlocking
 import net.msrandom.minecraftcodev.core.resolve.MinecraftDownloadVariant
 import net.msrandom.minecraftcodev.core.resolve.downloadMinecraftFile
 import net.msrandom.minecraftcodev.core.utils.getAsPath
@@ -35,18 +34,16 @@ abstract class ResolveMinecraftMappings : CachedMinecraftTask() {
 
     @TaskAction
     private fun download() {
-        runBlocking {
-            val versionList = cacheParameters.versionList()
+        val versionList = cacheParameters.versionList()
 
-            val version = versionList.version(version.get())
-            val variant = if (server.get()) MinecraftDownloadVariant.ServerMappings else MinecraftDownloadVariant.ClientMappings
+        val version = versionList.version(version.get())
+        val variant = if (server.get()) MinecraftDownloadVariant.ServerMappings else MinecraftDownloadVariant.ClientMappings
 
-            val output = output.getAsPath()
+        val output = output.getAsPath()
 
-            val downloadPath = downloadMinecraftFile(cacheParameters.directory.getAsPath(), version, variant, cacheParameters.isOffline.get())
-                ?: throw IllegalArgumentException("${version.id} does not have variant $variant")
+        val downloadPath = downloadMinecraftFile(cacheParameters.directory.getAsPath(), version, variant, cacheParameters.isOffline.get())
+            ?: throw IllegalArgumentException("${version.id} does not have variant $variant")
 
-            downloadPath.copyTo(output, StandardCopyOption.REPLACE_EXISTING)
-        }
+        downloadPath.copyTo(output, StandardCopyOption.REPLACE_EXISTING)
     }
 }

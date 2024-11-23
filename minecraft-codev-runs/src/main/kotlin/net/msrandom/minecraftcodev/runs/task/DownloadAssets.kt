@@ -7,9 +7,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import net.msrandom.minecraftcodev.core.AssetsIndex
 import net.msrandom.minecraftcodev.core.task.CachedMinecraftTask
-import net.msrandom.minecraftcodev.core.utils.checkHash
-import net.msrandom.minecraftcodev.core.utils.extension
-import net.msrandom.minecraftcodev.core.utils.toPath
+import net.msrandom.minecraftcodev.core.utils.*
 import net.msrandom.minecraftcodev.runs.RunsContainer
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFile
@@ -48,7 +46,7 @@ abstract class DownloadAssets : CachedMinecraftTask() {
         ) {
             val outputPath = output.toPath()
 
-            net.msrandom.minecraftcodev.core.utils.download(
+            downloadSuspend(
                 url,
                 sha1,
                 outputPath,
@@ -61,7 +59,7 @@ abstract class DownloadAssets : CachedMinecraftTask() {
             val assetIndex = metadata.assetIndex
             val assetIndexJson = indexesDirectory.file("${assetIndex.id}.json").toPath()
 
-            net.msrandom.minecraftcodev.core.utils.download(
+            downloadSuspend(
                 assetIndex.url,
                 assetIndex.sha1,
                 assetIndexJson,
@@ -83,7 +81,7 @@ abstract class DownloadAssets : CachedMinecraftTask() {
 
                     async {
                         if (file.asFile.exists()) {
-                            if (checkHash(file.toPath(), asset.hash)) {
+                            if (checkHashSuspend(file.toPath(), asset.hash)) {
                                 return@async
                             } else {
                                 file.asFile.delete()

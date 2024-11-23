@@ -1,7 +1,5 @@
 package net.msrandom.minecraftcodev.remapper
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.decodeFromStream
 import net.fabricmc.mappingio.MappedElementKind
 import net.fabricmc.mappingio.adapter.MappingSourceNsSwitch
@@ -10,7 +8,6 @@ import net.fabricmc.mappingio.tree.MappingTreeView
 import net.fabricmc.mappingio.tree.MemoryMappingTree
 import net.msrandom.minecraftcodev.core.*
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
-import net.msrandom.minecraftcodev.core.utils.computeSuspendIfAbsent
 import net.msrandom.minecraftcodev.core.utils.serviceLoader
 import org.gradle.api.Action
 import org.gradle.api.file.FileCollection
@@ -67,7 +64,7 @@ class ProguardMappingResolutionRule : MappingResolutionRule {
             MappingSourceNsSwitch(data.visitor.tree, data.visitor.tree.srcNamespace ?: MappingsNamespace.OBF)
         }
 
-    override suspend fun load(
+    override fun load(
         path: Path,
         extension: String,
         data: MappingResolutionData,
@@ -90,7 +87,7 @@ class ProguardMappingResolutionRule : MappingResolutionRule {
 }
 
 class ParchmentJsonMappingResolutionHandler : MappingResolutionRule {
-    override suspend fun load(
+    override fun load(
         path: Path,
         extension: String,
         data: MappingResolutionData,
@@ -106,7 +103,7 @@ class ParchmentJsonMappingResolutionHandler : MappingResolutionRule {
 }
 
 class ParchmentZipMappingResolutionRule : ZipMappingResolutionRule {
-    override suspend fun load(
+    override fun load(
         path: Path,
         fileSystem: FileSystem,
         isJar: Boolean,
@@ -128,7 +125,7 @@ val mappingResolutionRules = serviceLoader<MappingResolutionRule>()
 
 private val mappingsCache = ConcurrentHashMap<Set<File>, MappingTreeView>()
 
-suspend fun loadMappingFile(
+fun loadMappingFile(
     file: Path,
     data: MappingResolutionData,
 ) {
@@ -141,19 +138,19 @@ suspend fun loadMappingFile(
     throw UnsupportedOperationException("Unknown mapping file format $file")
 }
 
-suspend fun loadMappings(
+fun loadMappings(
     files: FileCollection,
     execOperations: ExecOperations,
     extraFiles: Map<String, File>,
-): MappingTreeView = mappingsCache.computeSuspendIfAbsent(files.files) {
+): MappingTreeView = mappingsCache.computeIfAbsent(files.files) {
+    println("Loading mappings $files")
+
     val tree = MemoryMappingTree()
 
     val data = MappingResolutionData(MappingTreeProvider(tree), execOperations, extraFiles)
 
-    withContext(Dispatchers.IO) {
-        for (file in it) {
-            loadMappingFile(file.toPath(), data)
-        }
+    for (file in it) {
+        loadMappingFile(file.toPath(), data)
     }
 
     tree

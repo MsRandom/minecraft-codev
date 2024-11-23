@@ -8,7 +8,6 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.*
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
-import net.msrandom.minecraftcodev.core.utils.computeSuspendIfAbsent
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import java.io.File
 import java.nio.file.Path
@@ -90,8 +89,10 @@ data class Userdev(val config: UserdevConfig, val source: File) {
     companion object {
         private val cache = ConcurrentHashMap<File, CacheEntry>()
 
-        suspend fun fromFile(file: File) =
-            cache.computeSuspendIfAbsent(file) {
+        fun fromFile(file: File) =
+            cache.computeIfAbsent(file) {
+                println("Loading $it as userdev")
+
                 zipFileSystem(it.toPath()).use { fs ->
                     fs.getPath("config.json")
                         .takeIf(Path::exists)

@@ -1,7 +1,6 @@
 package net.msrandom.minecraftcodev.forge.mappings
 
 import com.google.common.io.ByteStreams.nullOutputStream
-import kotlinx.coroutines.runBlocking
 import net.fabricmc.mappingio.adapter.MappingNsCompleter
 import net.fabricmc.mappingio.adapter.MappingNsRenamer
 import net.fabricmc.mappingio.format.TsrgReader
@@ -37,7 +36,7 @@ fun mcpConfigDependency(
     userdevFiles: FileCollection,
 ): Provider<String> =
     project.provider {
-        val userdev = runBlocking { Userdev.fromFile(userdevFiles.singleFile)!! }
+        val userdev = Userdev.fromFile(userdevFiles.singleFile)!!
 
         userdev.config.mcp
     }
@@ -49,13 +48,11 @@ fun mcpConfigExtraRemappingFiles(
     metadataUrl: Provider<String> = project.provider { VERSION_MANIFEST_URL },
     isOffline: Provider<Boolean> = project.provider { project.gradle.startParameter.isOffline },
 ): Provider<Map<String, File>> {
-    val mcp = runBlocking { McpConfigFile.fromFile(resolveFile(project, mcpConfigFile))!! }
+    val mcp = McpConfigFile.fromFile(resolveFile(project, mcpConfigFile))!!
 
     val metadata =
         project.lazyProvider {
-            runBlocking {
-                getVersionList(cacheDirectory.get().toPath(), metadataUrl.get(), isOffline.get()).version(mcp.config.version)
-            }
+            getVersionList(cacheDirectory.get().toPath(), metadataUrl.get(), isOffline.get()).version(mcp.config.version)
         }
 
     val javaExecutable =
@@ -65,14 +62,12 @@ fun mcpConfigExtraRemappingFiles(
 
     val clientMappings =
         metadata.map {
-            runBlocking {
-                downloadMinecraftFile(
-                    cacheDirectory.get().toPath(),
-                    it,
-                    MinecraftDownloadVariant.ClientMappings,
-                    isOffline.get(),
-                )!!.toFile()
-            }
+            downloadMinecraftFile(
+                cacheDirectory.get().toPath(),
+                it,
+                MinecraftDownloadVariant.ClientMappings,
+                isOffline.get(),
+            )!!.toFile()
         }
 
     val mergeMappingsJarFile =
@@ -95,7 +90,7 @@ fun mcpConfigExtraRemappingFiles(
 }
 
 class McpConfigMappingResolutionRule : ZipMappingResolutionRule {
-    override suspend fun load(
+    override fun load(
         path: Path,
         fileSystem: FileSystem,
         isJar: Boolean,
@@ -103,29 +98,26 @@ class McpConfigMappingResolutionRule : ZipMappingResolutionRule {
     ): Boolean {
         val mcpConfigFile = McpConfigFile.fromFile(path, fileSystem) ?: return false
 
-        val javaExecutable = data.extraFiles.getValue("javaExecutable")
-        val clientMappings = data.extraFiles.getValue("clientMappings")
-
-        val mergeMappingsJarFile = data.extraFiles.getValue("mergeMappingsJarFile")
-
         val mappings =
             if (mcpConfigFile.config.official) {
+                val javaExecutable = data.extraFiles.getValue("javaExecutable")
+                val clientMappings = data.extraFiles.getValue("clientMappings")
+                val mergeMappingsJarFile = data.extraFiles.getValue("mergeMappingsJarFile")
+
                 val mergeMappings =
-                    runBlocking {
-                        McpAction(
-                            data.execOperations,
-                            javaExecutable,
-                            mergeMappingsJarFile,
-                            mcpConfigFile,
-                            mcpConfigFile.config.functions
-                                .getValue("mergeMappings")
-                                .args,
-                            mapOf(
-                                "official" to clientMappings,
-                            ),
-                            nullOutputStream(),
-                        )
-                    }
+                    McpAction(
+                        data.execOperations,
+                        javaExecutable,
+                        mergeMappingsJarFile,
+                        mcpConfigFile,
+                        mcpConfigFile.config.functions
+                            .getValue("mergeMappings")
+                            .args,
+                        mapOf(
+                            "official" to clientMappings,
+                        ),
+                        nullOutputStream(),
+                    )
 
                 mergeMappings.execute(fileSystem)
             } else {

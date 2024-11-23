@@ -39,7 +39,7 @@ object ServerFixer {
         return entry.value.firstOrNull { path.startsWith(it.first) }?.second
     }
 
-    suspend fun removeLibraries(
+    fun removeLibraries(
         manifest: MinecraftVersionMetadata,
         newServer: Path,
         serverFs: FileSystem,
@@ -49,7 +49,7 @@ object ServerFixer {
         val libraryGroups = hashMapOf<String, MutableList<Pair<String, MinecraftVersionMetadata.Library>>>()
 
         for (library in manifest.libraries) {
-            val identifier = ModuleLibraryIdentifier.load(library.name)
+            val identifier = library.name
 
             val groupName = '/' + identifier.group.replace('.', '/')
             val path = LIBRARY_PATHS["${identifier.group}:${identifier.module}"]
@@ -89,6 +89,6 @@ object ServerFixer {
             }
         }
 
-        return commonLibraries.map(MinecraftVersionMetadata.Library::name)
+        return commonLibraries.map { it.name.toString() }
     }
 }

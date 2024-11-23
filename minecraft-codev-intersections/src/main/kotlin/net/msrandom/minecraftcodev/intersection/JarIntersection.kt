@@ -1,6 +1,5 @@
 package net.msrandom.minecraftcodev.intersection
 
-import kotlinx.coroutines.runBlocking
 import net.msrandom.minecraftcodev.core.utils.getAsPath
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.gradle.api.DefaultTask
@@ -239,36 +238,35 @@ abstract class JarIntersection : DefaultTask() {
         val output = output.getAsPath()
 
         output.deleteIfExists()
-        val intersection = runBlocking {
-            files.asSequence().map(File::toPath).reduce { acc, path ->
-                val intermediateOutput = Files.createTempFile("intermediate-intersection", ".jar")
 
-                intermediateOutput.deleteExisting()
+        val intersection = files.asSequence().map(File::toPath).reduce { acc, path ->
+            val intermediateOutput = Files.createTempFile("intermediate-intersection", ".jar")
 
-                zipFileSystem(acc).use { fileSystemA ->
-                    zipFileSystem(path).use { fileSystemB ->
-                        zipFileSystem(intermediateOutput, create = true).use { outputFileSystem ->
-                            val pathsA = Files.walk(fileSystemA.getPath("/")).asSequence().map(Path::toString)
-                            val pathsB = Files.walk(fileSystemB.getPath("/")).asSequence().map(Path::toString)
+            intermediateOutput.deleteExisting()
 
-                            val cacheA = hashMapOf<Path, ClassNode>()
-                            val cacheB = hashMapOf<Path, ClassNode>()
+            zipFileSystem(acc).use { fileSystemA ->
+                zipFileSystem(path).use { fileSystemB ->
+                    zipFileSystem(intermediateOutput, create = true).use { outputFileSystem ->
+                        val pathsA = Files.walk(fileSystemA.getPath("/")).asSequence().map(Path::toString)
+                        val pathsB = Files.walk(fileSystemB.getPath("/")).asSequence().map(Path::toString)
 
-                            for (path in pathsA.toSet().intersect(pathsB.toSet())) {
-                                fileIntersection(
-                                    fileSystemA.getPath(path),
-                                    fileSystemB.getPath(path),
-                                    cacheA,
-                                    cacheB,
-                                    outputFileSystem.getPath(path),
-                                )
-                            }
+                        val cacheA = hashMapOf<Path, ClassNode>()
+                        val cacheB = hashMapOf<Path, ClassNode>()
+
+                        for (path in pathsA.toSet().intersect(pathsB.toSet())) {
+                            fileIntersection(
+                                fileSystemA.getPath(path),
+                                fileSystemB.getPath(path),
+                                cacheA,
+                                cacheB,
+                                outputFileSystem.getPath(path),
+                            )
                         }
                     }
                 }
-
-                intermediateOutput
             }
+
+            intermediateOutput
         }
 
         intersection.moveTo(output)

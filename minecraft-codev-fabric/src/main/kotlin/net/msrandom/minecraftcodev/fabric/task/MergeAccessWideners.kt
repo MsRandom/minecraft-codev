@@ -27,8 +27,7 @@ abstract class MergeAccessWideners : DefaultTask() {
         apply {
             output.convention(
                 project.layout.dir(project.provider { temporaryDir }).flatMap {
-                    accessWidenerName.map {
-                            name ->
+                    accessWidenerName.map { name ->
                         it.file("$name.accessWidener")
                     }
                 },

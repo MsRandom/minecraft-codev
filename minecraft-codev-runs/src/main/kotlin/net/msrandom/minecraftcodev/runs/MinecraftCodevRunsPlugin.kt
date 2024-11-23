@@ -14,6 +14,7 @@ import org.gradle.api.tasks.SourceSet
 import org.gradle.configurationcache.extensions.serviceOf
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.jvm.toolchain.JavaToolchainService
+import org.gradle.util.internal.GUtil
 
 class MinecraftCodevRunsPlugin<T : PluginAware> : Plugin<T> {
     override fun apply(target: T) =
@@ -44,14 +45,15 @@ class MinecraftCodevRunsPlugin<T : PluginAware> : Plugin<T> {
             project.integrateIdeaRuns()
 
             runs.all { builder ->
-                val name = "${ApplicationPlugin.TASK_RUN_NAME}${StringUtils.capitalize(builder.name)}"
+                fun taskName(builder: MinecraftRunConfigurationBuilder) =
+                    ApplicationPlugin.TASK_RUN_NAME + GUtil.toCamelCase(builder.name.replace(':', '-'))
 
-                tasks.register(name, JavaExec::class.java) { javaExec ->
+                tasks.register(taskName(builder), JavaExec::class.java) { javaExec ->
                     val configuration = builder.build()
 
-                    javaExec.environment = configuration.environment.get().mapValues {
+                    javaExec.environment = configuration.environment.keySet().get().associateWith {
                         object {
-                            override fun toString() = it.value.compile()
+                            override fun toString() = configuration.environment.getting(it).get()
                         }
                     }
 
@@ -59,20 +61,14 @@ class MinecraftCodevRunsPlugin<T : PluginAware> : Plugin<T> {
                         it.languageVersion.set(configuration.jvmVersion.map(JavaLanguageVersion::of))
                     })
 
-                    javaExec.argumentProviders.add(
-                        configuration.arguments.map { arguments -> arguments.map(MinecraftRunConfiguration.Argument::compile) }::get,
-                    )
+                    javaExec.argumentProviders.add(configuration.arguments::get)
 
-                    javaExec.jvmArgumentProviders.add(
-                        configuration.jvmArguments.map { arguments ->
-                            arguments.map(MinecraftRunConfiguration.Argument::compile)
-                        }::get,
-                    )
+                    javaExec.jvmArgumentProviders.add(configuration.jvmArguments::get)
 
                     javaExec.workingDir(configuration.executableDirectory)
                     javaExec.mainClass.set(configuration.mainClass)
 
-                    javaExec.classpath = configuration.sourceSet.get().runtimeClasspath
+                    javaExec.classpath = files(configuration.sourceSet.map(SourceSet::getRuntimeClasspath))
 
                     javaExec.group = ApplicationPlugin.APPLICATION_GROUP
 
@@ -80,11 +76,15 @@ class MinecraftCodevRunsPlugin<T : PluginAware> : Plugin<T> {
 
                     javaExec.dependsOn(
                         configuration.dependsOn.map {
-                            it.map { other -> "${ApplicationPlugin.TASK_RUN_NAME}${StringUtils.capitalize(other.name)}" }
+                            it.map(::taskName)
                         },
                     )
 
                     javaExec.dependsOn(configuration.sourceSet.map(SourceSet::getClassesTaskName))
+
+                    javaExec.dependsOn(configuration.environment)
+                    javaExec.dependsOn(configuration.arguments)
+                    javaExec.dependsOn(configuration.jvmArguments)
                 }
             }
         }

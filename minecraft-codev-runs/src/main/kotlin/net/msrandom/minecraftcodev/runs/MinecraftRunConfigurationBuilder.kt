@@ -19,7 +19,7 @@ abstract class MinecraftRunConfigurationBuilder @Inject constructor(private val 
 
     val friendlyName
         get() = if (project == project.rootProject) {
-            "Run $name"
+            "Run :$name"
         } else {
             "Run ${project.path}:$name"
         }
@@ -81,13 +81,17 @@ abstract class MinecraftRunConfigurationBuilder @Inject constructor(private val 
     fun args(vararg args: Any?) = arguments(*args)
 
     fun arguments(vararg args: Any?) = apply {
-        action { arguments.addAll(mapArgs(*args)) }
+        action {
+            arguments.addAll(args.map(Any?::toString))
+        }
     }
 
     fun jvmArgs(vararg args: Any?) = jvmArguments(*args)
 
     fun jvmArguments(vararg args: Any?) = apply {
-        action { jvmArguments.addAll(mapArgs(*args)) }
+        action {
+            jvmArguments.addAll(args.map(Any?::toString))
+        }
     }
 
     fun env(variables: Map<String, Any>) = environment(variables)
@@ -101,22 +105,18 @@ abstract class MinecraftRunConfigurationBuilder @Inject constructor(private val 
 
     fun environment(variables: Map<String, Any>) = apply {
         action {
-            environment.putAll(variables.mapValues { MinecraftRunConfiguration.Argument(it) })
+            environment.putAll(variables.mapValues(Any::toString))
         }
     }
 
-    fun environment(vararg variables: Pair<String, Any>) = apply {
-        action {
-            environment.putAll(variables.associate { it.first to MinecraftRunConfiguration.Argument(it.second) })
-        }
-    }
+    fun environment(vararg variables: Pair<String, Any>) = environment(variables.toMap())
 
     fun environment(
         key: String,
         value: Any,
     ) = apply {
         action {
-            environment.put(key, MinecraftRunConfiguration.Argument(value))
+            environment.put(key, value.toString())
         }
     }
 
@@ -126,10 +126,6 @@ abstract class MinecraftRunConfigurationBuilder @Inject constructor(private val 
 
     fun executableDirectory(path: Any) = apply {
         action { executableDirectory.set(project.file(path)) }
-    }
-
-    private fun mapArgs(vararg args: Any?) = args.map {
-        if (it is MinecraftRunConfiguration.Argument) it else MinecraftRunConfiguration.Argument(it)
     }
 
     internal fun build() = project.objects.newInstance(MinecraftRunConfiguration::class.java).also {

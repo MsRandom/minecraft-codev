@@ -1,6 +1,5 @@
 package net.msrandom.minecraftcodev.remapper.task
 
-import kotlinx.coroutines.runBlocking
 import net.msrandom.minecraftcodev.core.utils.getAsPath
 import net.msrandom.minecraftcodev.remapper.JarRemapper
 import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
@@ -11,8 +10,6 @@ import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.MapProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.*
-import org.gradle.api.tasks.bundling.Jar
-import org.gradle.language.base.plugins.LifecycleBasePlugin
 import org.gradle.process.ExecOperations
 import java.io.File
 import javax.inject.Inject
@@ -68,7 +65,7 @@ abstract class RemapTask : DefaultTask() {
     }
 
     @TaskAction
-    fun remap() = runBlocking {
+    fun remap() {
         val mappings = loadMappings(mappings, execOperations, extraFiles.get())
 
         JarRemapper.remap(

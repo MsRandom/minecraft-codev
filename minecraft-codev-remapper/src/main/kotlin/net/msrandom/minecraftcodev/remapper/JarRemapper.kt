@@ -19,18 +19,18 @@ import net.msrandom.minecraftcodev.remapper.dependency.getNamespaceId
 import org.objectweb.asm.commons.Remapper
 import java.io.File
 import java.nio.file.Path
+import java.util.concurrent.CompletableFuture
 
 object JarRemapper {
-    private val mutex = Mutex()
-
-    suspend fun remap(
+    @Synchronized
+    fun remap(
         mappings: MappingTreeView,
         sourceNamespace: String,
         targetNamespace: String,
         input: Path,
         output: Path,
         classpath: Iterable<File>,
-    ) = mutex.withLock {
+    ) {
         val remapper =
             TinyRemapper
                 .newRemapper()
@@ -171,6 +171,7 @@ object JarRemapper {
                                             currentLvtRowIndex,
                                             name,
                                         )
+
                                     else -> {}
                                 }
                             }
@@ -178,7 +179,8 @@ object JarRemapper {
                             override fun visitComment(
                                 targetKind: MappedElementKind,
                                 comment: String,
-                            ) {}
+                            ) {
+                            }
                         },
                     )
 
@@ -187,19 +189,19 @@ object JarRemapper {
                     }
                 }.build()
 
-        withContext(Dispatchers.IO) {
-            try {
-                OutputConsumerPath.Builder(output).build().use {
-                    it.addNonClassFiles(input, NonClassCopyMode.FIX_META_INF, remapper)
+        try {
+            OutputConsumerPath.Builder(output).build().use {
+                it.addNonClassFiles(input, NonClassCopyMode.FIX_META_INF, remapper)
 
-                    remapper.readClassPathAsync(*classpath.map(File::toPath).toTypedArray()).await()
+                CompletableFuture.allOf(
+                    remapper.readClassPathAsync(*classpath.map(File::toPath).toTypedArray()),
+                    remapper.readInputsAsync(input),
+                ).join()
 
-                    remapper.readInputsAsync(input).await()
-                    remapper.apply(it)
-                }
-            } finally {
-                remapper.finish()
+                remapper.apply(it)
             }
+        } finally {
+            remapper.finish()
         }
 
         zipFileSystem(output).use { fs ->

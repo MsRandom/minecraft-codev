@@ -95,20 +95,18 @@ object LegacyJarSplitter {
         value.add(AnnotationNode(Type.getObjectType(annotation).descriptor))
     }
 
-    suspend fun <R> useFileSystems(action: suspend ((FileSystem) -> Unit) -> R): R {
+    fun <R> useFileSystems(action: ((FileSystem) -> Unit) -> R): R {
         val fileSystems = mutableListOf<FileSystem>()
         try {
             return action(fileSystems::add)
         } finally {
             val throwables = mutableListOf<Throwable>()
 
-            withContext(Dispatchers.IO) {
-                for (fileSystem in fileSystems) {
-                    try {
-                        fileSystem.close()
-                    } catch (throwable: Throwable) {
-                        throwables.add(throwable)
-                    }
+            for (fileSystem in fileSystems) {
+                try {
+                    fileSystem.close()
+                } catch (throwable: Throwable) {
+                    throwables.add(throwable)
                 }
             }
 
@@ -213,7 +211,7 @@ object LegacyJarSplitter {
             }
         }
 
-    internal suspend fun split(
+    internal fun split(
         cacheDirectory: Path,
         metadata: MinecraftVersionMetadata,
         server: Path,

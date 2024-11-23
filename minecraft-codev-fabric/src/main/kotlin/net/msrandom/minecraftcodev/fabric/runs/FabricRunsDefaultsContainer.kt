@@ -1,8 +1,6 @@
 package net.msrandom.minecraftcodev.fabric.runs
 
-import kotlinx.coroutines.runBlocking
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
-import net.msrandom.minecraftcodev.core.utils.extension
 import net.msrandom.minecraftcodev.core.utils.toPath
 import net.msrandom.minecraftcodev.fabric.FabricInstaller
 import net.msrandom.minecraftcodev.fabric.loadFabricInstaller
@@ -10,7 +8,6 @@ import net.msrandom.minecraftcodev.runs.*
 import net.msrandom.minecraftcodev.runs.task.DownloadAssets
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
 import org.gradle.api.Action
-import org.gradle.api.file.Directory
 import org.gradle.api.provider.Provider
 import java.io.File
 import kotlin.io.path.createDirectories
@@ -32,14 +29,14 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
             )
 
             jvmArguments.add(
-                sourceSet.zip(remapClasspathDirectory, ::Pair).map { (sourceSet, directory) ->
+                sourceSet.zip(remapClasspathDirectory, ::Pair).flatMap { (sourceSet, directory) ->
                     val file = directory.file("classpath.txt")
                     val runtimeClasspath = sourceSet.runtimeClasspath
 
                     file.toPath().parent.createDirectories()
                     file.asFile.writeText(runtimeClasspath.files.joinToString("\n", transform = File::getAbsolutePath))
 
-                    MinecraftRunConfiguration.Argument("-Dfabric.remapClasspathFile=", file.asFile)
+                    compileArgument("-Dfabric.remapClasspathFile=", file.asFile)
                 },
             )
         }
@@ -53,12 +50,10 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
         defaults.builder.action {
             val assetIndex =
                 version.map {
-                    runBlocking {
-                        cacheParameters
-                            .versionList()
-                            .version(it)
-                            .assetIndex
-                    }
+                    cacheParameters
+                        .versionList()
+                        .version(it)
+                        .assetIndex
                 }
 
             val extractNativesTask =
@@ -75,11 +70,11 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
             val nativesDirectory = extractNativesTask.flatMap(ExtractNatives::destinationDirectory)
             val assetsDirectory = downloadAssetsTask.flatMap(DownloadAssets::assetsDirectory)
 
-            arguments.add(MinecraftRunConfiguration.Argument("--assetsDir=", assetsDirectory))
-            arguments.add(MinecraftRunConfiguration.Argument("--assetIndex=", assetIndex.map(MinecraftVersionMetadata.AssetIndex::id)))
+            arguments.add(compileArgument("--assetsDir=", assetsDirectory))
+            arguments.add(compileArgument("--assetIndex=", assetIndex.map(MinecraftVersionMetadata.AssetIndex::id)))
 
-            jvmArguments.add(MinecraftRunConfiguration.Argument("-Djava.library.path=", nativesDirectory))
-            jvmArguments.add(MinecraftRunConfiguration.Argument("-Dorg.lwjgl.librarypath=", nativesDirectory))
+            jvmArguments.add(compileArgument("-Djava.library.path=", nativesDirectory))
+            jvmArguments.add(compileArgument("-Dorg.lwjgl.librarypath=", nativesDirectory))
 
             beforeRun.add(extractNativesTask)
             beforeRun.add(downloadAssetsTask)
@@ -105,13 +100,9 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
 
             action.execute(data)
 
-            jvmArguments.add(MinecraftRunConfiguration.Argument("-Dfabric-api.datagen"))
-
-            jvmArguments.add(
-                data.getOutputDirectory(this).map { MinecraftRunConfiguration.Argument("-Dfabric-api.datagen.output-dir=", it) },
-            )
-
-            jvmArguments.add(data.modId.map { MinecraftRunConfiguration.Argument("-Dfabric-api.datagen.modid=", it) })
+            jvmArguments.add("-Dfabric-api.datagen")
+            jvmArguments.add(compileArgument("-Dfabric-api.datagen.output-dir=", data.getOutputDirectory(this)))
+            jvmArguments.add(compileArgument("-Dfabric-api.datagen.modid=", data.modId))
         }
     }
 

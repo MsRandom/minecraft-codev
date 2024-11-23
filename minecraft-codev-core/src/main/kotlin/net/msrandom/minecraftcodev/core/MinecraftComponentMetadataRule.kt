@@ -1,6 +1,5 @@
 package net.msrandom.minecraftcodev.core
 
-import kotlinx.coroutines.runBlocking
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionList
 import net.msrandom.minecraftcodev.core.resolve.getClientDependencies
 import net.msrandom.minecraftcodev.core.resolve.setupCommon
@@ -10,7 +9,6 @@ import org.gradle.api.artifacts.ComponentMetadataRule
 import org.gradle.api.attributes.Attribute
 import org.gradle.api.attributes.Category
 import org.gradle.api.model.ObjectFactory
-import org.gradle.api.provider.Provider
 import java.io.File
 import java.nio.file.Path
 import javax.inject.Inject
@@ -18,7 +16,7 @@ import javax.inject.Inject
 const val VERSION_MANIFEST_URL = "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json"
 
 // TODO: Caching
-suspend fun getVersionList(
+fun getVersionList(
     cacheDirectory: Path,
     url: String = VERSION_MANIFEST_URL,
     isOffline: Boolean,
@@ -27,13 +25,14 @@ suspend fun getVersionList(
 @CacheableRule
 abstract class MinecraftComponentMetadataRule<T : Any> @Inject constructor(
     private val cacheDirectory: File,
-    private val version: Provider<String>,
-    private val versionManifestUrl: Provider<String>,
-    private val isOffline: Provider<Boolean>,
+    private val version: String,
+    private val versionManifestUrl: String,
+    private val isOffline: Boolean,
     private val client: Boolean,
     private val variantName: String,
     private val attribute: Attribute<T>,
-    private val attributeValue: T,
+    private val commonAttributeValue: T,
+    private val clientAttributeValue: T,
 ) : ComponentMetadataRule {
     abstract val objectFactory: ObjectFactory
         @Inject get
@@ -43,18 +42,30 @@ abstract class MinecraftComponentMetadataRule<T : Any> @Inject constructor(
             it.attributes { attributes ->
                 attributes
                     .attribute(Category.CATEGORY_ATTRIBUTE, objectFactory.named(Category::class.java, Category.REGULAR_PLATFORM))
-                    .attribute(attribute, attributeValue)
+                    .attribute(attribute, clientAttributeValue)
             }
 
-            it.withDependencies {
-                runBlocking {
-                    val versionMetadata = getVersionList(cacheDirectory.toPath(), versionManifestUrl.get(), isOffline.get()).version(version.get())
+            it.withCapabilities { capabilities ->
+                capabilities.addCapability("net.minecraft.dependencies", if (client) "client" else "server", "1.0.0")
+            }
 
-                    if (client) {
-                        setupCommon(cacheDirectory.toPath(), versionMetadata, isOffline.get())
-                    } else {
-                        getClientDependencies(cacheDirectory.toPath(), versionMetadata, isOffline.get())
+            it.withDependencies { dependencies ->
+                val versionMetadata = getVersionList(cacheDirectory.toPath(), versionManifestUrl, isOffline).version(version)
+
+                if (client) {
+                    val id = context.details.id
+
+                    getClientDependencies(cacheDirectory.toPath(), versionMetadata, isOffline).forEach(dependencies::add)
+
+                    dependencies.add("${id.group}:${id.name}:${id.version}") { commonDependency ->
+                        commonDependency.attributes { attributes ->
+                            attributes
+                                .attribute(Category.CATEGORY_ATTRIBUTE, objectFactory.named(Category::class.java, Category.REGULAR_PLATFORM))
+                                .attribute(attribute, commonAttributeValue)
+                        }
                     }
+                } else {
+                    setupCommon(cacheDirectory.toPath(), versionMetadata, isOffline).forEach(dependencies::add)
                 }
             }
         }

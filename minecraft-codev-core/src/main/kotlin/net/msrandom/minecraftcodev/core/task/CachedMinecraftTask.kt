@@ -36,7 +36,7 @@ abstract class CachedMinecraftParameters {
         isOffline.convention(project.provider { project.gradle.startParameter.isOffline })
     }
 
-    suspend fun versionList() = getVersionList(directory.getAsPath(), versionManifestUrl.get(), isOffline.get())
+    fun versionList() = getVersionList(directory.getAsPath(), versionManifestUrl.get(), isOffline.get())
 }
 
 abstract class CachedMinecraftTask : DefaultTask() {

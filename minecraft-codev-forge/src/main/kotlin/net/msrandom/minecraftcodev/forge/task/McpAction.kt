@@ -1,17 +1,13 @@
 package net.msrandom.minecraftcodev.forge.task
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import net.msrandom.minecraftcodev.core.utils.walk
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.forge.McpConfigFile
 import net.msrandom.minecraftcodev.forge.Userdev
 import net.msrandom.minecraftcodev.forge.mappings.injectForgeMappingService
-import org.gradle.api.Project
 import org.gradle.api.artifacts.ConfigurationContainer
 import org.gradle.api.artifacts.dsl.DependencyHandler
 import org.gradle.api.file.RegularFile
-import org.gradle.configurationcache.extensions.serviceOf
 import org.gradle.process.ExecOperations
 import java.io.File
 import java.io.OutputStream
@@ -38,14 +34,12 @@ open class McpAction(
 ) {
     open val inputName = "input"
 
-    suspend fun execute(fileSystem: FileSystem, input: Path) = execute(fileSystem, mapOf(inputName to input))
+    fun execute(fileSystem: FileSystem, input: Path) = execute(fileSystem, mapOf(inputName to input))
 
-    suspend fun execute(fileSystem: FileSystem, vararg inputs: Pair<String, Path>) = execute(fileSystem, mapOf(*inputs))
+    fun execute(fileSystem: FileSystem, vararg inputs: Pair<String, Path>) = execute(fileSystem, mapOf(*inputs))
 
-    protected open suspend fun execute(fileSystem: FileSystem, inputs: Map<String, Path> = emptyMap()): Path {
-        val output = withContext(Dispatchers.IO) {
-            Files.createTempFile("mcp-step", ".out")
-        }
+    protected open fun execute(fileSystem: FileSystem, inputs: Map<String, Path> = emptyMap()): Path {
+        val output = Files.createTempFile("mcp-step", ".out")
 
         val executionResult =
             execOperations.javaexec {
@@ -131,7 +125,7 @@ class PatchMcpAction(
     override val inputName
         get() = "clean"
 
-    override suspend fun execute(fileSystem: FileSystem, inputs: Map<String, Path>): Path {
+    override fun execute(fileSystem: FileSystem, inputs: Map<String, Path>): Path {
         val userdevConfig = userdev.config
 
         val patched =

@@ -50,7 +50,7 @@ fun FileSystem.findAccessTransformers(): List<Path> {
 }
 
 class ForgeAccessTransformerResolutionRule : ZipAccessModifierResolutionRule {
-    override suspend fun load(path: Path, fileSystem: FileSystem, isJar: Boolean, data: AccessModifierResolutionData): Boolean {
+    override fun load(path: Path, fileSystem: FileSystem, isJar: Boolean, data: AccessModifierResolutionData): Boolean {
         val accessTransformers = fileSystem.findAccessTransformers()
 
         if (accessTransformers.isEmpty()) {

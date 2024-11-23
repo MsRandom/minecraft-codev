@@ -1,6 +1,5 @@
 package net.msrandom.minecraftcodev.forge.runs
 
-import kotlinx.coroutines.runBlocking
 import net.fabricmc.mappingio.format.Tiny2Reader
 import net.fabricmc.mappingio.tree.MappingTreeView
 import net.fabricmc.mappingio.tree.MemoryMappingTree
@@ -22,8 +21,12 @@ import org.gradle.api.Action
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.FileCollection
+import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
-import org.gradle.api.tasks.*
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.SourceSet
+import org.gradle.api.tasks.SourceSetContainer
 import java.io.File
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
@@ -37,10 +40,8 @@ open class ForgeRunsDefaultsContainer(
         var config: UserdevConfig? = null
 
         for (file in patches) {
-            val isUserdev = runBlocking {
-                MinecraftCodevForgePlugin.userdevConfig(file) {
-                    config = it
-                }
+            val isUserdev = MinecraftCodevForgePlugin.userdevConfig(file) {
+                config = it
             }
 
             if (isUserdev) break
@@ -64,27 +65,25 @@ open class ForgeRunsDefaultsContainer(
     private fun MinecraftRunConfiguration.addArgs(
         manifest: MinecraftVersionMetadata,
         config: UserdevConfig,
-        runtimeClasspath: FileCollection,
-        arguments: MutableSet<MinecraftRunConfiguration.Argument>,
+        arguments: MutableList<Any?>,
         existing: List<String>,
         extractNativesName: String,
         downloadAssetsName: String,
+        modId: Provider<String>,
     ) {
         arguments.addAll(
             existing.map {
                 if (it.startsWith('{')) {
-                    MinecraftRunConfiguration.Argument(
-                        resolveTemplate(
-                            manifest,
-                            config,
-                            runtimeClasspath,
-                            it.substring(1, it.length - 1),
-                            extractNativesName,
-                            downloadAssetsName,
-                        ),
+                    resolveTemplate(
+                        manifest,
+                        config,
+                        it.substring(1, it.length - 1),
+                        extractNativesName,
+                        downloadAssetsName,
+                        modId,
                     )
                 } else {
-                    MinecraftRunConfiguration.Argument(it)
+                    it
                 }
             },
         )
@@ -93,23 +92,25 @@ open class ForgeRunsDefaultsContainer(
     private fun MinecraftRunConfiguration.resolveTemplate(
         manifest: MinecraftVersionMetadata,
         config: UserdevConfig,
-        runtimeClasspath: FileCollection,
         template: String,
         extractNativesName: String,
         downloadAssetsName: String,
-    ): Any =
+        modId: Provider<String>,
+    ): Any? =
         when (template) {
             "asset_index" -> manifest.assets
             "assets_root" -> {
-                val task = project.tasks.withType(DownloadAssets::class.java).getByName(downloadAssetsName)
+                val task = project.tasks.withType(DownloadAssets::class.java).named(downloadAssetsName)
 
                 beforeRun.add(task)
 
-                task.assetsDirectory.asFile
+                task.flatMap(DownloadAssets::assetsDirectory)
             }
 
             "modules" -> {
-                val configuration = project.configurations.getByName(sourceSet.get().runtimeClasspathConfigurationName)
+                val configuration = sourceSet.flatMap {
+                    project.configurations.named(it.runtimeClasspathConfigurationName)
+                }
 
                 val moduleDependencies =
                     config.modules.map {
@@ -119,59 +120,35 @@ open class ForgeRunsDefaultsContainer(
                     }
 
                 val moduleArtifactView =
-                    configuration.incoming.artifactView { viewConfiguration ->
-                        viewConfiguration.componentFilter { component ->
-                            component is ModuleComponentIdentifier && (component.group to component.module) in moduleDependencies
+                    configuration.map {
+                        it.incoming.artifactView { viewConfiguration ->
+                            viewConfiguration.componentFilter { component ->
+                                component is ModuleComponentIdentifier && (component.group to component.module) in moduleDependencies
+                            }
                         }
                     }
 
-                moduleArtifactView.files.joinToString(File.pathSeparator)
+                moduleArtifactView.map { it.files.joinToString(File.pathSeparator) }
             }
 
             "MC_VERSION" -> manifest.id
             "mcp_mappings" -> "minecraft-codev.mappings"
             "source_roots" -> {
-                val sourceRoots = modClasspaths
-
-                val fixedRoots =
-                    if (sourceRoots.isEmpty()) {
-                        fun sourceToFiles(sourceSet: SourceSet) =
-                            if (sourceSet.output.resourcesDir == null) {
-                                sourceSet.output.classesDirs
-                            } else {
-                                project.files(sourceSet.output.resourcesDir, sourceSet.output.classesDirs)
-                            }
-
-                        val sourceSet = sourceSet.get()
-                        if (SourceSet.isMain(sourceSet)) {
-                            mapOf(null to sourceToFiles(sourceSet))
-                        } else {
-                            val main =
-                                project
-                                    .extension<SourceSetContainer>()
-                                    .getByName(SourceSet.MAIN_SOURCE_SET_NAME)
-
-                            mapOf(null to sourceToFiles(main) + sourceToFiles(sourceSet))
-                        }
+                val files = sourceSet.map {
+                    if (it.output.resourcesDir == null) {
+                        it.output.classesDirs
                     } else {
-                        sourceRoots
-                    }
-
-                val modClasses = mutableListOf<Any>()
-
-                for ((modId, files) in fixedRoots) {
-                    for (directory in files) {
-                        if (modId != null) {
-                            modClasses.add(modId)
-                            modClasses.add("%%")
-                        }
-
-                        modClasses += directory
-                        modClasses += File.pathSeparator
+                        project.files(it.output.resourcesDir, it.output.classesDirs)
                     }
                 }
 
-                modClasses.joinToString("")
+                val modClasses = files.zip(modId, ::Pair).map { (files, modId) ->
+                    files.joinToString(File.pathSeparator) {
+                        "$modId%%$it"
+                    }
+                }
+
+                modClasses
             }
 
             "mcp_to_srg" -> {
@@ -195,29 +172,27 @@ open class ForgeRunsDefaultsContainer(
                     // Compiler doesn't like working with MemoryMappingTree for some reason
                     val treeView: MappingTreeView = mappings
 
-                    runBlocking {
-                        zipFileSystem(mappingsArtifact).use {
-                            it.getPath("mappings/mappings.tiny").reader().use { reader ->
-                                Tiny2Reader.read(reader, mappings)
+                    zipFileSystem(mappingsArtifact).use {
+                        it.getPath("mappings/mappings.tiny").reader().use { reader ->
+                            Tiny2Reader.read(reader, mappings)
+                        }
+
+                        val sourceNamespace = treeView.getNamespaceId(MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE)
+                        val targetNamespace = treeView.getNamespaceId(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
+
+                        for (type in treeView.classes) {
+                            val addedClass = srgMappings.addClass(type.getName(targetNamespace), type.getName(sourceNamespace))
+
+                            for (field in type.fields) {
+                                addedClass.field(field.getName(sourceNamespace), field.getName(targetNamespace))
                             }
 
-                            val sourceNamespace = treeView.getNamespaceId(MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE)
-                            val targetNamespace = treeView.getNamespaceId(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
-
-                            for (type in treeView.classes) {
-                                val addedClass = srgMappings.addClass(type.getName(targetNamespace), type.getName(sourceNamespace))
-
-                                for (field in type.fields) {
-                                    addedClass.field(field.getName(sourceNamespace), field.getName(targetNamespace))
-                                }
-
-                                for (method in type.methods) {
-                                    addedClass.method(
-                                        method.getDesc(sourceNamespace),
-                                        method.getName(sourceNamespace),
-                                        method.getName(targetNamespace),
-                                    )
-                                }
+                            for (method in type.methods) {
+                                addedClass.method(
+                                    method.getDesc(sourceNamespace),
+                                    method.getName(sourceNamespace),
+                                    method.getName(targetNamespace),
+                                )
                             }
                         }
                     }
@@ -229,6 +204,7 @@ open class ForgeRunsDefaultsContainer(
                         .get()
                         .file("mcp.srg")
                         .toPath()
+
                 srgMappings.build().write(path, IMappingFile.Format.SRG)
                 path
             }
@@ -242,17 +218,23 @@ open class ForgeRunsDefaultsContainer(
                         .toPath()
 
                 path.parent.createDirectories()
-                path.writeLines(runtimeClasspath.map(File::getAbsolutePath))
+
+                val runtimeClasspath = project.configurations.getByName(sourceSet.get().runtimeClasspathConfigurationName)
+
+                // TODO Hack
+                val files = runtimeClasspath.map(File::getAbsolutePath).filterNot { "-patched" in it && it.endsWith(".jar") }
+
+                path.writeLines(files)
 
                 path.toAbsolutePath().toString()
             }
 
             "natives" -> {
-                val task = project.tasks.withType(ExtractNatives::class.java).getByName(extractNativesName)
+                val task = project.tasks.withType(ExtractNatives::class.java).named(extractNativesName)
 
                 beforeRun.add(task)
 
-                task.destinationDirectory.get()
+                task.flatMap(ExtractNatives::destinationDirectory)
             }
 
             else -> {
@@ -282,111 +264,106 @@ open class ForgeRunsDefaultsContainer(
         mainClass.set(configProvider.map { it.getRun().main })
 
         val zipped = manifestProvider.zip(configProvider, ::Pair)
-        val runtimeClasspath = project.files(sourceSet.map(SourceSet::getRuntimeClasspath))
 
         environment.putAll(
-            zipped.map { (manifest, userdevConfig) ->
-                buildMap {
+            zipped.flatMap { (manifest, userdevConfig) ->
+                project.objects.mapProperty(String::class.java, String::class.java).apply {
                     for ((key, value) in userdevConfig.getRun().env) {
                         val argument =
                             if (value.startsWith('$')) {
-                                MinecraftRunConfiguration.Argument(
-                                    resolveTemplate(
-                                        manifest,
-                                        userdevConfig,
-                                        runtimeClasspath,
-                                        value.substring(2, value.length - 1),
-                                        extractNativesTaskName,
-                                        downloadAssetsTaskName,
-                                    ),
+                                resolveTemplate(
+                                    manifest,
+                                    userdevConfig,
+                                    value.substring(2, value.length - 1),
+                                    extractNativesTaskName,
+                                    downloadAssetsTaskName,
+                                    data.modId,
                                 )
                             } else if (value.startsWith('{')) {
-                                MinecraftRunConfiguration.Argument(
-                                    resolveTemplate(
-                                        manifest,
-                                        userdevConfig,
-                                        runtimeClasspath,
-                                        value.substring(1, value.length - 1),
-                                        extractNativesTaskName,
-                                        downloadAssetsTaskName,
-                                    ),
+                                resolveTemplate(
+                                    manifest,
+                                    userdevConfig,
+                                    value.substring(1, value.length - 1),
+                                    extractNativesTaskName,
+                                    downloadAssetsTaskName,
+                                    data.modId,
                                 )
                             } else {
-                                MinecraftRunConfiguration.Argument(value)
+                                value
                             }
 
-                        put(key, argument)
+                        put(key, compileArgument(argument))
                     }
                 }
             },
         )
 
         arguments.addAll(
-            zipped.map { (manifest, userdevConfig) ->
-                val arguments = mutableSetOf<MinecraftRunConfiguration.Argument>()
+            zipped.flatMap { (manifest, userdevConfig) ->
+                val arguments = mutableListOf<Any?>()
 
                 addArgs(
                     manifest,
                     userdevConfig,
-                    runtimeClasspath,
                     arguments,
                     userdevConfig.getRun().args,
                     extractNativesTaskName,
                     downloadAssetsTaskName,
+                    data.modId,
                 )
 
                 for (mixinConfig in data.mixinConfigs) {
-                    arguments.add(MinecraftRunConfiguration.Argument("--mixin.config=", mixinConfig.absolutePath))
+                    arguments.add(compileArgument("--mixin.config=", mixinConfig.absolutePath))
                 }
 
-                arguments
+                compileArguments(arguments)
             },
         )
 
         jvmArguments.addAll(
-            zipped.map { (manifest, userdevConfig) ->
+            zipped.flatMap { (manifest, userdevConfig) ->
                 val run = userdevConfig.getRun()
-                val jvmArguments = mutableSetOf<MinecraftRunConfiguration.Argument>()
+                val jvmArguments = mutableListOf<Any?>()
 
                 addArgs(
                     manifest,
                     userdevConfig,
-                    runtimeClasspath,
                     jvmArguments,
                     run.jvmArgs,
                     extractNativesTaskName,
                     downloadAssetsTaskName,
+                    data.modId,
                 )
 
                 for ((key, value) in run.props) {
                     if (value.startsWith('{')) {
                         val template = value.substring(1, value.length - 1)
                         jvmArguments.add(
-                            MinecraftRunConfiguration.Argument(
+                            compileArgument(
                                 "-D$key=",
                                 resolveTemplate(
                                     manifest,
                                     userdevConfig,
-                                    runtimeClasspath,
                                     template,
                                     extractNativesTaskName,
                                     downloadAssetsTaskName,
+                                    data.modId,
                                 ),
                             ),
                         )
                     } else {
-                        jvmArguments.add(MinecraftRunConfiguration.Argument("-D$key=$value"))
+                        jvmArguments.add("-D$key=$value")
                     }
                 }
 
-                jvmArguments
+                compileArguments(jvmArguments)
             },
         )
 
         if (addLwjglNatives) {
-            val natives = project.tasks.withType(ExtractNatives::class.java).getByName(extractNativesTaskName)
+            val natives = project.tasks.withType(ExtractNatives::class.java).named(extractNativesTaskName)
 
-            jvmArguments.add(MinecraftRunConfiguration.Argument("-Dorg.lwjgl.librarypath=", natives.destinationDirectory))
+            jvmArguments.add(compileArgument("-Dorg.lwjgl.librarypath=", natives.flatMap(ExtractNatives::destinationDirectory)))
         }
     }
 
@@ -429,17 +406,17 @@ open class ForgeRunsDefaultsContainer(
 
             action.execute(data)
 
-            val outputDirectory = data.getOutputDirectory(this).map(MinecraftRunConfiguration::Argument)
+            val outputDirectory = data.getOutputDirectory(this)
 
             addData(UserdevConfig.Runs::data.name, minecraftVersion, data, UserdevConfig.Runs::data)
 
             val resources = sourceSet.map { it.output.resourcesDir!! }
 
-            arguments.add(MinecraftRunConfiguration.Argument("--mod=", data.modId.map(MinecraftRunConfiguration::Argument)))
-            arguments.add(MinecraftRunConfiguration.Argument("--all"))
-            arguments.add(MinecraftRunConfiguration.Argument("--output=", outputDirectory))
-            arguments.add(MinecraftRunConfiguration.Argument("--existing=", outputDirectory))
-            arguments.add(MinecraftRunConfiguration.Argument("--existing=", resources))
+            arguments.add(compileArgument("--mod=", data.modId))
+            arguments.add("--all")
+            arguments.add(compileArgument("--output=", outputDirectory))
+            arguments.add(compileArgument("--existing=", outputDirectory))
+            arguments.add(compileArgument("--existing=", resources))
         }
     }
 
@@ -463,16 +440,20 @@ open class ForgeRunsDefaultsContainer(
     }
 }
 
-abstract class ForgeRunConfigurationData {
-    abstract val patches: ConfigurableFileCollection
+interface ForgeRunConfigurationData {
+    val patches: ConfigurableFileCollection
         @InputFiles
         get
 
-    abstract val mixinConfigs: ConfigurableFileCollection
+    val mixinConfigs: ConfigurableFileCollection
         @InputFiles
+        get
+
+    val modId: Property<String>
+        @Input
         get
 }
 
 abstract class ForgeDatagenRunConfigurationData :
-    ForgeRunConfigurationData(),
+    ForgeRunConfigurationData,
     DatagenRunConfigurationData

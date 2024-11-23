@@ -1,6 +1,5 @@
 package net.msrandom.minecraftcodev.runs
 
-import kotlinx.coroutines.runBlocking
 import net.msrandom.minecraftcodev.core.resolve.MinecraftDownloadVariant
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
 import net.msrandom.minecraftcodev.core.resolve.downloadMinecraftFile
@@ -55,7 +54,7 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
             jvmVersion.set(manifest.map { it.javaVersion.majorVersion })
 
             arguments.addAll(
-                manifest.map {
+                manifest.flatMap {
                     val arguments =
                         it.arguments.game.ifEmpty {
                             it.minecraftArguments.split(' ').map { argument ->
@@ -63,55 +62,47 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
                             }
                         }
 
-                    val fixedArguments = mutableListOf<MinecraftRunConfiguration.Argument>()
+                    val fixedArguments = mutableListOf<Any?>()
 
                     for (argument in arguments) {
                         if (argument.rules.isEmpty()) {
                             for (value in argument.value) {
                                 if (value.startsWith("\${") && value.endsWith("}")) {
                                     when (value.subSequence(2, value.length - 1)) {
-                                        "version_name" -> fixedArguments.add(MinecraftRunConfiguration.Argument(it.id))
+                                        "version_name" -> fixedArguments.add(it.id)
                                         "assets_root" -> {
-                                            fixedArguments.add(
-                                                MinecraftRunConfiguration.Argument(
-                                                    downloadAssetsTask.flatMap(DownloadAssets::assetsDirectory),
-                                                ),
-                                            )
+                                            fixedArguments.add(downloadAssetsTask.flatMap(DownloadAssets::assetsDirectory))
                                         }
 
-                                        "assets_index_name" -> fixedArguments.add(MinecraftRunConfiguration.Argument(it.assets))
+                                        "assets_index_name" -> fixedArguments.add(it.assets)
                                         "game_assets" -> {
-                                            fixedArguments.add(
-                                                MinecraftRunConfiguration.Argument(
-                                                    downloadAssetsTask.flatMap(DownloadAssets::resourcesDirectory),
-                                                ),
-                                            )
+                                            fixedArguments.add(downloadAssetsTask.flatMap(DownloadAssets::resourcesDirectory))
                                         }
 
-                                        "auth_access_token" -> fixedArguments.add(MinecraftRunConfiguration.Argument(Random.nextLong()))
-                                        "user_properties" -> fixedArguments.add(MinecraftRunConfiguration.Argument("{}"))
+                                        "auth_access_token" -> fixedArguments.add(Random.nextLong())
+                                        "user_properties" -> fixedArguments.add("{}")
                                         else -> fixedArguments.removeLastOrNull()
                                     }
                                 } else {
-                                    fixedArguments.add(MinecraftRunConfiguration.Argument(value))
+                                    fixedArguments.add(value)
                                 }
                             }
                         }
                     }
 
-                    fixedArguments
+                    compileArguments(fixedArguments)
                 },
             )
 
             jvmArguments.addAll(
-                manifest.map {
+                manifest.flatMap {
                     val jvmArguments =
                         it.arguments.jvm.ifEmpty {
                             // For some reason, older versions didn't include this
                             listOf(MinecraftVersionMetadata.Argument(emptyList(), listOf("-Djava.library.path=\${natives_directory}")))
                         }
 
-                    val fixedJvmArguments = mutableListOf<MinecraftRunConfiguration.Argument>()
+                    val fixedJvmArguments = mutableListOf<Any?>()
 
                     ARGUMENTS@ for (argument in jvmArguments) {
                         if (!rulesMatch(argument.rules)) continue
@@ -136,7 +127,7 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
                                 }
 
                                 fixedJvmArguments.add(
-                                    MinecraftRunConfiguration.Argument(
+                                    compileArgument(
                                         value.substring(0, templateStart),
                                         extractNativesTask.flatMap(ExtractNatives::destinationDirectory),
                                     ),
@@ -146,14 +137,14 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
                             }
 
                             if (' ' in value) {
-                                fixedJvmArguments.add(MinecraftRunConfiguration.Argument("\"$value\""))
+                                fixedJvmArguments.add("\"$value\"")
                             } else {
-                                fixedJvmArguments.add(MinecraftRunConfiguration.Argument(value))
+                                fixedJvmArguments.add(value)
                             }
                         }
                     }
 
-                    fixedJvmArguments
+                    compileArguments(fixedJvmArguments)
                 },
             )
         }
@@ -163,32 +154,30 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
         builder.action {
             val manifestProvider = getManifest(minecraftVersion)
 
-            arguments.add(MinecraftRunConfiguration.Argument("nogui"))
+            arguments.add("nogui")
 
             mainClass.set(
                 manifestProvider
                     .map { manifest ->
-                        runBlocking {
-                            val serverJar =
-                                downloadMinecraftFile(
-                                    cacheParameters.directory.getAsPath(),
-                                    manifest,
-                                    MinecraftDownloadVariant.Server,
-                                    cacheParameters.isOffline.get(),
-                                ) ?: throw UnsupportedOperationException("Version ${manifest.id} does not have a server.")
+                        val serverJar =
+                            downloadMinecraftFile(
+                                cacheParameters.directory.getAsPath(),
+                                manifest,
+                                MinecraftDownloadVariant.Server,
+                                cacheParameters.isOffline.get(),
+                            ) ?: throw UnsupportedOperationException("Version ${manifest.id} does not have a server.")
 
-                            zipFileSystem(serverJar).use {
-                                val mainPath = it.getPath("META-INF/main-class")
+                        zipFileSystem(serverJar).use {
+                            val mainPath = it.getPath("META-INF/main-class")
 
-                                if (mainPath.exists()) {
-                                    mainPath.readText()
-                                } else {
-                                    it.getPath(JarFile.MANIFEST_NAME)
-                                        .inputStream()
-                                        .use(::Manifest)
-                                        .mainAttributes
-                                        .getValue(Attributes.Name.MAIN_CLASS)
-                                }
+                            if (mainPath.exists()) {
+                                mainPath.readText()
+                            } else {
+                                it.getPath(JarFile.MANIFEST_NAME)
+                                    .inputStream()
+                                    .use(::Manifest)
+                                    .mainAttributes
+                                    .getValue(Attributes.Name.MAIN_CLASS)
                             }
                         }
                     },
@@ -201,9 +190,7 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
     companion object {
         fun MinecraftRunConfiguration.getManifest(minecraftVersion: Provider<String>): Provider<MinecraftVersionMetadata> =
             minecraftVersion.map {
-                runBlocking {
-                    cacheParameters.versionList().version(it)
-                }
+                cacheParameters.versionList().version(it)
             }
     }
 }

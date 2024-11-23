@@ -1,7 +1,5 @@
 package net.msrandom.minecraftcodev.accesswidener
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import net.fabricmc.accesswidener.AccessWidenerReader
@@ -28,7 +26,7 @@ class ZipAccessModifierResolutionRuleHandler :
     AccessModifierResolutionRule
 
 class AccessWidenerResolutionRule : AccessModifierResolutionRule {
-    override suspend fun load(path: Path, extension: String, data: AccessModifierResolutionData): Boolean {
+    override fun load(path: Path, extension: String, data: AccessModifierResolutionData): Boolean {
         if (extension.lowercase() != "accesswidener") {
             return false
         }
@@ -44,7 +42,7 @@ class AccessWidenerResolutionRule : AccessModifierResolutionRule {
 }
 
 class AccessModifierJsonResolutionRule : AccessModifierResolutionRule {
-    override suspend fun load(path: Path, extension: String, data: AccessModifierResolutionData): Boolean {
+    override fun load(path: Path, extension: String, data: AccessModifierResolutionData): Boolean {
         if (extension.lowercase() != "json") {
             return false
         }
@@ -61,9 +59,9 @@ class AccessModifierJsonResolutionRule : AccessModifierResolutionRule {
 
 }
 
-val mappingResolutionRules = serviceLoader<ZipAccessModifierResolutionRuleHandler>()
+val accessModifierResolutionRules = serviceLoader<AccessModifierResolutionRule>()
 
-suspend fun loadAccessWideners(
+fun loadAccessWideners(
     files: FileCollection,
     namespace: String?,
 ): AccessModifiers {
@@ -71,12 +69,10 @@ suspend fun loadAccessWideners(
 
     val data = AccessModifierResolutionData(widener, namespace)
 
-    withContext(Dispatchers.IO) {
-        for (file in files) {
-            for (rule in mappingResolutionRules) {
-                if (rule.load(file.toPath(), file.extension, data)) {
-                    break
-                }
+    for (file in files) {
+        for (rule in accessModifierResolutionRules) {
+            if (rule.load(file.toPath(), file.extension, data)) {
+                break
             }
         }
     }

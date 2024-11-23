@@ -15,7 +15,7 @@ import kotlin.io.path.deleteIfExists
 import kotlin.io.path.exists
 import kotlin.io.path.notExists
 
-internal suspend fun setupCommon(
+internal fun setupCommon(
     cacheDirectory: Path,
     metadata: MinecraftVersionMetadata,
     isOffline: Boolean,
@@ -48,7 +48,7 @@ internal suspend fun setupCommon(
     }
 }
 
-internal suspend fun setupClient(
+internal fun setupClient(
     cacheDirectory: Path,
     output: Path,
     metadata: MinecraftVersionMetadata,
@@ -85,7 +85,7 @@ internal suspend fun setupClient(
 }
 
 fun getAllDependencies(metadata: MinecraftVersionMetadata) =
-    metadata.libraries.filter { rulesMatch(it.rules) }.map(MinecraftVersionMetadata.Library::name)
+    metadata.libraries.filter { rulesMatch(it.rules) }.map { it.name.toString() }
 
 private fun osMatches(os: OperatingSystem): Boolean {
     if (os.name != null && os.name != osName()) {
@@ -121,7 +121,7 @@ fun rulesMatch(rules: List<MinecraftVersionMetadata.Rule>): Boolean {
     return allowed
 }
 
-suspend fun getClientDependencies(
+fun getClientDependencies(
     cacheDirectory: Path,
     metadata: MinecraftVersionMetadata,
     isOffline: Boolean,

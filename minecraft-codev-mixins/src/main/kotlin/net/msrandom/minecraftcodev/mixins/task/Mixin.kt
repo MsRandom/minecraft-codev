@@ -1,6 +1,5 @@
 package net.msrandom.minecraftcodev.mixins.task
 
-import kotlinx.coroutines.runBlocking
 import net.msrandom.minecraftcodev.core.utils.getAsPath
 import net.msrandom.minecraftcodev.core.utils.walk
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
@@ -60,47 +59,45 @@ abstract class Mixin : DefaultTask() {
         val output = outputFile.getAsPath()
 
         (MixinService.getService() as GradleMixinService).use(classpath + mixinFiles + project.files(input), side.get()) {
-            runBlocking {
-                CLASSPATH@ for (mixinFile in mixinFiles + project.files(input)) {
-                    zipFileSystem(mixinFile.toPath()).use fs@{
-                        val root = it.getPath("/")
+            CLASSPATH@ for (mixinFile in mixinFiles + project.files(input)) {
+                zipFileSystem(mixinFile.toPath()).use fs@{
+                    val root = it.getPath("/")
 
-                        val handler =
-                            mixinListingRules.firstNotNullOfOrNull { rule ->
-                                rule.load(root)
-                            }
-
-                        if (handler == null) {
-                            return@fs
+                    val handler =
+                        mixinListingRules.firstNotNullOfOrNull { rule ->
+                            rule.load(root)
                         }
 
-                        Mixins.addConfigurations(*handler.list(root).toTypedArray())
+                    if (handler == null) {
+                        return@fs
                     }
+
+                    Mixins.addConfigurations(*handler.list(root).toTypedArray())
                 }
+            }
 
-                zipFileSystem(input).use { inputFs ->
-                    val root = inputFs.getPath("/")
+            zipFileSystem(input).use { inputFs ->
+                val root = inputFs.getPath("/")
 
-                    zipFileSystem(output, true).use { outputFs ->
-                        root.walk {
-                            for (path in filter(Path::isRegularFile)) {
-                                val pathString = path.toString()
-                                val outputPath = outputFs.getPath(pathString)
+                zipFileSystem(output, true).use { outputFs ->
+                    root.walk {
+                        for (path in filter(Path::isRegularFile)) {
+                            val pathString = path.toString()
+                            val outputPath = outputFs.getPath(pathString)
 
-                                outputPath.parent?.createDirectories()
+                            outputPath.parent?.createDirectories()
 
-                                if (pathString.endsWith(".class")) {
-                                    val pathName = root.relativize(path).toString()
+                            if (pathString.endsWith(".class")) {
+                                val pathName = root.relativize(path).toString()
 
-                                    val name =
-                                        pathName
-                                            .substring(0, pathName.length - ".class".length)
-                                            .replace(File.separatorChar, '.')
+                                val name =
+                                    pathName
+                                        .substring(0, pathName.length - ".class".length)
+                                        .replace(File.separatorChar, '.')
 
-                                    outputPath.writeBytes(transformer.transformClassBytes(name, name, path.readBytes()))
-                                } else {
-                                    path.copyTo(outputPath, StandardCopyOption.COPY_ATTRIBUTES)
-                                }
+                                outputPath.writeBytes(transformer.transformClassBytes(name, name, path.readBytes()))
+                            } else {
+                                path.copyTo(outputPath, StandardCopyOption.COPY_ATTRIBUTES)
                             }
                         }
                     }

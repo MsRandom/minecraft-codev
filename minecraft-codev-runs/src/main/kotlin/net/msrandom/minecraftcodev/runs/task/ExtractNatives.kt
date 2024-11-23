@@ -1,6 +1,5 @@
 package net.msrandom.minecraftcodev.runs.task
 
-import kotlinx.coroutines.*
 import net.msrandom.minecraftcodev.core.resolve.rulesMatch
 import net.msrandom.minecraftcodev.core.task.CachedMinecraftTask
 import net.msrandom.minecraftcodev.core.utils.getAsPath
@@ -45,66 +44,61 @@ abstract class ExtractNatives : CachedMinecraftTask() {
     private fun extract() {
         val output = destinationDirectory.getAsPath()
 
-        runBlocking {
-            val metadata = cacheParameters.versionList().version(version.get())
+        val metadata = cacheParameters.versionList().version(version.get())
 
-            val libs =
-                metadata.libraries.filter { library ->
-                    if (library.natives.isEmpty()) {
-                        return@filter false
-                    }
-
-                    rulesMatch(library.rules)
-                }.associate {
-                    val classifier = it.natives.getValue(osName())
-
-                    dependencyHandler.create("${it.name}:$classifier") to it.extract
+        val libs =
+            metadata.libraries.filter { library ->
+                if (library.natives.isEmpty()) {
+                    return@filter false
                 }
 
-            withContext(Dispatchers.IO) {
-                val config = configurationContainer.detachedConfiguration(*libs.keys.toTypedArray())
+                rulesMatch(library.rules)
+            }.associate {
+                val classifier = it.natives.getValue(osName())
 
-                val fileResolution = libs.flatMap { (dependency, extractionRules) ->
-                    val artifactView = config.incoming.artifactView { view ->
-                        view.componentFilter {
-                            it is ModuleComponentIdentifier &&
-                                    it.group == dependency.group &&
-                                    it.module == dependency.name &&
-                                    it.version == dependency.version
-                        }
-                    }
+                dependencyHandler.create("${it.name}:$classifier") to it.extract
+            }
 
-                    val exclude = extractionRules?.exclude.orEmpty()
+        val config = configurationContainer.detachedConfiguration(*libs.keys.toTypedArray())
 
-                    artifactView.artifacts.artifactFiles.map { artifact ->
-                        async {
-                            val extension = artifact.extension
-                            if (extension == "jar" || extension == "zip") {
-                                zipFileSystem(artifact.toPath()).use {
-                                    val root = it.getPath("/")
-                                    root.walk {
-                                        for (path in filter(Path::isRegularFile)) {
-                                            val name = root.relativize(path).toString()
-                                            if (exclude.none(name::startsWith)) {
-                                                val outputPath = output.resolve(name)
-                                                outputPath.parent?.createDirectories()
+        val artifactView = config.incoming.artifactView { view ->
+            view.componentFilter {
+                it is ModuleComponentIdentifier && libs.any { (dependency, _) -> it.group == dependency.group && it.module == dependency.name }
+            }
+        }
 
-                                                path.copyTo(outputPath, StandardCopyOption.REPLACE_EXISTING)
-                                            }
-                                        }
-                                    }
-                                }
-                            } else if (extension != "json") {
-                                val outputPath = output.resolve(artifact.name)
+        for (artifact in artifactView.artifacts.artifacts) {
+            val file = artifact.file
+            val id = artifact.variant.owner as ModuleComponentIdentifier
+
+            val exclude = libs.entries.firstOrNull { (dependency, _) ->
+                id.group == dependency.group && id.module == dependency.name
+            }
+                ?.value
+                ?.exclude
+                ?: emptyList()
+
+            val extension = file.extension
+            if (extension == "jar" || extension == "zip") {
+                zipFileSystem(file.toPath()).use {
+                    val root = it.getPath("/")
+                    root.walk {
+                        for (path in filter(Path::isRegularFile)) {
+                            val name = root.relativize(path).toString()
+                            if (exclude.none(name::startsWith)) {
+                                val outputPath = output.resolve(name)
                                 outputPath.parent?.createDirectories()
 
-                                artifact.toPath().copyTo(outputPath, StandardCopyOption.REPLACE_EXISTING)
+                                path.copyTo(outputPath, StandardCopyOption.REPLACE_EXISTING)
                             }
                         }
                     }
                 }
+            } else {
+                val outputPath = output.resolve(file.name)
+                outputPath.parent?.createDirectories()
 
-                fileResolution.awaitAll()
+                file.toPath().copyTo(outputPath, StandardCopyOption.REPLACE_EXISTING)
             }
         }
     }

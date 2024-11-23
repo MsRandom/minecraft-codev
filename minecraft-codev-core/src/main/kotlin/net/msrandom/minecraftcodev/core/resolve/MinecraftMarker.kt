@@ -4,14 +4,11 @@ import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import java.nio.file.Path
 import java.util.jar.JarFile
 import java.util.jar.Manifest
-import kotlin.io.path.createDirectories
-import kotlin.io.path.exists
-import kotlin.io.path.inputStream
-import kotlin.io.path.outputStream
+import kotlin.io.path.*
 
 private const val CODEV_MINECRAFT_MARKER = "Codev-Minecraft-Marker"
 
-suspend fun addMinecraftMarker(path: Path) {
+fun addMinecraftMarker(path: Path) {
     zipFileSystem(path).use { fs ->
         val manifestPath = fs.getPath(JarFile.MANIFEST_NAME)
 
@@ -29,8 +26,14 @@ suspend fun addMinecraftMarker(path: Path) {
     }
 }
 
-suspend fun isCodevGeneratedMinecraftJar(path: Path) = zipFileSystem(path).use { fs ->
-    val manifest = fs.getPath(JarFile.MANIFEST_NAME).inputStream().use(::Manifest)
+fun isCodevGeneratedMinecraftJar(path: Path) = zipFileSystem(path).use { fs ->
+    val manifestPath = fs.getPath(JarFile.MANIFEST_NAME)
+
+    if (manifestPath.notExists()) {
+        return@use false
+    }
+
+    val manifest = manifestPath.inputStream().use(::Manifest)
 
     manifest.mainAttributes.getValue(CODEV_MINECRAFT_MARKER).toBoolean()
 }

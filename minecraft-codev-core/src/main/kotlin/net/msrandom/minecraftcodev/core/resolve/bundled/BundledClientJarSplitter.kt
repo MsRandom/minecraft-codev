@@ -5,13 +5,12 @@ import net.msrandom.minecraftcodev.core.resolve.downloadMinecraftClient
 import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter.useFileSystems
 import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter.withAssets
 import net.msrandom.minecraftcodev.core.utils.*
-import org.gradle.api.Project
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import kotlin.io.path.*
 
 object BundledClientJarSplitter {
-    internal suspend fun split(
+    internal fun split(
         cacheDirectory: Path,
         metadata: MinecraftVersionMetadata,
         server: Path,

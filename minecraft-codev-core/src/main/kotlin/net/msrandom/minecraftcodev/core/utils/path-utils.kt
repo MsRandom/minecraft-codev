@@ -7,60 +7,34 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.gradle.api.file.FileSystemLocation
 import org.gradle.api.file.FileSystemLocationProperty
+import org.jetbrains.annotations.Blocking
 import org.slf4j.LoggerFactory
+import java.lang.Thread.sleep
 import java.net.URI
 import java.nio.file.*
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.streams.asSequence
 import kotlin.time.Duration.Companion.seconds
 
 private val logger = LoggerFactory.getLogger("path-utils")
 
-private val mutexes = ConcurrentHashMap<Any?, Mutex>()
-
-private fun objectMutex(obj: Any?) = mutexes.computeIfAbsent(obj) { Mutex() }
-
-suspend fun <K : Any, V : Any> ConcurrentHashMap<K, V>.computeSuspendIfAbsent(key: K, compute: suspend (K) -> V): V {
-    get(key)?.let {
-        return it
-    }
-
-    return objectMutex(this).withLock {
-        get(key)?.let {
-            return it
-        }
-
-        val value = compute(key)
-
-        put(key, value)
-
-        value
-    }
-}
-
-suspend fun zipFileSystem(
+@Blocking
+fun zipFileSystem(
     file: Path,
     create: Boolean = false,
 ): FileSystem {
     val uri = URI.create("jar:${file.toUri()}")
 
-    return withContext(Dispatchers.IO) {
-        if (create) {
-            FileSystems.newFileSystem(uri, mapOf("create" to true.toString()))
-        } else {
-            while (true) {
-                try {
-                    return@withContext FileSystems.newFileSystem(uri, emptyMap<String, Any>())
-                } catch (e: FileSystemAlreadyExistsException) {
-                    logger.info("Couldn't acquire access to $file file-system, waiting", e)
+    if (create) {
+        return FileSystems.newFileSystem(uri, mapOf("create" to true.toString()))
+    }
 
-                    delay(1.seconds)
-                }
-            }
+    while (true) {
+        try {
+            return FileSystems.newFileSystem(uri, emptyMap<String, Any>())
+        } catch (e: FileSystemAlreadyExistsException) {
+            logger.info("Couldn't acquire access to $file file-system, waiting", e)
 
-            // Unreachable
-            @Suppress("UNREACHABLE_CODE")
-            throw IllegalStateException()
+            sleep(1.seconds.inWholeMilliseconds)
         }
     }
 }

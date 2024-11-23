@@ -1,6 +1,5 @@
 package net.msrandom.minecraftcodev.runs
 
-import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin
 import net.msrandom.minecraftcodev.core.utils.extension
 import org.gradle.api.Project
 import org.gradle.api.provider.Property
@@ -14,19 +13,9 @@ private fun setupIdeaRun(project: Project, runConfigurations: RunConfigurationCo
 
         application.mainClass = config.mainClass.get()
         application.workingDirectory = config.executableDirectory.get().asFile.absolutePath
-        application.envs = config.environment.get().mapValues { it.value.compile() }
-
-        application.programParameters =
-            config.arguments.get().joinToString(
-                " ",
-                transform = MinecraftRunConfiguration.Argument::compile,
-            )
-
-        application.jvmArgs =
-            config.jvmArguments.get().joinToString(
-                " ",
-                transform = MinecraftRunConfiguration.Argument::compile,
-            )
+        application.envs = config.environment.get()
+        application.programParameters = config.arguments.get().joinToString(" ")
+        application.jvmArgs = config.jvmArguments.get().joinToString(" ")
 
         if (config.sourceSet.isPresent) {
             application.moduleRef(project, config.sourceSet.get())

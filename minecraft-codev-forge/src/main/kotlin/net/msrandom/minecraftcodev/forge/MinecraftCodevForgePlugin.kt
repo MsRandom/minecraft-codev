@@ -29,7 +29,7 @@ open class MinecraftCodevForgePlugin<T : PluginAware> : Plugin<T> {
         internal const val FORGE_MODS_TOML = "mods.toml"
         internal const val NEOFORGE_MODS_TOML = "neoforge.mods.toml"
 
-        internal suspend fun userdevConfig(
+        internal fun userdevConfig(
             file: File,
             action: FileSystem.(config: UserdevConfig) -> Unit,
         ) = zipFileSystem(file.toPath()).use { fs ->

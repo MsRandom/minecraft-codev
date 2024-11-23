@@ -27,10 +27,10 @@ abstract class ExtractIncludes : TransformAction<TransformParameters.None> {
         @InputArtifactDependencies
         get
 
-    override fun transform(outputs: TransformOutputs) = runBlocking {
+    override fun transform(outputs: TransformOutputs) {
         val input = inputFile.get().toPath()
 
-        val handler =
+        val handler = runBlocking {
             zipFileSystem(input).use {
                 val root = it.getPath("/")
 
@@ -47,7 +47,7 @@ abstract class ExtractIncludes : TransformAction<TransformParameters.None> {
                     classpath
                         .map {
                             async {
-                                hashFile(it.toPath())
+                                hashFileSuspend(it.toPath())
                             }
                         }.awaitAll()
                         .toHashSet()
@@ -58,7 +58,7 @@ abstract class ExtractIncludes : TransformAction<TransformParameters.None> {
                         async {
                             withContext(Dispatchers.IO) {
                                 val path = it.getPath(includedJar)
-                                val hash = hashFile(path)
+                                val hash = hashFileSuspend(path)
 
                                 if (hash !in inputHashes) {
                                     println("Extracting $path from $input")
@@ -75,11 +75,12 @@ abstract class ExtractIncludes : TransformAction<TransformParameters.None> {
 
                 handler
             }
+        }
 
         if (handler == null) {
             outputs.file(inputFile)
 
-            return@runBlocking
+            return
         }
 
         val output = outputs.file(input.fileName.toString()).toPath()

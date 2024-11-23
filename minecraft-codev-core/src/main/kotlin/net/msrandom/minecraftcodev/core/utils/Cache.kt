@@ -8,7 +8,7 @@ import java.io.File
 import java.nio.file.Path
 
 fun getCacheDirectoryProvider(project: Project): Provider<Directory> =
-    project.layout.dir(project.provider { project.gradle.gradleUserHomeDir.resolve("caches/minecraft-codev") })
+    project.layout.dir(project.provider { getCacheDirectory(project) })
 
 fun getCacheDirectory(project: Project): File =
     project.gradle.gradleUserHomeDir.resolve("caches/minecraft-codev")

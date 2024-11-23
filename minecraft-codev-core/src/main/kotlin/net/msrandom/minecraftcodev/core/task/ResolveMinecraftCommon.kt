@@ -1,6 +1,5 @@
 package net.msrandom.minecraftcodev.core.task
 
-import kotlinx.coroutines.runBlocking
 import net.msrandom.minecraftcodev.core.resolve.setupCommon
 import net.msrandom.minecraftcodev.core.utils.getAsPath
 import org.gradle.api.file.RegularFileProperty
@@ -30,12 +29,10 @@ abstract class ResolveMinecraftCommon : CachedMinecraftTask() {
 
     @TaskAction
     private fun extract() {
-        runBlocking {
-            val versionList = cacheParameters.versionList()
+        val versionList = cacheParameters.versionList()
 
-            val version = versionList.version(version.get())
+        val version = versionList.version(version.get())
 
-            setupCommon(cacheParameters.directory.getAsPath(), version, cacheParameters.isOffline.get(), output.getAsPath())
-        }
+        setupCommon(cacheParameters.directory.getAsPath(), version, cacheParameters.isOffline.get(), output.getAsPath())
     }
 }
