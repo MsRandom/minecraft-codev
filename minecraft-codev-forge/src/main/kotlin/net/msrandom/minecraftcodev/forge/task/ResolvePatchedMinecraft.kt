@@ -81,7 +81,7 @@ abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
         output.convention(
             project.layout.file(
                 version.map {
-                    temporaryDir.resolve("forge-$it.jar")
+                    temporaryDir.resolve("minecraft-$it-patched.jar")
                 },
             ),
         )
@@ -89,7 +89,7 @@ abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
         clientExtra.convention(
             project.layout.file(
                 version.map {
-                    temporaryDir.resolve("forge-$it-client-extra.zip")
+                    temporaryDir.resolve("minecraft-$it-patched-client-extra.zip")
                 },
             ),
         )

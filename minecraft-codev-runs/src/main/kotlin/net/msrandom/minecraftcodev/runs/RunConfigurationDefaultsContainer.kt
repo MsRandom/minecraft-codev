@@ -34,16 +34,12 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
 
             val extractNativesTask =
                 sourceSet.flatMap {
-                    project.tasks
-                        .withType(ExtractNatives::class.java)
-                        .named(it.extractNativesTaskName)
+                    project.tasks.named(it.extractNativesTaskName, ExtractNatives::class.java)
                 }
 
             val downloadAssetsTask =
                 sourceSet.flatMap {
-                    project.tasks
-                        .withType(DownloadAssets::class.java)
-                        .named(it.downloadAssetsTaskName)
+                    project.tasks.named(it.downloadAssetsTaskName, DownloadAssets::class.java)
                 }
 
             beforeRun.add(extractNativesTask)

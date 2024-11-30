@@ -35,11 +35,11 @@ abstract class MinecraftRunConfiguration @Inject constructor(val project: Projec
         @Input
         get
 
-    abstract val arguments: SetProperty<String>
+    abstract val arguments: ListProperty<String>
         @Input
         get
 
-    abstract val jvmArguments: SetProperty<String>
+    abstract val jvmArguments: ListProperty<String>
         @Input
         get
 

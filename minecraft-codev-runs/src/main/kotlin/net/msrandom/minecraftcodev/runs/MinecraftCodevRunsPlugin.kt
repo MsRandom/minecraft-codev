@@ -81,10 +81,6 @@ class MinecraftCodevRunsPlugin<T : PluginAware> : Plugin<T> {
                     )
 
                     javaExec.dependsOn(configuration.sourceSet.map(SourceSet::getClassesTaskName))
-
-                    javaExec.dependsOn(configuration.environment)
-                    javaExec.dependsOn(configuration.arguments)
-                    javaExec.dependsOn(configuration.jvmArguments)
                 }
             }
         }

@@ -100,7 +100,7 @@ open class ForgeRunsDefaultsContainer(
         when (template) {
             "asset_index" -> manifest.assets
             "assets_root" -> {
-                val task = project.tasks.withType(DownloadAssets::class.java).named(downloadAssetsName)
+                val task = project.tasks.named(downloadAssetsName, DownloadAssets::class.java)
 
                 beforeRun.add(task)
 
@@ -230,7 +230,7 @@ open class ForgeRunsDefaultsContainer(
             }
 
             "natives" -> {
-                val task = project.tasks.withType(ExtractNatives::class.java).named(extractNativesName)
+                val task = project.tasks.named(extractNativesName, ExtractNatives::class.java)
 
                 beforeRun.add(task)
 
@@ -248,7 +248,6 @@ open class ForgeRunsDefaultsContainer(
         minecraftVersion: Provider<String>,
         data: ForgeRunConfigurationData,
         runType: (UserdevConfig.Runs) -> UserdevConfig.Run?,
-        addLwjglNatives: Boolean = false,
     ) {
         val configProvider = getUserdevData(data.patches)
 
@@ -359,12 +358,6 @@ open class ForgeRunsDefaultsContainer(
                 compileArguments(jvmArguments)
             },
         )
-
-        if (addLwjglNatives) {
-            val natives = project.tasks.withType(ExtractNatives::class.java).named(extractNativesTaskName)
-
-            jvmArguments.add(compileArgument("-Dorg.lwjgl.librarypath=", natives.flatMap(ExtractNatives::destinationDirectory)))
-        }
     }
 
     fun client(
@@ -378,7 +371,7 @@ open class ForgeRunsDefaultsContainer(
 
             action?.execute(data)
 
-            addData(::client.name, minecraftVersion, data, UserdevConfig.Runs::client, true)
+            addData(::client.name, minecraftVersion, data, UserdevConfig.Runs::client)
         }
 
     fun server(
