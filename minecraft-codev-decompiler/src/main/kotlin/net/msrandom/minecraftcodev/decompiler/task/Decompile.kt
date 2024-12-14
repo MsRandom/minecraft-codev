@@ -34,7 +34,7 @@ abstract class Decompile : DefaultTask() {
     }
 
     @TaskAction
-    private fun decompile() {
+    fun decompile() {
         val input = inputFile.getAsPath()
         val output = outputFile.getAsPath()
 

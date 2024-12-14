@@ -28,7 +28,7 @@ abstract class ResolveMinecraftClient : CachedMinecraftTask() {
     }
 
     @TaskAction
-    private fun extract() {
+    fun extract() {
         val versionList = cacheParameters.versionList()
 
         val version = versionList.version(version.get())

@@ -36,7 +36,7 @@ abstract class MergeAccessWideners : DefaultTask() {
     }
 
     @TaskAction
-    private fun generate() {
+    fun generate() {
         output.get().asFile.bufferedWriter().use {
             val writer = AccessWidenerWriter()
             val reader = AccessWidenerReader(writer)

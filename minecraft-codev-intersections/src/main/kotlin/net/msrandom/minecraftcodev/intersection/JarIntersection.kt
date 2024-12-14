@@ -234,7 +234,7 @@ abstract class JarIntersection : DefaultTask() {
     }
 
     @TaskAction
-    private fun intersection() {
+    fun intersection() {
         val output = output.getAsPath()
 
         output.deleteIfExists()

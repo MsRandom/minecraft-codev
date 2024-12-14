@@ -54,7 +54,7 @@ abstract class Mixin : DefaultTask() {
     }
 
     @TaskAction
-    private fun mixin() {
+    fun mixin() {
         val input = inputFile.getAsPath()
         val output = outputFile.getAsPath()
 

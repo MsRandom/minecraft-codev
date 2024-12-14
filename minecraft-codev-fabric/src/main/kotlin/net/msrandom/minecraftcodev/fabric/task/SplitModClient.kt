@@ -25,7 +25,7 @@ abstract class SplitModClient : DefaultTask() {
     }
 
     @TaskAction
-    private fun split() {
+    fun split() {
 
     }
 }

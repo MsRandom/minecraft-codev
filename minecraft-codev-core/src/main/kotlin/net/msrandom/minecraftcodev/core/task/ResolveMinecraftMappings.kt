@@ -33,7 +33,7 @@ abstract class ResolveMinecraftMappings : CachedMinecraftTask() {
     }
 
     @TaskAction
-    private fun download() {
+    fun download() {
         val versionList = cacheParameters.versionList()
 
         val version = versionList.version(version.get())

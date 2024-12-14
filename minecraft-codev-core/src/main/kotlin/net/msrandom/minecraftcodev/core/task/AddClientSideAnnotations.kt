@@ -202,7 +202,7 @@ abstract class AddClientSideAnnotations<T> : DefaultTask() where T : AnnotationV
     }
 
     @TaskAction
-    private fun addAnnotations() {
+    fun addAnnotations() {
         val cachedClientOnlyMembers = hashMapOf<String, CachedClientOnlyMembers>()
         val handled = hashSetOf<File>()
 

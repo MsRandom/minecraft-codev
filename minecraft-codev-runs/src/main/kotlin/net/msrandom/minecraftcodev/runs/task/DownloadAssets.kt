@@ -34,7 +34,7 @@ abstract class DownloadAssets : CachedMinecraftTask() {
     }
 
     @TaskAction
-    private fun download() {
+    fun download() {
         val resourcesDirectory = resourcesDirectory.get()
         val indexesDirectory = assetsDirectory.dir("indexes").get()
         val objectsDirectory = assetsDirectory.dir("objects").get()

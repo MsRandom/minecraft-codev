@@ -96,7 +96,7 @@ abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
     }
 
     @TaskAction
-    private fun resolve() {
+    fun resolve() {
         val cacheDirectory = cacheParameters.directory.getAsPath()
         val isOffline = cacheParameters.isOffline.get()
 
