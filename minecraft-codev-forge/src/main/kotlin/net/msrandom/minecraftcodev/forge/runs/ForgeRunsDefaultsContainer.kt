@@ -219,10 +219,11 @@ open class ForgeRunsDefaultsContainer(
 
                 path.parent.createDirectories()
 
+                // TODO Works for neoforge, for forge it should be ${sourceSet.get().runtimeClasspath - sourceSet.get().output}
                 val runtimeClasspath = project.configurations.getByName(sourceSet.get().runtimeClasspathConfigurationName)
 
-                // TODO Hack
-                val files = runtimeClasspath.map(File::getAbsolutePath).filterNot { "-patched" in it && it.endsWith(".jar") }
+                // TODO This is making an assumption that the forge Jar is not here
+                val files = runtimeClasspath.map(File::getAbsolutePath)
 
                 path.writeLines(files)
 

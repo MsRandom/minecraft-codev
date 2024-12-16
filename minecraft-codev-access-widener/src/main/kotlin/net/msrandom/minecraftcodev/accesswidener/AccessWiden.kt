@@ -1,12 +1,12 @@
 package net.msrandom.minecraftcodev.accesswidener
 
 import net.msrandom.minecraftcodev.core.resolve.isCodevGeneratedMinecraftJar
-import net.msrandom.minecraftcodev.core.utils.toPath
-import net.msrandom.minecraftcodev.core.utils.walk
-import net.msrandom.minecraftcodev.core.utils.zipFileSystem
+import net.msrandom.minecraftcodev.core.utils.*
+import org.gradle.api.DefaultTask
 import org.gradle.api.artifacts.transform.*
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.FileSystemLocation
+import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.*
@@ -17,42 +17,46 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import kotlin.io.path.*
 
-@CacheableTransform
-abstract class AccessWiden : TransformAction<AccessWiden.Parameters> {
-    abstract class Parameters : TransformParameters {
-        abstract val accessWideners: ConfigurableFileCollection
-            @InputFiles
-            @PathSensitive(PathSensitivity.RELATIVE)
-            get
-
-        abstract val namespace: Property<String>
-            @Input
-            @Optional
-            get
-    }
-
-    abstract val inputFile: Provider<FileSystemLocation>
-        @InputArtifact
-        @PathSensitive(PathSensitivity.NONE)
+@CacheableTask
+abstract class AccessWiden : DefaultTask() {
+    abstract val inputFile: RegularFileProperty
+        @InputFile
+        @Classpath
         get
 
-    override fun transform(outputs: TransformOutputs) {
+    abstract val accessWideners: ConfigurableFileCollection
+        @InputFiles
+        @PathSensitive(PathSensitivity.RELATIVE)
+        get
+
+    abstract val namespace: Property<String>
+        @Input
+        @Optional
+        get
+
+    abstract val outputFile: RegularFileProperty
+        @OutputFile get
+
+    init {
+        outputFile.convention(
+            project.layout.file(
+                inputFile.map {
+                    temporaryDir.resolve("${it.asFile.nameWithoutExtension}-access-widened.${it.asFile.extension}")
+                },
+            ),
+        )
+    }
+
+    @TaskAction
+    fun accessWiden() {
+        outputFile.getAsPath().deleteIfExists()
+
         val input = inputFile.get().toPath()
 
-        if (parameters.accessWideners.isEmpty || !isCodevGeneratedMinecraftJar(input)) {
-            outputs.file(inputFile)
-
-            return
-        }
-
-        println("Access widening $input")
-
-        val accessModifiers = loadAccessWideners(parameters.accessWideners, parameters.namespace.takeIf(Property<*>::isPresent)?.get())
-
-        val output = outputs.file("${input.nameWithoutExtension}-access-widened.${input.extension}").toPath()
+        val accessModifiers = loadAccessWideners(accessWideners, namespace.takeIf(Property<*>::isPresent)?.get())
 
         zipFileSystem(input).use { inputZip ->
-            zipFileSystem(output, true).use { outputZip ->
+            zipFileSystem(outputFile.getAsPath(), true).use { outputZip ->
                 inputZip.getPath("/").walk {
                     for (path in filter(Path::isRegularFile)) {
                         val name = path.toString()

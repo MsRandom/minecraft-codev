@@ -12,8 +12,41 @@ import org.gradle.api.attributes.Attribute
 import org.gradle.api.attributes.Category
 import org.gradle.api.model.ObjectFactory
 import java.io.File
+import java.io.Serializable
 import java.util.zip.ZipInputStream
 import javax.inject.Inject
+
+class UserdevPath(internal val group: String, internal val name: String, internal val version: String, internal val classifier: String) : Serializable
+
+fun getUserdev(
+    userdev: UserdevPath,
+    repositoryResourceAccessor: RepositoryResourceAccessor,
+): UserdevConfig? {
+    val path = "${userdev.group.replace('.', '/')}/${userdev.name}/${userdev.version}/${userdev.name}-${userdev.version}-${userdev.classifier}.jar"
+
+    var userdev: UserdevConfig? = null
+
+    repositoryResourceAccessor.withResource(path) {
+        val zipStream = ZipInputStream(it)
+
+        while (true) {
+            val entry = zipStream.nextEntry ?: break
+
+            try {
+                if (entry.name == "config.json") {
+                    userdev = json.decodeFromStream<UserdevConfig>(zipStream)
+                    break
+                }
+            } finally {
+                zipStream.closeEntry()
+            }
+        }
+    }
+
+    return userdev
+}
+
+fun getClassifier(library: String) = library.split(':').getOrNull(3)?.split('@')?.get(0)
 
 @CacheableRule
 abstract class MinecraftForgeComponentMetadataRule<T : Any> @Inject constructor(
@@ -21,10 +54,7 @@ abstract class MinecraftForgeComponentMetadataRule<T : Any> @Inject constructor(
     private val version: String,
     private val versionManifestUrl: String,
     private val isOffline: Boolean,
-    private val userdevGroup: String,
-    private val userdevName: String,
-    private val userdevVersion: String,
-    private val userdevClassifier: String,
+    private val userdev: UserdevPath,
     private val variantName: String,
     private val attribute: Attribute<T>,
     private val attributeValue: T,
@@ -37,29 +67,8 @@ abstract class MinecraftForgeComponentMetadataRule<T : Any> @Inject constructor(
 
     override fun execute(context: ComponentMetadataContext) {
         context.details.addVariant(variantName) { variant ->
-            val userdevJar by lazy {
-                val path = "${userdevGroup.replace('.', '/')}/$userdevName/$userdevVersion/$userdevName-$userdevVersion-$userdevClassifier.jar"
-
-                lateinit var userdev: UserdevConfig
-
-                repositoryResourceAccessor.withResource(path) {
-                    val zipStream = ZipInputStream(it)
-
-                    while (true) {
-                        val entry = zipStream.nextEntry ?: break
-
-                        try {
-                            if (entry.name == "config.json") {
-                                userdev = json.decodeFromStream<UserdevConfig>(zipStream)
-                                break
-                            }
-                        } finally {
-                            zipStream.closeEntry()
-                        }
-                    }
-                }
-
-                userdev
+            val userdevJar by lazy(LazyThreadSafetyMode.NONE) {
+                getUserdev(userdev, repositoryResourceAccessor)!!
             }
 
             variant.attributes {
@@ -76,7 +85,18 @@ abstract class MinecraftForgeComponentMetadataRule<T : Any> @Inject constructor(
                 }
 
                 getAllDependencies(versionMetadata).forEach(it::add)
-                libraries.forEach(it::add)
+
+                for (library in libraries) {
+                    it.add(library) {
+                        val classifier = getClassifier(library)
+
+                        if (classifier != null) {
+                            it.attributes{ attributes ->
+                                attributes.attribute(CLASSIFIER_ATTRIBUTE, classifier)
+                            }
+                        }
+                    }
+                }
             }
 
             variant.withDependencyConstraints {

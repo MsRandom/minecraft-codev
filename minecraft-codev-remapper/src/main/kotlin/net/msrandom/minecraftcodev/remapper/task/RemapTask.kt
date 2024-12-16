@@ -24,7 +24,9 @@ abstract class RemapTask : DefaultTask() {
         @Input get
 
     abstract val targetNamespace: Property<String>
-        @Input get
+        @Optional
+        @Input
+        get
 
     abstract val mappings: ConfigurableFileCollection
         @InputFiles
@@ -60,13 +62,13 @@ abstract class RemapTask : DefaultTask() {
                 ),
             )
 
-            sourceNamespace.convention(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
+            targetNamespace.convention(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
         }
     }
 
     @TaskAction
     fun remap() {
-        val mappings = loadMappings(mappings, execOperations, extraFiles.get())
+        val mappings = loadMappings(mappings, execOperations, extraFiles.getOrElse(emptyMap()))
 
         JarRemapper.remap(
             mappings,

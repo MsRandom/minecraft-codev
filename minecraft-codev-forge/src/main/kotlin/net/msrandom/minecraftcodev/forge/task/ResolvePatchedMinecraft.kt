@@ -7,6 +7,7 @@ import net.msrandom.minecraftcodev.core.utils.getAsPath
 import net.msrandom.minecraftcodev.core.utils.toPath
 import net.msrandom.minecraftcodev.core.utils.walk
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
+import net.msrandom.minecraftcodev.forge.CLASSIFIER_ATTRIBUTE
 import net.msrandom.minecraftcodev.forge.McpConfigFile
 import net.msrandom.minecraftcodev.forge.Userdev
 import org.gradle.api.Project
@@ -36,7 +37,13 @@ internal fun resolveFile(
 ): File =
     configurationContainer
         .detachedConfiguration(dependencyHandler.create(name))
-        .apply { isTransitive = false }
+        .apply {
+            isTransitive = false
+
+            attributes { attributes ->
+                attributes.attribute(CLASSIFIER_ATTRIBUTE, "")
+            }
+        }
         .singleFile
 
 internal fun resolveFile(

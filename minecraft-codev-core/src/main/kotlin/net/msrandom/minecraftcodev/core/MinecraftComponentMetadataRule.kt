@@ -1,6 +1,7 @@
 package net.msrandom.minecraftcodev.core
 
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionList
+import net.msrandom.minecraftcodev.core.resolve.getAllDependencies
 import net.msrandom.minecraftcodev.core.resolve.getClientDependencies
 import net.msrandom.minecraftcodev.core.resolve.setupCommon
 import org.gradle.api.artifacts.CacheableRule
@@ -29,41 +30,33 @@ abstract class MinecraftComponentMetadataRule<T : Any> @Inject constructor(
     private val versionManifestUrl: String,
     private val isOffline: Boolean,
     private val client: Boolean,
-    private val variantName: String,
-    private val attribute: Attribute<T>,
-    private val commonAttributeValue: T,
-    private val clientAttributeValue: T,
+
+    private val attribute: Attribute<String>,
+    private val commonAttributeValue: String,
+    private val clientAttributeValue: String,
 ) : ComponentMetadataRule {
     abstract val objectFactory: ObjectFactory
         @Inject get
 
     override fun execute(context: ComponentMetadataContext) {
+        val variantName = if (client) {
+            clientAttributeValue
+        } else {
+            commonAttributeValue
+        }
+
         context.details.addVariant(variantName) {
             it.attributes { attributes ->
                 attributes
                     .attribute(Category.CATEGORY_ATTRIBUTE, objectFactory.named(Category::class.java, Category.REGULAR_PLATFORM))
-                    .attribute(attribute, clientAttributeValue)
-            }
-
-            it.withCapabilities { capabilities ->
-                capabilities.addCapability("net.minecraft.dependencies", if (client) "client" else "server", "1.0.0")
+                    .attribute(attribute, variantName)
             }
 
             it.withDependencies { dependencies ->
                 val versionMetadata = getVersionList(cacheDirectory.toPath(), versionManifestUrl, isOffline).version(version)
 
                 if (client) {
-                    val id = context.details.id
-
-                    getClientDependencies(cacheDirectory.toPath(), versionMetadata, isOffline).forEach(dependencies::add)
-
-                    dependencies.add("${id.group}:${id.name}:${id.version}") { commonDependency ->
-                        commonDependency.attributes { attributes ->
-                            attributes
-                                .attribute(Category.CATEGORY_ATTRIBUTE, objectFactory.named(Category::class.java, Category.REGULAR_PLATFORM))
-                                .attribute(attribute, commonAttributeValue)
-                        }
-                    }
+                    getAllDependencies(versionMetadata).forEach(dependencies::add)
                 } else {
                     setupCommon(cacheDirectory.toPath(), versionMetadata, isOffline).forEach(dependencies::add)
                 }
