@@ -1,12 +1,16 @@
 package net.msrandom.minecraftcodev.remapper.task
 
+import net.msrandom.minecraftcodev.core.utils.cacheExpensiveOperation
 import net.msrandom.minecraftcodev.core.utils.getAsPath
+import net.msrandom.minecraftcodev.core.utils.getGlobalCacheDirectoryProvider
 import net.msrandom.minecraftcodev.remapper.JarRemapper
 import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
 import net.msrandom.minecraftcodev.remapper.loadMappings
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.MapProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.*
@@ -44,6 +48,12 @@ abstract class RemapTask : DefaultTask() {
         @Input
         get
 
+    abstract val cacheDirectory: DirectoryProperty
+        @Internal get
+
+    abstract val objectFactory: ObjectFactory
+        @Inject get
+
     abstract val execOperations: ExecOperations
         @Inject get
 
@@ -63,20 +73,33 @@ abstract class RemapTask : DefaultTask() {
             )
 
             targetNamespace.convention(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
+
+            cacheDirectory.set(getGlobalCacheDirectoryProvider(project))
         }
     }
 
     @TaskAction
     fun remap() {
-        val mappings = loadMappings(mappings, execOperations, extraFiles.getOrElse(emptyMap()))
+        val extraFiles = extraFiles.getOrElse(emptyMap())
 
-        JarRemapper.remap(
-            mappings,
-            sourceNamespace.get(),
-            targetNamespace.get(),
-            inputFile.getAsPath(),
-            outputFile.getAsPath(),
-            classpath,
-        )
+        val cacheKey = objectFactory.fileCollection()
+
+        cacheKey.from(classpath)
+        cacheKey.from(extraFiles.values)
+        cacheKey.from(mappings)
+        cacheKey.from(inputFile.get().asFile)
+
+        cacheExpensiveOperation(cacheDirectory.getAsPath(), "remap", cacheKey, outputFile.getAsPath()) {
+            val mappings = loadMappings(mappings, execOperations, extraFiles)
+
+            JarRemapper.remap(
+                mappings,
+                sourceNamespace.get(),
+                targetNamespace.get(),
+                inputFile.getAsPath(),
+                it,
+                classpath,
+            )
+        }
     }
 }

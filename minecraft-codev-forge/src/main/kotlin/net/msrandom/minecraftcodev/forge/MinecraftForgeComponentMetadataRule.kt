@@ -7,9 +7,8 @@ import net.msrandom.minecraftcodev.core.resolve.getAllDependencies
 import org.gradle.api.artifacts.CacheableRule
 import org.gradle.api.artifacts.ComponentMetadataContext
 import org.gradle.api.artifacts.ComponentMetadataRule
+import org.gradle.api.artifacts.Dependency
 import org.gradle.api.artifacts.repositories.RepositoryResourceAccessor
-import org.gradle.api.attributes.Attribute
-import org.gradle.api.attributes.Category
 import org.gradle.api.model.ObjectFactory
 import java.io.File
 import java.io.Serializable
@@ -55,26 +54,23 @@ abstract class MinecraftForgeComponentMetadataRule<T : Any> @Inject constructor(
     private val versionManifestUrl: String,
     private val isOffline: Boolean,
     private val userdev: UserdevPath,
-    private val variantName: String,
-    private val attribute: Attribute<T>,
-    private val attributeValue: T,
+    private val capability: String,
 ) : ComponentMetadataRule {
-    abstract val objectFactory: ObjectFactory
-        @Inject get
-
     abstract val repositoryResourceAccessor: RepositoryResourceAccessor
         @Inject get
 
     override fun execute(context: ComponentMetadataContext) {
-        context.details.addVariant(variantName) { variant ->
-            val userdevJar by lazy(LazyThreadSafetyMode.NONE) {
-                getUserdev(userdev, repositoryResourceAccessor)!!
+        context.details.addVariant(capability, Dependency.DEFAULT_CONFIGURATION) { variant ->
+            variant.withCapabilities {
+                for (capability in it.capabilities) {
+                    it.removeCapability(capability.group, capability.name)
+                }
+
+                it.addCapability("net.msrandom", capability, "0.0.0")
             }
 
-            variant.attributes {
-                it
-                    .attribute(Category.CATEGORY_ATTRIBUTE, objectFactory.named(Category::class.java, Category.REGULAR_PLATFORM))
-                    .attribute(attribute, attributeValue)
+            val userdevJar by lazy(LazyThreadSafetyMode.NONE) {
+                getUserdev(userdev, repositoryResourceAccessor)!!
             }
 
             variant.withDependencies {

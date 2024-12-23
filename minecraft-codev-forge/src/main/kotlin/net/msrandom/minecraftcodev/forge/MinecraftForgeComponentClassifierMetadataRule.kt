@@ -6,8 +6,6 @@ import org.gradle.api.artifacts.ComponentMetadataDetails
 import org.gradle.api.artifacts.ComponentMetadataRule
 import org.gradle.api.artifacts.repositories.RepositoryResourceAccessor
 import org.gradle.api.attributes.Attribute
-import org.gradle.api.attributes.Category
-import org.gradle.api.model.ObjectFactory
 import javax.inject.Inject
 
 @JvmField
@@ -29,7 +27,15 @@ abstract class MinecraftForgeComponentClassifierMetadataRule @Inject constructor
             it.attributes.attribute(CLASSIFIER_ATTRIBUTE, "")
         }
 
-        addVariant("${classifier}-compile", "compile") {
+        withVariant("apiElements") {
+            it.attributes.attribute(CLASSIFIER_ATTRIBUTE, "")
+        }
+
+        withVariant("runtimeElements") {
+            it.attributes.attribute(CLASSIFIER_ATTRIBUTE, "")
+        }
+
+        maybeAddVariant("${classifier}-compile", "compile") {
             it.attributes.attribute(CLASSIFIER_ATTRIBUTE, classifier)
 
             it.withFiles {
@@ -39,7 +45,27 @@ abstract class MinecraftForgeComponentClassifierMetadataRule @Inject constructor
             }
         }
 
-        addVariant("${classifier}-runtime", "runtime") {
+        maybeAddVariant("${classifier}-runtime", "runtime") {
+            it.attributes.attribute(CLASSIFIER_ATTRIBUTE, classifier)
+
+            it.withFiles {
+                it.removeAllFiles()
+
+                it.addFile("${id.name}-${id.version}-$classifier.jar")
+            }
+        }
+
+        maybeAddVariant("${classifier}ApiElements", "apiElements") {
+            it.attributes.attribute(CLASSIFIER_ATTRIBUTE, classifier)
+
+            it.withFiles {
+                it.removeAllFiles()
+
+                it.addFile("${id.name}-${id.version}-$classifier.jar")
+            }
+        }
+
+        maybeAddVariant("${classifier}RuntimeElements", "runtimeElements") {
             it.attributes.attribute(CLASSIFIER_ATTRIBUTE, classifier)
 
             it.withFiles {

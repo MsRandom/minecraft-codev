@@ -1,7 +1,10 @@
 package net.msrandom.minecraftcodev.remapper
 
+import net.msrandom.minecraftcodev.core.utils.cacheExpensiveOperation
+import net.msrandom.minecraftcodev.core.utils.getAsPath
 import org.gradle.api.artifacts.transform.*
 import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.FileCollection
 import org.gradle.api.file.FileSystemLocation
 import org.gradle.api.model.ObjectFactory
@@ -40,6 +43,9 @@ abstract class RemapAction : TransformAction<RemapAction.Parameters> {
             @Input
             get
 
+        abstract val cacheDirectory: DirectoryProperty
+            @Internal get
+
         init {
             apply {
                 targetNamespace.convention(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
@@ -77,19 +83,30 @@ abstract class RemapAction : TransformAction<RemapAction.Parameters> {
         val sourceNamespace = parameters.sourceNamespace.get()
         val targetNamespace = parameters.targetNamespace.get()
 
-        println("Remapping mod $input from $sourceNamespace to $targetNamespace")
-
         val output = outputs.file("${input.nameWithoutExtension}-$targetNamespace.${input.extension}")
 
-        val mappings = loadMappings(parameters.mappings, execOperations, parameters.extraFiles.getOrElse(emptyMap()))
+        val extraFiles = parameters.extraFiles.getOrElse(emptyMap())
 
-        JarRemapper.remap(
-            mappings,
-            sourceNamespace,
-            targetNamespace,
-            input.toPath(),
-            output.toPath(),
-            classpath + parameters.extraClasspath - objectFactory.fileTree().apply { from(inputFile) },
-        )
+        val cacheKey = objectFactory.fileCollection()
+
+        cacheKey.from(classpath)
+        cacheKey.from(extraFiles.values)
+        cacheKey.from(parameters.mappings)
+        cacheKey.from(inputFile.get().asFile)
+
+        cacheExpensiveOperation(parameters.cacheDirectory.getAsPath(), "remap", cacheKey, output.toPath()) {
+            println("Remapping mod $input from $sourceNamespace to $targetNamespace")
+
+            val mappings = loadMappings(parameters.mappings, execOperations, extraFiles)
+
+            JarRemapper.remap(
+                mappings,
+                sourceNamespace,
+                targetNamespace,
+                input.toPath(),
+                it,
+                classpath + parameters.extraClasspath,
+            )
+        }
     }
 }

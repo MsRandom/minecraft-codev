@@ -3,6 +3,7 @@ package net.msrandom.minecraftcodev.forge.task
 import net.minecraftforge.accesstransformer.TransformerProcessor
 import net.msrandom.minecraftcodev.core.resolve.*
 import net.msrandom.minecraftcodev.core.task.CachedMinecraftTask
+import net.msrandom.minecraftcodev.core.utils.cacheExpensiveOperation
 import net.msrandom.minecraftcodev.core.utils.getAsPath
 import net.msrandom.minecraftcodev.core.utils.toPath
 import net.msrandom.minecraftcodev.core.utils.walk
@@ -14,7 +15,6 @@ import org.gradle.api.Project
 import org.gradle.api.artifacts.ConfigurationContainer
 import org.gradle.api.artifacts.dsl.DependencyHandler
 import org.gradle.api.file.ConfigurableFileCollection
-import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.*
@@ -102,9 +102,7 @@ abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
         )
     }
 
-    @TaskAction
-    fun resolve() {
-        val cacheDirectory = cacheParameters.directory.getAsPath()
+    private fun resolve(cacheDirectory: Path, outputPath: Path) {
         val isOffline = cacheParameters.isOffline.get()
 
         val metadata = cacheParameters.versionList().version(version.get())
@@ -150,7 +148,6 @@ abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
 
         librariesFile.writeLines(libraries.flatMap { listOf("-e", it.absolutePath) })
 
-        val outputFile = output.get()
         val clientExtra = clientExtra.get()
 
         val patchLog = temporaryDir.resolve("patch.log").outputStream()
@@ -278,7 +275,7 @@ abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
                     "--inJar",
                     patched.toAbsolutePath().toString(),
                     "--outJar",
-                    outputFile.toString(),
+                    outputPath.toString(),
                     *atFiles
                         .flatMap { at ->
                             listOf("--atFile", at.toAbsolutePath().toString())
@@ -301,6 +298,15 @@ abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
             }
         }
 
-        addMinecraftMarker(outputFile.toPath())
+        addMinecraftMarker(outputPath)
+    }
+
+    @TaskAction
+    fun resolve() {
+        val cacheDirectory = cacheParameters.directory.getAsPath()
+
+        cacheExpensiveOperation(cacheDirectory, "patch", patches, output.getAsPath()) {
+            resolve(cacheDirectory, it)
+        }
     }
 }

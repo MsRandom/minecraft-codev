@@ -1,9 +1,12 @@
 package net.msrandom.minecraftcodev.intersection
 
+import net.msrandom.minecraftcodev.core.utils.cacheExpensiveOperation
 import net.msrandom.minecraftcodev.core.utils.getAsPath
+import net.msrandom.minecraftcodev.core.utils.getLocalCacheDirectoryProvider
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.tasks.*
 import org.objectweb.asm.ClassReader
@@ -223,6 +226,9 @@ abstract class JarIntersection : DefaultTask() {
     abstract val output: RegularFileProperty
         @OutputFile get
 
+    abstract val cacheDirectory: DirectoryProperty
+        @Internal get
+
     init {
         output.convention(
             project.layout.file(
@@ -231,14 +237,11 @@ abstract class JarIntersection : DefaultTask() {
                 },
             ),
         )
+
+        cacheDirectory.set(getLocalCacheDirectoryProvider(project))
     }
 
-    @TaskAction
-    fun intersection() {
-        val output = output.getAsPath()
-
-        output.deleteIfExists()
-
+    private fun intersection(output: Path) {
         val intersection = files.asSequence().map(File::toPath).reduce { acc, path ->
             val intermediateOutput = Files.createTempFile("intermediate-intersection", ".jar")
 
@@ -270,5 +273,14 @@ abstract class JarIntersection : DefaultTask() {
         }
 
         intersection.moveTo(output)
+    }
+
+    @TaskAction
+    fun intersection() {
+        val output = output.getAsPath()
+
+        cacheExpensiveOperation(cacheDirectory.getAsPath(), "intersection", files, output) {
+            intersection(it)
+        }
     }
 }

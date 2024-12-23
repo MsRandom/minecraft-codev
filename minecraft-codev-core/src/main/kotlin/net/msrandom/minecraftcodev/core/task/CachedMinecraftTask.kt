@@ -3,7 +3,7 @@ package net.msrandom.minecraftcodev.core.task
 import net.msrandom.minecraftcodev.core.VERSION_MANIFEST_URL
 import net.msrandom.minecraftcodev.core.getVersionList
 import net.msrandom.minecraftcodev.core.utils.getAsPath
-import net.msrandom.minecraftcodev.core.utils.getCacheDirectoryProvider
+import net.msrandom.minecraftcodev.core.utils.getGlobalCacheDirectoryProvider
 import org.gradle.api.DefaultTask
 import org.gradle.api.Project
 import org.gradle.api.file.DirectoryProperty
@@ -32,8 +32,8 @@ abstract class CachedMinecraftParameters {
     fun convention(project: Project) {
         versionManifestUrl.convention(VERSION_MANIFEST_URL)
 
-        directory.convention(getCacheDirectoryProvider(project))
-        isOffline.convention(project.provider { project.gradle.startParameter.isOffline })
+        directory.set(getGlobalCacheDirectoryProvider(project))
+        isOffline.set(project.provider { project.gradle.startParameter.isOffline })
     }
 
     fun versionList() = getVersionList(directory.getAsPath(), versionManifestUrl.get(), isOffline.get())

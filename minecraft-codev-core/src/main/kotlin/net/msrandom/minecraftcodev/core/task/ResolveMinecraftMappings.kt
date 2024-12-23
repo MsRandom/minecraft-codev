@@ -3,11 +3,14 @@ package net.msrandom.minecraftcodev.core.task
 import net.msrandom.minecraftcodev.core.resolve.MinecraftDownloadVariant
 import net.msrandom.minecraftcodev.core.resolve.downloadMinecraftFile
 import net.msrandom.minecraftcodev.core.utils.getAsPath
+import net.msrandom.minecraftcodev.core.utils.tryLink
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
-import org.gradle.api.tasks.*
-import java.nio.file.StandardCopyOption
-import kotlin.io.path.copyTo
+import org.gradle.api.tasks.CacheableTask
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.OutputFile
+import org.gradle.api.tasks.TaskAction
+import kotlin.io.path.deleteIfExists
 
 @CacheableTask
 abstract class ResolveMinecraftMappings : CachedMinecraftTask() {
@@ -44,6 +47,7 @@ abstract class ResolveMinecraftMappings : CachedMinecraftTask() {
         val downloadPath = downloadMinecraftFile(cacheParameters.directory.getAsPath(), version, variant, cacheParameters.isOffline.get())
             ?: throw IllegalArgumentException("${version.id} does not have variant $variant")
 
-        downloadPath.copyTo(output, StandardCopyOption.REPLACE_EXISTING)
+        output.deleteIfExists()
+        output.tryLink(downloadPath)
     }
 }

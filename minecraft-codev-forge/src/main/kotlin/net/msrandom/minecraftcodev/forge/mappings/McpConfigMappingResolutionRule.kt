@@ -10,7 +10,7 @@ import net.msrandom.minecraftcodev.core.VERSION_MANIFEST_URL
 import net.msrandom.minecraftcodev.core.getVersionList
 import net.msrandom.minecraftcodev.core.resolve.MinecraftDownloadVariant
 import net.msrandom.minecraftcodev.core.resolve.downloadMinecraftFile
-import net.msrandom.minecraftcodev.core.utils.getCacheDirectoryProvider
+import net.msrandom.minecraftcodev.core.utils.getGlobalCacheDirectoryProvider
 import net.msrandom.minecraftcodev.core.utils.lazyProvider
 import net.msrandom.minecraftcodev.core.utils.toPath
 import net.msrandom.minecraftcodev.forge.McpConfigFile
@@ -44,7 +44,7 @@ fun mcpConfigDependency(
 fun mcpConfigExtraRemappingFiles(
     project: Project,
     mcpConfigFile: String,
-    cacheDirectory: Provider<Directory> = getCacheDirectoryProvider(project),
+    cacheDirectory: Provider<Directory> = getGlobalCacheDirectoryProvider(project),
     metadataUrl: Provider<String> = project.provider { VERSION_MANIFEST_URL },
     isOffline: Provider<Boolean> = project.provider { project.gradle.startParameter.isOffline },
 ): Provider<Map<String, File>> {

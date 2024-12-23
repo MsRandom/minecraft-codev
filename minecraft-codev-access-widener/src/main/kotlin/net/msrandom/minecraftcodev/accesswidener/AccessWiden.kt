@@ -1,20 +1,25 @@
 package net.msrandom.minecraftcodev.accesswidener
 
-import net.msrandom.minecraftcodev.core.resolve.isCodevGeneratedMinecraftJar
-import net.msrandom.minecraftcodev.core.utils.*
+import net.msrandom.minecraftcodev.core.utils.cacheExpensiveOperation
+import net.msrandom.minecraftcodev.core.utils.getAsPath
+import net.msrandom.minecraftcodev.core.utils.getLocalCacheDirectoryProvider
+import net.msrandom.minecraftcodev.core.utils.toPath
+import net.msrandom.minecraftcodev.core.utils.tryLink
+import net.msrandom.minecraftcodev.core.utils.walk
+import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.gradle.api.DefaultTask
-import org.gradle.api.artifacts.transform.*
 import org.gradle.api.file.ConfigurableFileCollection
-import org.gradle.api.file.FileSystemLocation
+import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.Property
-import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.*
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassWriter
 import org.objectweb.asm.Opcodes
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import javax.inject.Inject
 import kotlin.io.path.*
 
 @CacheableTask
@@ -37,6 +42,12 @@ abstract class AccessWiden : DefaultTask() {
     abstract val outputFile: RegularFileProperty
         @OutputFile get
 
+    abstract val cacheDirectory: DirectoryProperty
+        @Internal get
+
+    abstract val objectFactory: ObjectFactory
+        @Inject get
+
     init {
         outputFile.convention(
             project.layout.file(
@@ -45,18 +56,23 @@ abstract class AccessWiden : DefaultTask() {
                 },
             ),
         )
+
+        cacheDirectory.set(getLocalCacheDirectoryProvider(project))
     }
 
-    @TaskAction
-    fun accessWiden() {
-        outputFile.getAsPath().deleteIfExists()
-
+    private fun accessWiden(outputPath: Path) {
         val input = inputFile.get().toPath()
+
+        if (accessWideners.isEmpty) {
+            outputPath.tryLink(input)
+
+            return
+        }
 
         val accessModifiers = loadAccessWideners(accessWideners, namespace.takeIf(Property<*>::isPresent)?.get())
 
         zipFileSystem(input).use { inputZip ->
-            zipFileSystem(outputFile.getAsPath(), true).use { outputZip ->
+            zipFileSystem(outputPath, true).use { outputZip ->
                 inputZip.getPath("/").walk {
                     for (path in filter(Path::isRegularFile)) {
                         val name = path.toString()
@@ -84,6 +100,18 @@ abstract class AccessWiden : DefaultTask() {
                     }
                 }
             }
+        }
+    }
+
+    @TaskAction
+    fun accessWiden() {
+        val cacheKey = objectFactory.fileCollection().apply {
+            from(accessWideners)
+            from(inputFile)
+        }
+
+        cacheExpensiveOperation(cacheDirectory.getAsPath(), "access-widened", cacheKey, outputFile.getAsPath()) {
+            accessWiden(it)
         }
     }
 }

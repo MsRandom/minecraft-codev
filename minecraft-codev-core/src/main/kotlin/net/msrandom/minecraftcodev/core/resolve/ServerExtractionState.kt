@@ -1,7 +1,5 @@
 package net.msrandom.minecraftcodev.core.resolve
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import net.msrandom.minecraftcodev.core.resolve.bundled.ServerExtractor
 import net.msrandom.minecraftcodev.core.resolve.legacy.ServerFixer
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
@@ -88,6 +86,8 @@ fun getExtractionState(
     if (isBundled) {
         Files.createFile(bundledMark)
     }
+
+    addMinecraftMarker(extractedJar)
 
     return ServerExtractionResult(extractedJar, isBundled, commonLibraries)
 }

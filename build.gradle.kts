@@ -13,7 +13,7 @@ subprojects {
     apply(plugin = "java")
 
     java {
-        toolchain.languageVersion.set(JavaLanguageVersion.of(11))
+        toolchain.languageVersion.set(JavaLanguageVersion.of(8))
         withSourcesJar()
         withJavadocJar()
     }
@@ -51,23 +51,6 @@ childProjects.values.forEach { project ->
                         password = mavenPassword
                     }
                 }
-            }
-        }
-
-        tasks.compileKotlin {
-            kotlinOptions {
-                jvmTarget = "11"
-
-                freeCompilerArgs =
-                    listOf(
-                        "-opt-in=kotlin.ExperimentalStdlibApi",
-                        "-opt-in=kotlinx.serialization.ExperimentalSerializationApi",
-                        "-Xunrestricted-builder-inference",
-                        "-Xjvm-default=all",
-                    )
-
-                apiVersion = "1.6"
-                languageVersion = "1.6"
             }
         }
 

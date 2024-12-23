@@ -3,14 +3,9 @@ package net.msrandom.minecraftcodev.core.resolve
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata.Rule.OperatingSystem
 import net.msrandom.minecraftcodev.core.resolve.bundled.BundledClientJarSplitter
 import net.msrandom.minecraftcodev.core.resolve.legacy.LegacyJarSplitter
-import net.msrandom.minecraftcodev.core.utils.clientJarPath
-import net.msrandom.minecraftcodev.core.utils.commonJarPath
-import net.msrandom.minecraftcodev.core.utils.osName
-import net.msrandom.minecraftcodev.core.utils.osVersion
+import net.msrandom.minecraftcodev.core.utils.*
 import org.apache.commons.lang3.SystemUtils
 import java.nio.file.Path
-import java.nio.file.StandardCopyOption
-import kotlin.io.path.copyTo
 import kotlin.io.path.deleteIfExists
 import kotlin.io.path.exists
 import kotlin.io.path.notExists
@@ -26,10 +21,7 @@ internal fun setupCommon(
     val (extractedServer, isBundled, libraries) = getExtractionState(cacheDirectory, metadata, isOffline)!!
 
     return if (isBundled) {
-        if (output != null) {
-            extractedServer.copyTo(output, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES)
-            addMinecraftMarker(output)
-        }
+        output?.tryLink(extractedServer)
 
         libraries
     } else {
@@ -39,10 +31,7 @@ internal fun setupCommon(
             LegacyJarSplitter.split(cacheDirectory, metadata, extractedServer, isOffline)
         }
 
-        if (output != null) {
-            commonJarPath.copyTo(output)
-            addMinecraftMarker(output)
-        }
+        output?.tryLink(commonJarPath)
 
         libraries + "net.msrandom:side-annotations:1.0.0"
     }
@@ -59,7 +48,7 @@ internal fun setupClient(
     val clientJarPath = clientJarPath(cacheDirectory, metadata.id)
 
     if (clientJarPath.exists()) {
-        clientJarPath.copyTo(output)
+        output.tryLink(clientJarPath)
 
         return
     }
@@ -73,15 +62,12 @@ internal fun setupClient(
 
     if (isBundled) {
         BundledClientJarSplitter.split(cacheDirectory, metadata, extractedServer, isOffline)
-
-        clientJarPath.copyTo(output)
-        addMinecraftMarker(output)
     } else {
         LegacyJarSplitter.split(cacheDirectory, metadata, extractedServer, isOffline).client
-
-        clientJarPath.copyTo(output)
-        addMinecraftMarker(output)
     }
+
+    addMinecraftMarker(clientJarPath)
+    output.tryLink(clientJarPath)
 }
 
 fun getAllDependencies(metadata: MinecraftVersionMetadata) =
