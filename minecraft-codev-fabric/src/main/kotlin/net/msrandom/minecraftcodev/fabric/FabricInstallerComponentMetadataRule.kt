@@ -83,7 +83,7 @@ abstract class FabricInstallerComponentMetadataRule<T : Any> @Inject constructor
             }
         }
 
-        context.details.addVariant("clientRuntime", "compile") {
+        context.details.addVariant("clientRuntime", "runtime") {
             it.withSidedDependencies { common + client + development }
 
             it.attributes { attributes ->
