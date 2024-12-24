@@ -2,8 +2,8 @@ import org.jlleitschuh.gradle.ktlint.KtlintExtension
 
 plugins {
     java
-    kotlin("jvm") version "1.8.+"
-    kotlin("plugin.serialization") version "1.8.+" apply false
+    kotlin("jvm") version "2.1.0"
+    kotlin("plugin.serialization") version "2.1.0" apply false
     id("org.jlleitschuh.gradle.ktlint") version "12.1.0" apply false
     `java-gradle-plugin`
     `maven-publish`

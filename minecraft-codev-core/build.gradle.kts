@@ -11,7 +11,6 @@ gradlePlugin {
 }
 
 dependencies {
-    implementation(group = "dev.gradleplugins", name = "gradle-api", version = "8.8")
     implementation(projects.minecraftCodevCore.sideAnnotations)
 
     api(group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version = "1.3.3")

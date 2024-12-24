@@ -15,7 +15,9 @@ dependencies {
     api(group = "net.fabricmc", name = "tiny-remapper", version = "0.8.11")
 
     implementation(group = "org.cadixdev", name = "mercury", version = "0.1.0")
-    implementation(group = "com.github.replaymod", name = "remap", "5134612")
+
+    // TODO Remap should be downloaded in a configuration and used with the exec operations service and potentially the workers API
+    // implementation(group = "com.github.replaymod", name = "remap", "5134612")
 
     api(projects.minecraftCodevCore)
 }
