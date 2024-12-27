@@ -1,5 +1,7 @@
 package net.msrandom.minecraftcodev.remapper.task
 
+import net.msrandom.minecraftcodev.core.task.CachedMinecraftParameters
+import net.msrandom.minecraftcodev.core.task.CachedMinecraftTask
 import net.msrandom.minecraftcodev.core.utils.cacheExpensiveOperation
 import net.msrandom.minecraftcodev.core.utils.getAsPath
 import net.msrandom.minecraftcodev.core.utils.getGlobalCacheDirectoryProvider
@@ -14,11 +16,12 @@ import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.MapProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.*
+import org.gradle.jvm.toolchain.JavaLauncher
 import org.gradle.process.ExecOperations
 import java.io.File
 import javax.inject.Inject
 
-abstract class RemapTask : DefaultTask() {
+abstract class RemapTask : CachedMinecraftTask() {
     abstract val inputFile: RegularFileProperty
         @InputFile
         @PathSensitive(PathSensitivity.RELATIVE)
@@ -43,11 +46,6 @@ abstract class RemapTask : DefaultTask() {
         @CompileClasspath
         get
 
-    abstract val extraFiles: MapProperty<String, File>
-        @Optional
-        @Input
-        get
-
     abstract val cacheDirectory: DirectoryProperty
         @Internal get
 
@@ -59,6 +57,9 @@ abstract class RemapTask : DefaultTask() {
 
     abstract val outputFile: RegularFileProperty
         @OutputFile get
+
+    abstract val javaExecutable: RegularFileProperty
+        @Internal get
 
     init {
         run {
@@ -80,17 +81,19 @@ abstract class RemapTask : DefaultTask() {
 
     @TaskAction
     fun remap() {
-        val extraFiles = extraFiles.getOrElse(emptyMap())
-
         val cacheKey = objectFactory.fileCollection()
 
         cacheKey.from(classpath)
-        cacheKey.from(extraFiles.values)
         cacheKey.from(mappings)
         cacheKey.from(inputFile.get().asFile)
 
         cacheExpensiveOperation(cacheDirectory.getAsPath(), "remap", cacheKey, outputFile.getAsPath()) {
-            val mappings = loadMappings(mappings, execOperations, extraFiles)
+            val mappings = loadMappings(
+                mappings,
+                javaExecutable.get(),
+                cacheParameters,
+                execOperations,
+            )
 
             JarRemapper.remap(
                 mappings,

@@ -7,36 +7,30 @@ import net.msrandom.minecraftcodev.core.utils.getGlobalCacheDirectoryProvider
 import org.gradle.api.DefaultTask
 import org.gradle.api.Project
 import org.gradle.api.file.DirectoryProperty
-import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Nested
-import javax.inject.Inject
 
-abstract class CachedMinecraftParameters {
-    abstract val objectFactory: ObjectFactory
-        @Inject get
+fun CachedMinecraftParameters.convention(project: Project) {
+    versionManifestUrl.convention(VERSION_MANIFEST_URL)
 
-    abstract val versionManifestUrl: Property<String>
+    directory.set(getGlobalCacheDirectoryProvider(project))
+    getIsOffline().set(project.provider { project.gradle.startParameter.isOffline })
+}
+
+fun CachedMinecraftParameters.versionList() =
+    getVersionList(directory.getAsPath(), versionManifestUrl.get(), getIsOffline().get())
+
+interface CachedMinecraftParameters {
+    val versionManifestUrl: Property<String>
         @Input get
 
-    val directory: DirectoryProperty = objectFactory.directoryProperty()
+    val directory: DirectoryProperty
         @Internal get
 
-    val isOffline: Property<Boolean> = objectFactory.property(Boolean::class.javaObjectType)
-        @JvmName("getIsOffline")
-        @Internal
-        get
-
-    fun convention(project: Project) {
-        versionManifestUrl.convention(VERSION_MANIFEST_URL)
-
-        directory.set(getGlobalCacheDirectoryProvider(project))
-        isOffline.set(project.provider { project.gradle.startParameter.isOffline })
-    }
-
-    fun versionList() = getVersionList(directory.getAsPath(), versionManifestUrl.get(), isOffline.get())
+    @Internal
+    fun getIsOffline(): Property<Boolean>
 }
 
 abstract class CachedMinecraftTask : DefaultTask() {

@@ -8,9 +8,12 @@ import net.fabricmc.mappingio.tree.MappingTreeView
 import net.fabricmc.mappingio.tree.MemoryMappingTree
 import net.msrandom.minecraftcodev.core.*
 import net.msrandom.minecraftcodev.core.MinecraftCodevPlugin.Companion.json
+import net.msrandom.minecraftcodev.core.task.CachedMinecraftParameters
+import net.msrandom.minecraftcodev.core.utils.getAsPath
 import net.msrandom.minecraftcodev.core.utils.serviceLoader
 import org.gradle.api.Action
 import org.gradle.api.file.FileCollection
+import org.gradle.api.file.RegularFile
 import org.gradle.process.ExecOperations
 import java.io.File
 import java.nio.file.FileSystem
@@ -44,8 +47,12 @@ class MappingTreeProvider(
 
 class MappingResolutionData(
     visitor: MappingTreeProvider,
+    val javaExecutable: RegularFile,
+    val collection: FileCollection,
+    val cacheDirectory: Path,
+    val versionManifestUrl: String,
+    val isOffline: Boolean,
     val execOperations: ExecOperations,
-    val extraFiles: Map<String, File>,
 ) : ResolutionData<MappingTreeProvider>(visitor)
 
 interface MappingResolutionRule : ResolutionRule<MappingResolutionData>
@@ -131,23 +138,30 @@ fun loadMappingFile(
 ) {
     for (rule in mappingResolutionRules) {
         if (rule.load(file, file.extension, data)) {
-            return
+            break
         }
     }
 
-    throw UnsupportedOperationException("Unknown mapping file format $file")
+    println("Skipping non-mapping file $file")
 }
 
 fun loadMappings(
     files: FileCollection,
+    javaExecutable: RegularFile,
+    cacheParameters: CachedMinecraftParameters,
     execOperations: ExecOperations,
-    extraFiles: Map<String, File>,
 ): MappingTreeView = mappingsCache.computeIfAbsent(files.files) {
-    println("Loading mappings $files")
-
     val tree = MemoryMappingTree()
 
-    val data = MappingResolutionData(MappingTreeProvider(tree), execOperations, extraFiles)
+    val data = MappingResolutionData(
+        MappingTreeProvider(tree),
+        javaExecutable,
+        files,
+        cacheParameters.directory.getAsPath(),
+        cacheParameters.versionManifestUrl.get(),
+        cacheParameters.getIsOffline().get(),
+        execOperations,
+    )
 
     for (file in it) {
         loadMappingFile(file.toPath(), data)

@@ -1,19 +1,21 @@
 package net.msrandom.minecraftcodev.remapper.task
 
+import net.msrandom.minecraftcodev.core.task.CachedMinecraftParameters
+import net.msrandom.minecraftcodev.core.task.convention
 import net.msrandom.minecraftcodev.core.utils.getAsPath
 import net.msrandom.minecraftcodev.core.utils.toPath
 import net.msrandom.minecraftcodev.remapper.JarRemapper
 import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
 import net.msrandom.minecraftcodev.remapper.loadMappings
 import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.file.RegularFile
 import org.gradle.api.file.RegularFileProperty
-import org.gradle.api.provider.MapProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.*
 import org.gradle.api.tasks.bundling.Jar
+import org.gradle.jvm.toolchain.JavaLauncher
 import org.gradle.language.base.plugins.LifecycleBasePlugin
 import org.gradle.process.ExecOperations
-import java.io.File
 import javax.inject.Inject
 
 abstract class RemapJar : Jar() {
@@ -38,25 +40,33 @@ abstract class RemapJar : Jar() {
         @CompileClasspath
         get
 
-    abstract val extraFiles: MapProperty<String, File>
-        @Optional
-        @Input
-        get
-
     abstract val execOperations: ExecOperations
         @Inject get
+
+    abstract val cacheParameters: CachedMinecraftParameters
+        @Nested get
+
+    abstract val javaExecutable: RegularFileProperty
+        @Internal get
 
     init {
         run {
             group = LifecycleBasePlugin.BUILD_GROUP
 
             sourceNamespace.convention(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
+
+            cacheParameters.convention(project)
         }
     }
 
     @TaskAction
     fun remap() {
-        val mappings = loadMappings(mappings, execOperations, extraFiles.get())
+        val mappings = loadMappings(
+            mappings,
+            javaExecutable.get(),
+            cacheParameters,
+            execOperations,
+        )
 
         JarRemapper.remap(
             mappings,

@@ -12,7 +12,7 @@ val SourceSet.accessWidenersConfigurationName get() = disambiguateName(Minecraft
 class MinecraftCodevAccessWidenerPlugin<T : PluginAware> : Plugin<T> {
     override fun apply(target: T) =
         applyPlugin(target) {
-            createSourceSetConfigurations(ACCESS_WIDENERS_CONFIGURATION)
+            createSourceSetConfigurations(ACCESS_WIDENERS_CONFIGURATION, false)
         }
 
     companion object {

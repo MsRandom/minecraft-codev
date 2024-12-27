@@ -3,11 +3,8 @@ package net.msrandom.minecraftcodev.core
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.ListProperty
-import java.io.InputStream
 import java.nio.file.FileSystem
 import java.nio.file.Path
-import java.security.DigestInputStream
-import java.security.MessageDigest
 
 open class ResolutionData<T>(
     val visitor: T,

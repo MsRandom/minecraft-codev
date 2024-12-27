@@ -3,17 +3,10 @@ package net.msrandom.minecraftcodev.forge.task
 import net.minecraftforge.accesstransformer.TransformerProcessor
 import net.msrandom.minecraftcodev.core.resolve.*
 import net.msrandom.minecraftcodev.core.task.CachedMinecraftTask
-import net.msrandom.minecraftcodev.core.utils.cacheExpensiveOperation
-import net.msrandom.minecraftcodev.core.utils.getAsPath
-import net.msrandom.minecraftcodev.core.utils.toPath
-import net.msrandom.minecraftcodev.core.utils.walk
-import net.msrandom.minecraftcodev.core.utils.zipFileSystem
-import net.msrandom.minecraftcodev.forge.CLASSIFIER_ATTRIBUTE
+import net.msrandom.minecraftcodev.core.task.versionList
+import net.msrandom.minecraftcodev.core.utils.*
 import net.msrandom.minecraftcodev.forge.McpConfigFile
 import net.msrandom.minecraftcodev.forge.Userdev
-import org.gradle.api.Project
-import org.gradle.api.artifacts.ConfigurationContainer
-import org.gradle.api.artifacts.dsl.DependencyHandler
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
@@ -21,7 +14,6 @@ import org.gradle.api.tasks.*
 import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.process.ExecOperations
 import java.io.Closeable
-import java.io.File
 import java.io.OutputStream
 import java.io.PrintStream
 import java.nio.file.Files
@@ -29,27 +21,6 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import javax.inject.Inject
 import kotlin.io.path.*
-
-internal fun resolveFile(
-    configurationContainer: ConfigurationContainer,
-    dependencyHandler: DependencyHandler,
-    name: String,
-): File =
-    configurationContainer
-        .detachedConfiguration(dependencyHandler.create(name))
-        .apply {
-            isTransitive = false
-
-            attributes { attributes ->
-                attributes.attribute(CLASSIFIER_ATTRIBUTE, "")
-            }
-        }
-        .singleFile
-
-internal fun resolveFile(
-    project: Project,
-    name: String,
-) = resolveFile(project.configurations, project.dependencies, name)
 
 @CacheableTask
 abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
@@ -66,17 +37,16 @@ abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
         @PathSensitive(PathSensitivity.ABSOLUTE)
         get
 
+    abstract val universal: ConfigurableFileCollection
+        @InputFiles
+        @PathSensitive(PathSensitivity.ABSOLUTE)
+        get
+
     abstract val output: RegularFileProperty
         @OutputFile get
 
     abstract val clientExtra: RegularFileProperty
         @OutputFile get
-
-    abstract val configurationContainer: ConfigurationContainer
-        @Inject get
-
-    abstract val dependencyHandler: DependencyHandler
-        @Inject get
 
     abstract val javaToolchainService: JavaToolchainService
         @Inject get
@@ -103,7 +73,7 @@ abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
     }
 
     private fun resolve(cacheDirectory: Path, outputPath: Path) {
-        val isOffline = cacheParameters.isOffline.get()
+        val isOffline = cacheParameters.getIsOffline().get()
 
         val metadata = cacheParameters.versionList().version(version.get())
 
@@ -113,12 +83,11 @@ abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
 
         val serverJar = extractionState.result
 
-        val userdev = Userdev.fromFile(patches.singleFile)!!
+        val userdevFile = patches.filter { "userdev" in it.name }.singleFile
+        val userdev = Userdev.fromFile(userdevFile)!!
 
         val mcpConfigFile =
-            McpConfigFile.fromFile(
-                configurationContainer.detachedConfiguration(dependencyHandler.create(userdev.config.mcp)).singleFile,
-            )!!
+            McpConfigFile.fromFile(dependencyFile(patches, userdev.config.mcp))!!
 
         val javaExecutable =
             metadata.javaVersion
@@ -136,9 +105,9 @@ abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
             return McpAction(
                 execOperations,
                 javaExecutable,
-                resolveFile(configurationContainer, dependencyHandler, function.version),
+                patches,
+                function,
                 mcpConfigFile,
-                function.args,
                 template,
                 stdout,
             )
@@ -181,11 +150,11 @@ abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
                     PatchMcpAction(
                         execOperations,
                         javaExecutable,
+                        patches,
                         mcpConfigFile,
                         userdev,
+                        universal.singleFile,
                         patchLog,
-                        configurationContainer,
-                        dependencyHandler,
                     )
 
                 val official = mcpConfigFile.config.official
@@ -193,7 +162,7 @@ abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
 
                 zipFileSystem(mcpConfigFile.source).use { fs ->
                     if (official) {
-                        val clientMappings = downloadMinecraftFile(cacheDirectory, metadata, MinecraftDownloadVariant.ClientMappings, cacheParameters.isOffline.get())!!
+                        val clientMappings = downloadMinecraftFile(cacheDirectory, metadata, MinecraftDownloadVariant.ClientMappings, isOffline)!!
 
                         temporaryDir.resolve("patch.log").outputStream().use {
                             val mergeMappings =

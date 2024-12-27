@@ -1,13 +1,12 @@
 package net.msrandom.minecraftcodev.runs
 
 import net.msrandom.minecraftcodev.core.task.CachedMinecraftParameters
+import net.msrandom.minecraftcodev.core.task.convention
 import net.msrandom.minecraftcodev.core.utils.extension
 import org.gradle.api.Project
 import org.gradle.api.Task
-import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.FileSystemLocation
-import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.*
 import org.gradle.api.tasks.*
 import java.io.File

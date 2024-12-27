@@ -30,7 +30,7 @@ fun Project.createSourceSetElements(sourceSetHandler: (sourceSet: SourceSet) -> 
 
 fun Project.createSourceSetConfigurations(
     name: String,
-    transitive: Boolean = false,
+    transitive: Boolean = true,
 ) {
     fun createConfiguration(name: String) =
         configurations.maybeCreate(name).apply {

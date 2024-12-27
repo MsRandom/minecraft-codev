@@ -3,10 +3,10 @@ package net.msrandom.minecraftcodev.forge.task
 import net.msrandom.minecraftcodev.core.utils.walk
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.forge.McpConfigFile
+import net.msrandom.minecraftcodev.forge.PatchLibrary
 import net.msrandom.minecraftcodev.forge.Userdev
 import net.msrandom.minecraftcodev.forge.mappings.injectForgeMappingService
-import org.gradle.api.artifacts.ConfigurationContainer
-import org.gradle.api.artifacts.dsl.DependencyHandler
+import org.gradle.api.file.FileCollection
 import org.gradle.api.file.RegularFile
 import org.gradle.process.ExecOperations
 import java.io.File
@@ -23,12 +23,20 @@ import kotlin.io.path.createDirectories
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.notExists
 
+internal fun dependencyFile(patches: FileCollection, notation: String): File {
+    val name = notation.substringAfter(':').substringBefore(':')
+
+    return patches
+        .filter { name in it.name }
+        .singleFile
+}
+
 open class McpAction(
     private val execOperations: ExecOperations,
     private val javaExecutable: File,
-    private val jarFile: File,
+    protected val patches: FileCollection,
+    private val library: PatchLibrary,
     private val mcpConfig: McpConfigFile,
-    private val args: List<String>,
     private val argumentTemplates: Map<String, Any>,
     private val stdout: OutputStream?,
 ) {
@@ -39,6 +47,9 @@ open class McpAction(
     fun execute(fileSystem: FileSystem, vararg inputs: Pair<String, Path>) = execute(fileSystem, mapOf(*inputs))
 
     protected open fun execute(fileSystem: FileSystem, inputs: Map<String, Path> = emptyMap()): Path {
+        val jarFile = dependencyFile(patches, library.version)
+        println("${library.version} => ${jarFile}")
+
         val output = Files.createTempFile("mcp-step", ".out")
 
         val executionResult =
@@ -55,11 +66,11 @@ open class McpAction(
                                 .getValue(Attributes.Name.MAIN_CLASS)
                         }
 
-                it.classpath(jarFile)
+                it.classpath(patches)
                 it.mainClass.set(mainClass)
 
                 val args =
-                    args.map { arg ->
+                    library.args.map { arg ->
                         if (!arg.startsWith('{')) {
                             return@map arg
                         }
@@ -83,7 +94,7 @@ open class McpAction(
 
                                     dataOutput
                                 }
-                                ?: throw UnsupportedOperationException("Unknown argument for MCP function $args: $template")
+                                ?: throw UnsupportedOperationException("Unknown argument for MCP function ${library.args}: $template")
 
                         when (templateReplacement) {
                             is RegularFile -> templateReplacement.toString()
@@ -108,17 +119,17 @@ open class McpAction(
 class PatchMcpAction(
     execOperations: ExecOperations,
     javaExecutable: File,
+    patches: FileCollection,
     mcpConfig: McpConfigFile,
     private val userdev: Userdev,
+    private val universal: File,
     logFile: OutputStream,
-    private val configurationContainer: ConfigurationContainer,
-    private val dependencyHandler: DependencyHandler,
 ) : McpAction(
     execOperations,
     javaExecutable,
-    resolveFile(configurationContainer, dependencyHandler, userdev.config.binpatcher.version),
+    patches,
+    userdev.config.binpatcher,
     mcpConfig,
-    userdev.config.binpatcher.args,
     emptyMap(),
     logFile,
 ) {
@@ -155,8 +166,6 @@ class PatchMcpAction(
                     }
                 }
             }
-
-            val universal = resolveFile(configurationContainer, dependencyHandler, userdevConfig.universal)
 
             val filters = userdevConfig.universalFilters.map(::Regex)
 

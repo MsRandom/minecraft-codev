@@ -4,6 +4,7 @@ import net.msrandom.minecraftcodev.core.resolve.MinecraftDownloadVariant
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
 import net.msrandom.minecraftcodev.core.resolve.downloadMinecraftFile
 import net.msrandom.minecraftcodev.core.resolve.rulesMatch
+import net.msrandom.minecraftcodev.core.task.versionList
 import net.msrandom.minecraftcodev.core.utils.getAsPath
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.runs.task.DownloadAssets
@@ -160,7 +161,7 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
                                 cacheParameters.directory.getAsPath(),
                                 manifest,
                                 MinecraftDownloadVariant.Server,
-                                cacheParameters.isOffline.get(),
+                                cacheParameters.getIsOffline().get(),
                             ) ?: throw UnsupportedOperationException("Version ${manifest.id} does not have a server.")
 
                         zipFileSystem(serverJar).use {

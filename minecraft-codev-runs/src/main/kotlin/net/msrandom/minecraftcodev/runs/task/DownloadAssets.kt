@@ -7,6 +7,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import net.msrandom.minecraftcodev.core.AssetsIndex
 import net.msrandom.minecraftcodev.core.task.CachedMinecraftTask
+import net.msrandom.minecraftcodev.core.task.versionList
 import net.msrandom.minecraftcodev.core.utils.*
 import net.msrandom.minecraftcodev.runs.RunsContainer
 import org.gradle.api.file.DirectoryProperty
@@ -50,7 +51,7 @@ abstract class DownloadAssets : CachedMinecraftTask() {
                 url,
                 sha1,
                 outputPath,
-                cacheParameters.isOffline.get(),
+                cacheParameters.getIsOffline().get(),
             )
         }
 
@@ -63,7 +64,7 @@ abstract class DownloadAssets : CachedMinecraftTask() {
                 assetIndex.url,
                 assetIndex.sha1,
                 assetIndexJson,
-                cacheParameters.isOffline.get(),
+                cacheParameters.getIsOffline().get(),
             )
 
             val index = assetIndexJson.inputStream().use { Json.decodeFromStream<AssetsIndex>(it) }

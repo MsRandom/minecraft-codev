@@ -39,7 +39,7 @@ abstract class ResolveMinecraftClient : CachedMinecraftTask() {
                 .toPath(),
             output.getAsPath(),
             version,
-            cacheParameters.isOffline.get(),
+            cacheParameters.getIsOffline().get(),
         )
     }
 }

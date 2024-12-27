@@ -44,7 +44,7 @@ abstract class ResolveMinecraftMappings : CachedMinecraftTask() {
 
         val output = output.getAsPath()
 
-        val downloadPath = downloadMinecraftFile(cacheParameters.directory.getAsPath(), version, variant, cacheParameters.isOffline.get())
+        val downloadPath = downloadMinecraftFile(cacheParameters.directory.getAsPath(), version, variant, cacheParameters.getIsOffline().get())
             ?: throw IllegalArgumentException("${version.id} does not have variant $variant")
 
         output.deleteIfExists()

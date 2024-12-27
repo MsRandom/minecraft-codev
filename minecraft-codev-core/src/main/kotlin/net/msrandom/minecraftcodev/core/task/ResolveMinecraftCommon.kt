@@ -33,6 +33,6 @@ abstract class ResolveMinecraftCommon : CachedMinecraftTask() {
 
         val version = versionList.version(version.get())
 
-        setupCommon(cacheParameters.directory.getAsPath(), version, cacheParameters.isOffline.get(), output.getAsPath())
+        setupCommon(cacheParameters.directory.getAsPath(), version, cacheParameters.getIsOffline().get(), output.getAsPath())
     }
 }

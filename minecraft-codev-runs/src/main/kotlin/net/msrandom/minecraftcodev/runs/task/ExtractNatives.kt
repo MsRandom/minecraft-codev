@@ -2,6 +2,7 @@ package net.msrandom.minecraftcodev.runs.task
 
 import net.msrandom.minecraftcodev.core.resolve.rulesMatch
 import net.msrandom.minecraftcodev.core.task.CachedMinecraftTask
+import net.msrandom.minecraftcodev.core.task.versionList
 import net.msrandom.minecraftcodev.core.utils.getAsPath
 import net.msrandom.minecraftcodev.core.utils.osName
 import net.msrandom.minecraftcodev.core.utils.walk

@@ -16,7 +16,7 @@ val SourceSet.mixinsConfigurationName get() = disambiguateName(MinecraftCodevMix
 class MinecraftCodevMixinsPlugin<T : PluginAware> : Plugin<T> {
     override fun apply(target: T) =
         applyPlugin(target) {
-            createSourceSetConfigurations(MIXINS_CONFIGURATION, true)
+            createSourceSetConfigurations(MIXINS_CONFIGURATION)
 
             MixinBootstrap.init()
             (MixinService.getService() as GradleMixinService).phaseConsumer.accept(MixinEnvironment.Phase.DEFAULT)

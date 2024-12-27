@@ -5,15 +5,41 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import org.gradle.api.Project
+import org.gradle.api.artifacts.repositories.RepositoryResourceAccessor
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.file.Directory
 import org.gradle.api.provider.Provider
 import java.io.File
+import java.io.InputStream
 import java.nio.file.FileSystemException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import kotlin.io.path.*
+
+fun <R : Any> RepositoryResourceAccessor.withCachedResource(cacheDirectory: File, relativePath: String, reader: (InputStream) -> R): R? {
+    val path = cacheDirectory.resolve("metadata-rule-download-cache").resolve(relativePath)
+
+    return if (path.exists()) {
+        path.inputStream().use(reader)
+    } else {
+        var result: R? = null
+
+        withResource(relativePath) {
+            val stream = it.buffered()
+
+            stream.mark(Int.MAX_VALUE)
+            path.toPath().parent.createDirectories()
+            stream.copyTo(path.outputStream())
+
+            stream.reset()
+
+            result = reader(stream)
+        }
+
+        result
+    }
+}
 
 fun getGlobalCacheDirectoryProvider(project: Project): Provider<Directory> =
     project.layout.dir(project.provider { getGlobalCacheDirectory(project) })
