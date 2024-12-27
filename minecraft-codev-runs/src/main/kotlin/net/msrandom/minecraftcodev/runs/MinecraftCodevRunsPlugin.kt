@@ -26,8 +26,13 @@ class MinecraftCodevRunsPlugin<T : PluginAware> : Plugin<T> {
                 extractNativesTaskName: String,
                 downloadAssetsTaskName: String,
             ) {
-                tasks.register(extractNativesTaskName, ExtractNatives::class.java)
-                tasks.register(downloadAssetsTaskName, DownloadAssets::class.java)
+                tasks.register(extractNativesTaskName, ExtractNatives::class.java) {
+                    it.group = ApplicationPlugin.APPLICATION_GROUP
+                }
+
+                tasks.register(downloadAssetsTaskName, DownloadAssets::class.java) {
+                    it.group = ApplicationPlugin.APPLICATION_GROUP
+                }
             }
 
             createSourceSetElements {

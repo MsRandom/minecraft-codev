@@ -1,6 +1,7 @@
 package net.msrandom.minecraftcodev.fabric.runs
 
 import net.msrandom.minecraftcodev.core.resolve.MinecraftVersionMetadata
+import net.msrandom.minecraftcodev.core.task.versionList
 import net.msrandom.minecraftcodev.core.utils.toPath
 import net.msrandom.minecraftcodev.fabric.FabricInstaller
 import net.msrandom.minecraftcodev.fabric.loadFabricInstaller
@@ -56,15 +57,16 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
                         .assetIndex
                 }
 
-            val extractNativesTask = project.tasks.withType(ExtractNatives::class.java).getByName(sourceSet.get().extractNativesTaskName)
+            val downloadAssetsTask = sourceSet.flatMap {
+                project.tasks.named(it.downloadAssetsTaskName, DownloadAssets::class.java)
+            }
 
-            val downloadAssetsTask =
-                sourceSet.flatMap {
-                    project.tasks.named(it.downloadAssetsTaskName, DownloadAssets::class.java)
-                }
+            val extractNativesTask = sourceSet.flatMap {
+                project.tasks.named(it.extractNativesTaskName, ExtractNatives::class.java)
+            }
 
-            val nativesDirectory = extractNativesTask.destinationDirectory
             val assetsDirectory = downloadAssetsTask.flatMap(DownloadAssets::assetsDirectory)
+            val nativesDirectory = extractNativesTask.flatMap(ExtractNatives::destinationDirectory)
 
             arguments.add(compileArgument("--assetsDir=", assetsDirectory))
             arguments.add(compileArgument("--assetIndex=", assetIndex.map(MinecraftVersionMetadata.AssetIndex::id)))

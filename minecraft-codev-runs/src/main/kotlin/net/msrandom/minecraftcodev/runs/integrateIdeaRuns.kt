@@ -11,6 +11,7 @@ private fun setupIdeaRun(project: Project, runConfigurations: RunConfigurationCo
     runConfigurations.register(builder.friendlyName, Application::class.java) { application ->
         val config = builder.build()
 
+        // TODO the .get()s are broken due to the tasks are not executed. We need to make it so you can query the task inputs without requiring the task execution.
         application.mainClass = config.mainClass.get()
         application.workingDirectory = config.executableDirectory.get().asFile.absolutePath
         application.envs = config.environment.get()
