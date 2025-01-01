@@ -6,7 +6,10 @@ import net.msrandom.minecraftcodev.core.task.CachedMinecraftTask
 import net.msrandom.minecraftcodev.core.task.versionList
 import net.msrandom.minecraftcodev.core.utils.*
 import net.msrandom.minecraftcodev.forge.McpConfigFile
+import net.msrandom.minecraftcodev.forge.PatchLibrary
 import net.msrandom.minecraftcodev.forge.Userdev
+import org.gradle.api.artifacts.ConfigurationContainer
+import org.gradle.api.artifacts.dsl.DependencyHandler
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
@@ -47,6 +50,12 @@ abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
 
     abstract val clientExtra: RegularFileProperty
         @OutputFile get
+
+    abstract val configurationContainer: ConfigurationContainer
+        @Inject get
+
+    abstract val dependencyHandler: DependencyHandler
+        @Inject get
 
     abstract val javaToolchainService: JavaToolchainService
         @Inject get
@@ -89,6 +98,15 @@ abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
         val mcpConfigFile =
             McpConfigFile.fromFile(dependencyFile(patches, userdev.config.mcp))!!
 
+        val functionNames = listOf("rename", "mcinject", "merge", "mergeMappings")
+
+        val patchDependencyNames = functionNames.asSequence().mapNotNull { mcpConfigFile.config.functions[it] } + listOf(userdev.config.binpatcher)
+        val patchDependencies = patchDependencyNames.map(PatchLibrary::version).map(dependencyHandler::create)
+
+        val fixedPatches = configurationContainer.detachedConfiguration(*patchDependencies.toList().toTypedArray()).apply {
+            isTransitive = false
+        }
+
         val javaExecutable =
             metadata.javaVersion
                 .executable(javaToolchainService)
@@ -105,7 +123,7 @@ abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
             return McpAction(
                 execOperations,
                 javaExecutable,
-                patches,
+                fixedPatches,
                 function,
                 mcpConfigFile,
                 template,
@@ -150,7 +168,7 @@ abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
                     PatchMcpAction(
                         execOperations,
                         javaExecutable,
-                        patches,
+                        fixedPatches,
                         mcpConfigFile,
                         userdev,
                         universal.singleFile,

@@ -48,7 +48,6 @@ open class McpAction(
 
     protected open fun execute(fileSystem: FileSystem, inputs: Map<String, Path> = emptyMap()): Path {
         val jarFile = dependencyFile(patches, library.version)
-        println("${library.version} => ${jarFile}")
 
         val output = Files.createTempFile("mcp-step", ".out")
 

@@ -97,7 +97,7 @@ data class Userdev(val config: UserdevConfig, val source: File) {
                     fs.getPath("config.json")
                         .takeIf(Path::exists)
                         ?.inputStream()
-                        ?.use { json.decodeFromStream<UserdevConfig>(it) }
+                        ?.use { json.maybeDecode<UserdevConfig>(it) }
                         ?.let(CacheEntry::Present)
                         ?: CacheEntry.Absent
                 }

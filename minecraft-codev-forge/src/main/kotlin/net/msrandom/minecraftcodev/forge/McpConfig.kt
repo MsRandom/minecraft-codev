@@ -80,7 +80,7 @@ data class McpConfigFile(
                     fs.getPath("config.json")
                         .takeIf(Path::exists)
                         ?.inputStream()
-                        ?.use { json.decodeFromStream<McpConfig>(it) }
+                        ?.use { json.maybeDecode<McpConfig>(it) }
                         ?.let(CacheEntry::Present)
                         ?: CacheEntry.Absent
                 }
@@ -93,7 +93,7 @@ data class McpConfigFile(
                 fileSystem.getPath("config.json")
                     .takeIf(Path::exists)
                     ?.inputStream()
-                    ?.use { json.decodeFromStream<McpConfig>(it) }
+                    ?.use { json.maybeDecode<McpConfig>(it) }
                     ?.let(CacheEntry::Present)
                     ?: CacheEntry.Absent
             }.value?.let { McpConfigFile(it, file) }

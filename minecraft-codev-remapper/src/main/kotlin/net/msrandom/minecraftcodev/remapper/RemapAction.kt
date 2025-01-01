@@ -1,5 +1,8 @@
 package net.msrandom.minecraftcodev.remapper
 
+import net.fabricmc.mappingio.format.Tiny2Reader
+import net.fabricmc.mappingio.format.Tiny2Writer
+import net.fabricmc.mappingio.tree.MemoryMappingTree
 import net.msrandom.minecraftcodev.core.task.CachedMinecraftParameters
 import net.msrandom.minecraftcodev.core.utils.cacheExpensiveOperation
 import net.msrandom.minecraftcodev.core.utils.getAsPath
@@ -15,7 +18,12 @@ import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.*
 import org.gradle.jvm.toolchain.JavaLauncher
 import org.gradle.process.ExecOperations
+import java.nio.file.Files
 import javax.inject.Inject
+import kotlin.io.path.deleteExisting
+import kotlin.io.path.reader
+import kotlin.io.path.writer
+import kotlin.io.reader
 
 @CacheableTransform
 abstract class RemapAction : TransformAction<RemapAction.Parameters> {
@@ -84,6 +92,14 @@ abstract class RemapAction : TransformAction<RemapAction.Parameters> {
 
         val output = outputs.file("${input.nameWithoutExtension}-$targetNamespace.${input.extension}")
 
+        val mappingsFile = Files.createTempDirectory("mappings").resolve("mappings.tiny")
+
+        cacheExpensiveOperation(parameters.cacheParameters.directory.getAsPath(), "mappings", parameters.mappings, mappingsFile) {
+            val mappings = loadMappings(parameters.mappings, parameters.javaExecutable.get(), parameters.cacheParameters, execOperations)
+
+            mappings.accept(Tiny2Writer(it.writer(), false))
+        }
+
         val cacheKey = objectFactory.fileCollection()
 
         cacheKey.from(classpath)
@@ -93,12 +109,9 @@ abstract class RemapAction : TransformAction<RemapAction.Parameters> {
         cacheExpensiveOperation(parameters.cacheParameters.directory.getAsPath(), "remap", cacheKey, output.toPath()) {
             println("Remapping mod $input from $sourceNamespace to $targetNamespace")
 
-            val mappings = loadMappings(
-                parameters.mappings,
-                parameters.javaExecutable.get(),
-                parameters.cacheParameters,
-                execOperations,
-            )
+            val mappings = MemoryMappingTree()
+
+            Tiny2Reader.read(mappingsFile.reader(), mappings)
 
             JarRemapper.remap(
                 mappings,

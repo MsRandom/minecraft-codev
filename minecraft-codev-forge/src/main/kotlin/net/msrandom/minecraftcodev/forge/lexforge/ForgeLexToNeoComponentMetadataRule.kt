@@ -98,7 +98,6 @@ abstract class ForgeLexToNeoComponentMetadataRule @Inject constructor(
 
             variantMetadata.withDependencies {
                 it.add(userdev.mcp)
-                it.add(userdev.binpatcher.version)
             }
 
             variantMetadata.withCapabilities { capabilities ->
@@ -108,7 +107,7 @@ abstract class ForgeLexToNeoComponentMetadataRule @Inject constructor(
 
         context.details.addVariant("modDevDependencies") { variant ->
             val (classifiers, libraries) = userdev.libraries.partition {
-                it.startsWith("${id.group}:${id.version}")
+                it.startsWith("${id.group}:${id.name}:")
             }
 
             variant.attributes { attributes ->

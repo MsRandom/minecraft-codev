@@ -178,10 +178,12 @@ open class ForgeRunsDefaultsContainer(
                         }
 
                         val sourceNamespace = treeView.getNamespaceId(MinecraftCodevForgePlugin.SRG_MAPPINGS_NAMESPACE)
-                        val targetNamespace = treeView.getNamespaceId(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
+                        val targetNamespace =
+                            treeView.getNamespaceId(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
 
                         for (type in treeView.classes) {
-                            val addedClass = srgMappings.addClass(type.getName(targetNamespace), type.getName(sourceNamespace))
+                            val addedClass =
+                                srgMappings.addClass(type.getName(targetNamespace), type.getName(sourceNamespace))
 
                             for (field in type.fields) {
                                 addedClass.field(field.getName(sourceNamespace), field.getName(targetNamespace))
@@ -220,14 +222,18 @@ open class ForgeRunsDefaultsContainer(
                 path.parent.createDirectories()
 
                 // TODO Works for neoforge, for forge it should be ${sourceSet.get().runtimeClasspath - sourceSet.get().output}
-                val runtimeClasspath = project.configurations.getByName(sourceSet.get().runtimeClasspathConfigurationName)
+                val runtimeClasspath = sourceSet.flatMap {
+                    project.configurations.named(it.runtimeClasspathConfigurationName)
+                }
 
-                // TODO This is making an assumption that the forge Jar is not here
-                val files = runtimeClasspath.map(File::getAbsolutePath)
+                runtimeClasspath.map {
+                    // TODO This is making an assumption that the forge Jar is not here
+                    val files = it.map(File::getAbsolutePath)
 
-                path.writeLines(files)
+                    path.writeLines(files)
 
-                path.toAbsolutePath().toString()
+                    path.toAbsolutePath().toString()
+                }
             }
 
             "natives" -> {
@@ -256,7 +262,8 @@ open class ForgeRunsDefaultsContainer(
         val downloadAssetsTaskName = sourceSet.get().downloadAssetsTaskName
 
         val getRun: UserdevConfig.() -> UserdevConfig.Run = {
-            runType(runs) ?: throw UnsupportedOperationException("Attempted to use $caller run configuration which doesn't exist.")
+            runType(runs)
+                ?: throw UnsupportedOperationException("Attempted to use $caller run configuration which doesn't exist.")
         }
 
         val manifestProvider = getManifest(minecraftVersion)

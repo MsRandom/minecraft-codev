@@ -121,8 +121,12 @@ fun cacheExpensiveOperation(
         outputPath.deleteIfExists()
         outputPath.tryLink(cachedOutput)
 
+        println("Cache hit for $operationName operation for $outputPath")
+
         return
     }
+
+    println("Cache miss for $operationName operation for $outputPath")
 
     val temporaryPath = Files.createTempFile("$operationName-${outputPath.nameWithoutExtension}", ".${outputPath.extension}")
     temporaryPath.deleteExisting()

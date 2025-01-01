@@ -130,8 +130,6 @@ class ParchmentZipMappingResolutionRule : ZipMappingResolutionRule {
 
 val mappingResolutionRules = serviceLoader<MappingResolutionRule>()
 
-private val mappingsCache = ConcurrentHashMap<Set<File>, MappingTreeView>()
-
 fun loadMappingFile(
     file: Path,
     data: MappingResolutionData,
@@ -150,7 +148,7 @@ fun loadMappings(
     javaExecutable: RegularFile,
     cacheParameters: CachedMinecraftParameters,
     execOperations: ExecOperations,
-): MappingTreeView = mappingsCache.computeIfAbsent(files.files) {
+): MappingTreeView {
     val tree = MemoryMappingTree()
 
     val data = MappingResolutionData(
@@ -163,11 +161,11 @@ fun loadMappings(
         execOperations,
     )
 
-    for (file in it) {
+    for (file in files) {
         loadMappingFile(file.toPath(), data)
     }
 
-    tree
+    return tree
 }
 
 private fun handleParchment(
