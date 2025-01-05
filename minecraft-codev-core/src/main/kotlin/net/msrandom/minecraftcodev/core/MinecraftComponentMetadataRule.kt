@@ -9,16 +9,20 @@ import org.gradle.api.artifacts.ComponentMetadataRule
 import org.gradle.api.artifacts.Dependency
 import java.io.File
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
 const val VERSION_MANIFEST_URL = "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json"
 
-// TODO: Caching
+private val cache = ConcurrentHashMap<String, MinecraftVersionList>()
+
 fun getVersionList(
     cacheDirectory: Path,
     url: String = VERSION_MANIFEST_URL,
     isOffline: Boolean,
-) = MinecraftVersionList.load(cacheDirectory, url, isOffline)
+) = cache.computeIfAbsent(url) {
+    MinecraftVersionList.load(cacheDirectory, it, isOffline)
+}
 
 @CacheableRule
 abstract class MinecraftComponentMetadataRule<T : Any> @Inject constructor(

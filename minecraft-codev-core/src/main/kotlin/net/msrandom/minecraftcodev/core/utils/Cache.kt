@@ -15,6 +15,10 @@ import java.nio.file.FileSystemException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.locks.Lock
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 import kotlin.io.path.*
 
 fun <R : Any> RepositoryResourceAccessor.withCachedResource(cacheDirectory: File, relativePath: String, reader: (InputStream) -> R): R? {
@@ -48,7 +52,7 @@ fun getGlobalCacheDirectory(project: Project): File =
     project.gradle.gradleUserHomeDir.resolve("caches/minecraft-codev")
 
 fun getLocalCacheDirectoryProvider(project: Project): Provider<Directory> =
-    project.layout.buildDirectory.dir("minecraft-codev")
+    project.rootProject.layout.buildDirectory.dir("minecraft-codev")
 
 private fun getVanillaExtractJarPath(
     cacheDirectory: Path,
@@ -89,6 +93,8 @@ internal fun clientJarPath(
     version: String,
 ) = getVanillaExtractJarPath(cacheDirectory, version, "client")
 
+private val operationLocks = ConcurrentHashMap<Path, Lock>()
+
 fun cacheExpensiveOperation(
     cacheDirectory: Path,
     operationName: String,
@@ -128,13 +134,20 @@ fun cacheExpensiveOperation(
 
     println("Cache miss for $operationName operation for $outputPath")
 
-    val temporaryPath = Files.createTempFile("$operationName-${outputPath.nameWithoutExtension}", ".${outputPath.extension}")
-    temporaryPath.deleteExisting()
+    val lock = operationLocks.computeIfAbsent(outputPath) {
+        ReentrantLock()
+    }
 
-    generate(temporaryPath)
+    lock.withLock {
+        val temporaryPath =
+            Files.createTempFile("$operationName-${outputPath.nameWithoutExtension}", ".${outputPath.extension}")
+        temporaryPath.deleteExisting()
 
-    cachedOperationDirectoryName.createDirectories()
-    temporaryPath.copyTo(cachedOutput, StandardCopyOption.COPY_ATTRIBUTES)
+        generate(temporaryPath)
+
+        cachedOperationDirectoryName.createDirectories()
+        temporaryPath.copyTo(cachedOutput, StandardCopyOption.COPY_ATTRIBUTES)
+    }
 
     outputPath.deleteIfExists()
     outputPath.tryLink(cachedOutput)

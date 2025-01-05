@@ -6,11 +6,14 @@ import net.msrandom.minecraftcodev.core.utils.download
 import org.gradle.api.InvalidUserCodeException
 import java.net.URI
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentHashMap
+import javax.annotation.concurrent.ThreadSafe
 import kotlin.io.path.inputStream
 
+@ThreadSafe
 class MinecraftVersionList(private val cacheDirectory: Path, manifest: MinecraftVersionManifest, private val isOffline: Boolean) {
     private val versions = manifest.versions.associateBy(MinecraftVersionManifest.VersionInfo::id)
-    private val versionInfoCache = hashMapOf<String, MinecraftVersionMetadata>()
+    private val versionInfoCache = ConcurrentHashMap<String, MinecraftVersionMetadata>()
 
     fun version(version: String) = versionInfoCache.computeIfAbsent(version) {
         val versionInfo = versions[version] ?: throw InvalidUserCodeException("Minecraft version $version not found")

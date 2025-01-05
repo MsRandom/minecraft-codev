@@ -25,7 +25,6 @@ import java.nio.file.StandardCopyOption
 import javax.inject.Inject
 import kotlin.io.path.*
 
-@CacheableTask
 abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
     abstract val version: Property<String>
         @Input get
