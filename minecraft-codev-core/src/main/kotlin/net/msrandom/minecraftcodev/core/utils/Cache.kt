@@ -93,15 +93,17 @@ internal fun clientJarPath(
     version: String,
 ) = getVanillaExtractJarPath(cacheDirectory, version, "client")
 
-private val operationLocks = ConcurrentHashMap<Path, Lock>()
+private val operationLocks = ConcurrentHashMap<Any, Lock>()
 
 fun cacheExpensiveOperation(
     cacheDirectory: Path,
     operationName: String,
     inputFiles: Iterable<File>,
-    outputPath: Path,
-    generate: (Path) -> Unit,
+    vararg outputPaths: Path,
+    generate: (List<Path>) -> Unit,
 ) {
+    val outputPathsList = outputPaths.toList()
+
     val hashes =
         runBlocking {
             inputFiles.map {
@@ -121,34 +123,54 @@ fun cacheExpensiveOperation(
         .resolve(operationName)
         .resolve(directoryName)
 
-    val cachedOutput = cachedOperationDirectoryName.resolve(outputPath.fileName)
+    var allCached = true
 
-    if (cachedOutput.exists()) {
-        outputPath.deleteIfExists()
-        outputPath.tryLink(cachedOutput)
+    for (outputPath in outputPathsList) {
+        val cachedOutput = cachedOperationDirectoryName.resolve(outputPath.fileName)
 
-        println("Cache hit for $operationName operation for $outputPath")
+        if (cachedOutput.exists()) {
+            outputPath.deleteIfExists()
+            outputPath.tryLink(cachedOutput)
 
+            println("Cache hit for $operationName operation for $outputPath")
+        } else {
+            allCached = false
+        }
+    }
+
+    if (allCached) {
         return
     }
 
-    println("Cache miss for $operationName operation for $outputPath")
+    println("Cache miss for $operationName operation for $outputPathsList")
 
-    val lock = operationLocks.computeIfAbsent(outputPath) {
+    val lock = operationLocks.computeIfAbsent(outputPathsList) {
         ReentrantLock()
     }
 
     lock.withLock {
-        val temporaryPath =
-            Files.createTempFile("$operationName-${outputPath.nameWithoutExtension}", ".${outputPath.extension}")
-        temporaryPath.deleteExisting()
+        val temporaryPaths = outputPathsList.map { outputPath ->
+            val temporaryPath = Files.createTempFile("$operationName-${outputPath.nameWithoutExtension}", ".${outputPath.extension}")
+            temporaryPath.deleteExisting()
 
-        generate(temporaryPath)
+            temporaryPath
+        }
+
+        generate(temporaryPaths)
 
         cachedOperationDirectoryName.createDirectories()
-        temporaryPath.copyTo(cachedOutput, StandardCopyOption.COPY_ATTRIBUTES)
+
+        for ((temporaryPath, outputPath) in temporaryPaths.zip(outputPathsList)) {
+            val cachedOutput = cachedOperationDirectoryName.resolve(outputPath.fileName)
+
+            temporaryPath.copyTo(cachedOutput, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
+        }
     }
 
-    outputPath.deleteIfExists()
-    outputPath.tryLink(cachedOutput)
+    for (outputPath in outputPathsList) {
+        val cachedOutput = cachedOperationDirectoryName.resolve(outputPath.fileName)
+
+        outputPath.deleteIfExists()
+        outputPath.tryLink(cachedOutput)
+    }
 }

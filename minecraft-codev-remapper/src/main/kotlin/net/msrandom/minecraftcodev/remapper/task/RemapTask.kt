@@ -2,25 +2,18 @@ package net.msrandom.minecraftcodev.remapper.task
 
 import net.fabricmc.mappingio.format.Tiny2Reader
 import net.fabricmc.mappingio.tree.MemoryMappingTree
-import net.msrandom.minecraftcodev.core.task.CachedMinecraftParameters
-import net.msrandom.minecraftcodev.core.task.CachedMinecraftTask
 import net.msrandom.minecraftcodev.core.utils.cacheExpensiveOperation
 import net.msrandom.minecraftcodev.core.utils.getAsPath
 import net.msrandom.minecraftcodev.core.utils.getGlobalCacheDirectoryProvider
 import net.msrandom.minecraftcodev.remapper.JarRemapper
 import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
-import net.msrandom.minecraftcodev.remapper.loadMappings
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.model.ObjectFactory
-import org.gradle.api.provider.MapProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.*
-import org.gradle.jvm.toolchain.JavaLauncher
-import org.gradle.process.ExecOperations
-import java.io.File
 import javax.inject.Inject
 
 abstract class RemapTask : DefaultTask() {
@@ -82,7 +75,7 @@ abstract class RemapTask : DefaultTask() {
         cacheKey.from(mappings)
         cacheKey.from(inputFile.get().asFile)
 
-        cacheExpensiveOperation(cacheDirectory.getAsPath(), "remap", cacheKey, outputFile.getAsPath()) {
+        cacheExpensiveOperation(cacheDirectory.getAsPath(), "remap", cacheKey, outputFile.getAsPath()) { (output) ->
             val mappings = MemoryMappingTree()
 
             Tiny2Reader.read(this.mappings.asFile.get().reader(), mappings)
@@ -92,7 +85,7 @@ abstract class RemapTask : DefaultTask() {
                 sourceNamespace.get(),
                 targetNamespace.get(),
                 inputFile.getAsPath(),
-                it,
+                output,
                 classpath,
             )
         }

@@ -7,10 +7,8 @@ import org.gradle.plugins.ide.idea.model.IdeaModel
 import org.jetbrains.gradle.ext.*
 import javax.inject.Inject
 
-private fun setupIdeaRun(project: Project, runConfigurations: RunConfigurationContainer, builder: MinecraftRunConfigurationBuilder) {
-    runConfigurations.register(builder.friendlyName, Application::class.java) { application ->
-        val config = builder.build()
-
+private fun setupIdeaRun(project: Project, runConfigurations: RunConfigurationContainer, config: MinecraftRunConfiguration) {
+    runConfigurations.register(config.friendlyName, Application::class.java) { application ->
         // TODO the .get()s are broken due to the tasks are not executed. We need to make it so you can query the task inputs without requiring the task execution.
         application.mainClass = config.mainClass.get()
         application.workingDirectory = config.executableDirectory.get().asFile.absolutePath
@@ -55,8 +53,8 @@ fun Project.integrateIdeaRuns() {
     allprojects { otherProject ->
         otherProject.plugins.withType(MinecraftCodevRunsPlugin::class.java) {
             otherProject.extension<RunsContainer>()
-                .all { builder ->
-                    setupIdeaRun(otherProject, runConfigurations, builder)
+                .all { configuration ->
+                    setupIdeaRun(otherProject, runConfigurations, configuration)
                 }
         }
     }

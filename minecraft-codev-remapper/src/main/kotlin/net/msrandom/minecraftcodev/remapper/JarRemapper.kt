@@ -9,11 +9,8 @@ import net.fabricmc.tinyremapper.IMappingProvider
 import net.fabricmc.tinyremapper.NonClassCopyMode
 import net.fabricmc.tinyremapper.OutputConsumerPath
 import net.fabricmc.tinyremapper.TinyRemapper
-import net.msrandom.minecraftcodev.core.utils.cacheExpensiveOperation
-import net.msrandom.minecraftcodev.core.utils.getAsPath
 import net.msrandom.minecraftcodev.core.utils.zipFileSystem
 import net.msrandom.minecraftcodev.remapper.dependency.getNamespaceId
-import org.gradle.api.file.FileCollection
 import org.objectweb.asm.commons.Remapper
 import java.io.File
 import java.nio.file.Path

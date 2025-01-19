@@ -48,17 +48,19 @@ class MinecraftCodevRunsPlugin<T : PluginAware> : Plugin<T> {
 
             project.integrateIdeaRuns()
 
-            runs.all { builder ->
-                fun taskName(builder: MinecraftRunConfigurationBuilder) =
-                    ApplicationPlugin.TASK_RUN_NAME + GUtil.toCamelCase(builder.name.replace(':', '-'))
+            runs.all { configuration ->
+                fun taskName(configuration: MinecraftRunConfiguration) =
+                    ApplicationPlugin.TASK_RUN_NAME + GUtil.toCamelCase(configuration.name)
 
-                tasks.register(taskName(builder), JavaExec::class.java) { javaExec ->
-                    val configuration = builder.build()
+                tasks.register(taskName(configuration), JavaExec::class.java) { javaExec ->
+                    javaExec.doFirst {
+                        javaExec.environment.putAll(System.getenv())
 
-                    javaExec.environment = configuration.environment.keySet().get().associateWith {
-                        object {
-                            override fun toString() = configuration.environment.getting(it).get()
-                        }
+                        javaExec.environment.putAll(configuration.environment.keySet().get().associateWith {
+                            object {
+                                override fun toString() = configuration.environment.getting(it).get()
+                            }
+                        })
                     }
 
                     javaExec.javaLauncher.set(project.serviceOf<JavaToolchainService>().launcherFor {

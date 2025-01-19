@@ -37,10 +37,10 @@ abstract class LoadMappings : CachedMinecraftTask() {
 
     @TaskAction
     fun load() {
-        cacheExpensiveOperation(cacheParameters.directory.getAsPath(), "mappings", mappings, output.getAsPath()) {
+        cacheExpensiveOperation(cacheParameters.directory.getAsPath(), "mappings", mappings, output.getAsPath()) { (output) ->
             val mappings = loadMappings(mappings, javaExecutable.get(), cacheParameters, execOperations)
 
-            it.bufferedWriter().use { writer ->
+            output.bufferedWriter().use { writer ->
                 mappings.accept(Tiny2Writer(writer, false))
             }
         }

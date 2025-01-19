@@ -80,7 +80,7 @@ abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
         )
     }
 
-    private fun resolve(cacheDirectory: Path, outputPath: Path) {
+    private fun resolve(cacheDirectory: Path, outputPath: Path, clientExtra: Path) {
         val isOffline = cacheParameters.getIsOffline().get()
 
         val metadata = cacheParameters.versionList().version(version.get())
@@ -133,8 +133,6 @@ abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
         val librariesFile = Files.createTempFile("libraries", ".txt")
 
         librariesFile.writeLines(libraries.flatMap { listOf("-e", it.absolutePath) })
-
-        val clientExtra = clientExtra.get()
 
         val patchLog = temporaryDir.resolve("patch.log").outputStream()
         val renameLog = temporaryDir.resolve("rename.log").outputStream()
@@ -272,9 +270,9 @@ abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
             System.setErr(err)
         }
 
-        clientJar.copyTo(clientExtra.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        clientJar.copyTo(clientExtra, StandardCopyOption.REPLACE_EXISTING)
 
-        zipFileSystem(clientExtra.toPath()).use { clientZip ->
+        zipFileSystem(clientExtra).use { clientZip ->
             clientZip.getPath("/").walk {
                 for (path in filter(Path::isRegularFile)) {
                     if (path.toString().endsWith(".class") || path.startsWith("/META-INF")) {
@@ -291,8 +289,8 @@ abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
     fun resolve() {
         val cacheDirectory = cacheParameters.directory.getAsPath()
 
-        cacheExpensiveOperation(cacheDirectory, "patch", patches, output.getAsPath()) {
-            resolve(cacheDirectory, it)
+        cacheExpensiveOperation(cacheDirectory, "patch", patches, output.getAsPath(), clientExtra.getAsPath()) { (output, clientExtra) ->
+            resolve(cacheDirectory, output, clientExtra)
         }
     }
 }

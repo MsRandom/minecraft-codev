@@ -27,10 +27,10 @@ import kotlin.io.path.readText
 import kotlin.random.Random
 
 abstract class RunConfigurationDefaultsContainer : ExtensionAware {
-    lateinit var builder: MinecraftRunConfigurationBuilder
+    lateinit var configuration: MinecraftRunConfiguration
 
     fun client(minecraftVersion: Provider<String>) {
-        builder.action {
+        configuration.apply {
             val manifest = getManifest(minecraftVersion)
 
             val extractNativesTask =
@@ -148,7 +148,7 @@ abstract class RunConfigurationDefaultsContainer : ExtensionAware {
     }
 
     fun server(minecraftVersion: Provider<String>) {
-        builder.action {
+        configuration.apply {
             val manifestProvider = getManifest(minecraftVersion)
 
             arguments.add("nogui")

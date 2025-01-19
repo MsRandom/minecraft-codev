@@ -15,10 +15,10 @@ import kotlin.io.path.createDirectories
 
 open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDefaultsContainer) {
     private fun defaults(sidedMain: FabricInstaller.MainClass.() -> String) {
-        defaults.builder.jvmArguments("-Dfabric.development=true")
-        // defaults.builder.jvmArguments("-Dmixin.env.remapRefMap=true")
+        defaults.configuration.jvmArguments("-Dfabric.development=true")
+        // defaults.configuration.jvmArguments("-Dmixin.env.remapRefMap=true")
 
-        defaults.builder.action {
+        defaults.configuration.apply {
             val remapClasspathDirectory = project.layout.buildDirectory.dir("fabricRemapClasspath")
 
             mainClass.set(
@@ -41,14 +41,12 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
                 },
             )
         }
-
-        defaults.builder.jvmArguments()
     }
 
     fun client(version: Provider<String>) {
         defaults(FabricInstaller.MainClass::client)
 
-        defaults.builder.action {
+        defaults.configuration.apply {
             val assetIndex =
                 version.map {
                     cacheParameters
@@ -82,9 +80,7 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
     fun server() {
         defaults(FabricInstaller.MainClass::server)
 
-        defaults.builder.apply {
-            arguments("nogui")
-        }
+        defaults.configuration.arguments("nogui")
     }
 
     fun data(
@@ -93,7 +89,7 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
     ) {
         client(version)
 
-        defaults.builder.action {
+        defaults.configuration.apply {
             val data = project.objects.newInstance(FabricDatagenRunConfigurationData::class.java)
 
             action.execute(data)
@@ -105,12 +101,10 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
     }
 
     private fun gameTest() {
-        defaults.builder.apply {
-            jvmArguments(
-                "-Dfabric-api.gametest",
-                "-Dfabric.autoTest",
-            )
-        }
+        defaults.configuration.jvmArguments(
+            "-Dfabric-api.gametest",
+            "-Dfabric.autoTest",
+        )
     }
 
     fun gameTestServer() {

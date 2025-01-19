@@ -279,8 +279,8 @@ abstract class JarIntersection : DefaultTask() {
     fun intersection() {
         val output = output.getAsPath()
 
-        cacheExpensiveOperation(cacheDirectory.getAsPath(), "intersection", files, output) {
-            intersection(it)
+        cacheExpensiveOperation(cacheDirectory.getAsPath(), "intersection", files, output) { (output) ->
+            intersection(output)
         }
     }
 }

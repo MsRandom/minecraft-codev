@@ -110,8 +110,8 @@ abstract class AccessWiden : DefaultTask() {
             from(inputFile)
         }
 
-        cacheExpensiveOperation(cacheDirectory.getAsPath(), "access-widened", cacheKey, outputFile.getAsPath()) {
-            accessWiden(it)
+        cacheExpensiveOperation(cacheDirectory.getAsPath(), "access-widened", cacheKey, outputFile.getAsPath()) { (output) ->
+            accessWiden(output)
         }
     }
 }

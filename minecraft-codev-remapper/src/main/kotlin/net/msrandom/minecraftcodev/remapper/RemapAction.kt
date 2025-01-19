@@ -8,7 +8,6 @@ import net.msrandom.minecraftcodev.core.utils.cacheExpensiveOperation
 import net.msrandom.minecraftcodev.core.utils.getAsPath
 import org.gradle.api.artifacts.transform.*
 import org.gradle.api.file.ConfigurableFileCollection
-import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.FileCollection
 import org.gradle.api.file.FileSystemLocation
 import org.gradle.api.file.RegularFileProperty
@@ -16,14 +15,11 @@ import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.*
-import org.gradle.jvm.toolchain.JavaLauncher
 import org.gradle.process.ExecOperations
 import java.nio.file.Files
 import javax.inject.Inject
-import kotlin.io.path.deleteExisting
+import kotlin.io.path.bufferedWriter
 import kotlin.io.path.reader
-import kotlin.io.path.writer
-import kotlin.io.reader
 
 @CacheableTransform
 abstract class RemapAction : TransformAction<RemapAction.Parameters> {
@@ -94,10 +90,10 @@ abstract class RemapAction : TransformAction<RemapAction.Parameters> {
 
         val mappingsFile = Files.createTempDirectory("mappings").resolve("mappings.tiny")
 
-        cacheExpensiveOperation(parameters.cacheParameters.directory.getAsPath(), "mappings", parameters.mappings, mappingsFile) {
+        cacheExpensiveOperation(parameters.cacheParameters.directory.getAsPath(), "mappings", parameters.mappings, mappingsFile) { (output) ->
             val mappings = loadMappings(parameters.mappings, parameters.javaExecutable.get(), parameters.cacheParameters, execOperations)
 
-            mappings.accept(Tiny2Writer(it.writer(), false))
+            mappings.accept(Tiny2Writer(output.bufferedWriter(), false))
         }
 
         val cacheKey = objectFactory.fileCollection()
@@ -106,7 +102,7 @@ abstract class RemapAction : TransformAction<RemapAction.Parameters> {
         cacheKey.from(parameters.mappings)
         cacheKey.from(inputFile.get().asFile)
 
-        cacheExpensiveOperation(parameters.cacheParameters.directory.getAsPath(), "remap", cacheKey, output.toPath()) {
+        cacheExpensiveOperation(parameters.cacheParameters.directory.getAsPath(), "remap", cacheKey, output.toPath()) { (output) ->
             println("Remapping mod $input from $sourceNamespace to $targetNamespace")
 
             val mappings = MemoryMappingTree()
@@ -118,7 +114,7 @@ abstract class RemapAction : TransformAction<RemapAction.Parameters> {
                 sourceNamespace,
                 targetNamespace,
                 input.toPath(),
-                it,
+                output,
                 classpath + parameters.extraClasspath,
             )
         }

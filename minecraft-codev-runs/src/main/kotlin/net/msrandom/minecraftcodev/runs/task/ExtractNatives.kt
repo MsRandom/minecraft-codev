@@ -11,11 +11,14 @@ import org.gradle.api.artifacts.ConfigurationContainer
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.artifacts.dsl.DependencyHandler
 import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
+import org.gradle.nativeplatform.OperatingSystemFamily
+import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import javax.inject.Inject
@@ -35,6 +38,9 @@ abstract class ExtractNatives : CachedMinecraftTask() {
         @Inject get
 
     abstract val dependencyHandler: DependencyHandler
+        @Inject get
+
+    abstract val objects: ObjectFactory
         @Inject get
 
     init {
@@ -60,7 +66,9 @@ abstract class ExtractNatives : CachedMinecraftTask() {
                 dependencyHandler.create("${it.name}:$classifier") to it.extract
             }
 
-        val config = configurationContainer.detachedConfiguration(*libs.keys.toTypedArray())
+        val config = configurationContainer.detachedConfiguration(*libs.keys.toTypedArray()).apply {
+            attributes.attribute(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE, objects.named(OperatingSystemFamily::class.java, DefaultNativePlatform.host().operatingSystem.toFamilyName()))
+        }
 
         val artifactView = config.incoming.artifactView { view ->
             view.componentFilter {

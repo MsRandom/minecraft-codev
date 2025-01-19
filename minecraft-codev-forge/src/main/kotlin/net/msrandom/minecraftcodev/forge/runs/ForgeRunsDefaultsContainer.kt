@@ -18,9 +18,11 @@ import net.msrandom.minecraftcodev.runs.RunConfigurationDefaultsContainer.Compan
 import net.msrandom.minecraftcodev.runs.task.DownloadAssets
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
 import org.gradle.api.Action
+import org.gradle.api.Task
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.FileCollection
+import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.Input
@@ -67,9 +69,9 @@ open class ForgeRunsDefaultsContainer(
         config: UserdevConfig,
         arguments: MutableList<Any?>,
         existing: List<String>,
-        extractNativesName: String,
-        downloadAssetsName: String,
-        modId: Provider<String>,
+        extractNatives: Provider<ExtractNatives>,
+        downloadAssets: Provider<DownloadAssets>,
+        data: ForgeRunConfigurationData,
     ) {
         arguments.addAll(
             existing.map {
@@ -78,9 +80,9 @@ open class ForgeRunsDefaultsContainer(
                         manifest,
                         config,
                         it.substring(1, it.length - 1),
-                        extractNativesName,
-                        downloadAssetsName,
-                        modId,
+                        extractNatives,
+                        downloadAssets,
+                        data,
                     )
                 } else {
                     it
@@ -93,18 +95,14 @@ open class ForgeRunsDefaultsContainer(
         manifest: MinecraftVersionMetadata,
         config: UserdevConfig,
         template: String,
-        extractNativesName: String,
-        downloadAssetsName: String,
-        modId: Provider<String>,
+        extractNatives: Provider<ExtractNatives>,
+        downloadAssets: Provider<DownloadAssets>,
+        data: ForgeRunConfigurationData,
     ): Any? =
         when (template) {
             "asset_index" -> manifest.assets
             "assets_root" -> {
-                val task = project.tasks.named(downloadAssetsName, DownloadAssets::class.java)
-
-                beforeRun.add(task)
-
-                task.flatMap(DownloadAssets::assetsDirectory)
+                downloadAssets.flatMap(DownloadAssets::assetsDirectory)
             }
 
             "modules" -> {
@@ -134,15 +132,19 @@ open class ForgeRunsDefaultsContainer(
             "MC_VERSION" -> manifest.id
             "mcp_mappings" -> "minecraft-codev.mappings"
             "source_roots" -> {
-                val files = sourceSet.map {
-                    if (it.output.resourcesDir == null) {
-                        it.output.classesDirs
-                    } else {
-                        project.files(it.output.resourcesDir, it.output.classesDirs)
+                val files = project.files(data.additionalIncludedSourceSets.flatMap { extra ->
+                    sourceSet.map { primary ->
+                        (extra + primary).map {
+                            if (it.output.resourcesDir == null) {
+                                it.output.classesDirs
+                            } else {
+                                project.files(it.output.resourcesDir, it.output.classesDirs)
+                            }
+                        }
                     }
-                }
+                })
 
-                val modClasses = files.zip(modId, ::Pair).map { (files, modId) ->
+                val modClasses = data.modId.map { modId ->
                     files.joinToString(File.pathSeparator) {
                         "$modId%%$it"
                     }
@@ -221,13 +223,21 @@ open class ForgeRunsDefaultsContainer(
 
                 path.parent.createDirectories()
 
-                // TODO Works for neoforge, for forge it should be ${sourceSet.get().runtimeClasspath - sourceSet.get().output}
-                val runtimeClasspath = sourceSet.flatMap {
-                    project.configurations.named(it.runtimeClasspathConfigurationName)
+                val runtimeClasspath = data.neoforgeClasspathHandling.flatMap {
+                    if (it) {
+                        sourceSet.flatMap {
+                            // TODO This is making an assumption that the patched minecraft Jar is not here
+                            project.configurations.named(it.runtimeClasspathConfigurationName)
+                        }
+                    } else {
+                        sourceSet.map {
+                            // TODO Can just be the runtimeClasspath configuration if the above assumption is false
+                            it.runtimeClasspath - it.output
+                        }
+                    }
                 }
 
                 runtimeClasspath.map {
-                    // TODO This is making an assumption that the forge Jar is not here
                     val files = it.map(File::getAbsolutePath)
 
                     path.writeLines(files)
@@ -237,11 +247,7 @@ open class ForgeRunsDefaultsContainer(
             }
 
             "natives" -> {
-                val task = project.tasks.named(extractNativesName, ExtractNatives::class.java)
-
-                beforeRun.add(task)
-
-                task.flatMap(ExtractNatives::destinationDirectory)
+                extractNatives.flatMap(ExtractNatives::destinationDirectory)
             }
 
             else -> {
@@ -258,13 +264,42 @@ open class ForgeRunsDefaultsContainer(
     ) {
         val configProvider = getUserdevData(data.patches)
 
-        val extractNativesTaskName = sourceSet.get().extractNativesTaskName
-        val downloadAssetsTaskName = sourceSet.get().downloadAssetsTaskName
+        val extractNativesTask = sourceSet.flatMap {
+            project.tasks.named(it.extractNativesTaskName, ExtractNatives::class.java)
+        }
+
+        val downloadAssetsTask = sourceSet.flatMap {
+            project.tasks.named(it.downloadAssetsTaskName, DownloadAssets::class.java)
+        }
 
         val getRun: UserdevConfig.() -> UserdevConfig.Run = {
             runType(runs)
                 ?: throw UnsupportedOperationException("Attempted to use $caller run configuration which doesn't exist.")
         }
+
+        beforeRun.addAll(configProvider.flatMap {
+            val list = project.objects.listProperty(Task::class.java)
+
+            val hasAssets = it.getRun().args.any {
+                it == "{assets_root}"
+            } || it.getRun().env.values.any {
+                it == "{assets_root}"
+            }
+
+            val hasNatives = it.getRun().env.values.any {
+                it == "{natives}"
+            }
+
+            if (hasAssets) {
+                list.add(downloadAssetsTask)
+            }
+
+            if (hasNatives) {
+                list.add(extractNativesTask)
+            }
+
+            list
+        })
 
         val manifestProvider = getManifest(minecraftVersion)
 
@@ -282,18 +317,18 @@ open class ForgeRunsDefaultsContainer(
                                     manifest,
                                     userdevConfig,
                                     value.substring(2, value.length - 1),
-                                    extractNativesTaskName,
-                                    downloadAssetsTaskName,
-                                    data.modId,
+                                    extractNativesTask,
+                                    downloadAssetsTask,
+                                    data,
                                 )
                             } else if (value.startsWith('{')) {
                                 resolveTemplate(
                                     manifest,
                                     userdevConfig,
                                     value.substring(1, value.length - 1),
-                                    extractNativesTaskName,
-                                    downloadAssetsTaskName,
-                                    data.modId,
+                                    extractNativesTask,
+                                    downloadAssetsTask,
+                                    data,
                                 )
                             } else {
                                 value
@@ -314,9 +349,9 @@ open class ForgeRunsDefaultsContainer(
                     userdevConfig,
                     arguments,
                     userdevConfig.getRun().args,
-                    extractNativesTaskName,
-                    downloadAssetsTaskName,
-                    data.modId,
+                    extractNativesTask,
+                    downloadAssetsTask,
+                    data,
                 )
 
                 for (mixinConfig in data.mixinConfigs) {
@@ -337,9 +372,9 @@ open class ForgeRunsDefaultsContainer(
                     userdevConfig,
                     jvmArguments,
                     run.jvmArgs,
-                    extractNativesTaskName,
-                    downloadAssetsTaskName,
-                    data.modId,
+                    extractNativesTask,
+                    downloadAssetsTask,
+                    data,
                 )
 
                 for ((key, value) in run.props) {
@@ -352,9 +387,9 @@ open class ForgeRunsDefaultsContainer(
                                     manifest,
                                     userdevConfig,
                                     template,
-                                    extractNativesTaskName,
-                                    downloadAssetsTaskName,
-                                    data.modId,
+                                    extractNativesTask,
+                                    downloadAssetsTask,
+                                    data,
                                 ),
                             ),
                         )
@@ -371,45 +406,41 @@ open class ForgeRunsDefaultsContainer(
     fun client(
         minecraftVersion: Provider<String>,
         action: Action<ForgeRunConfigurationData>? = null,
-    ): Unit =
-        defaults.builder.action {
-            val data =
-                defaults.builder.project.objects
-                    .newInstance(ForgeRunConfigurationData::class.java)
+    ) {
+        val data = defaults.configuration.project.objects.newInstance(ForgeRunConfigurationData::class.java)
 
+        defaults.configuration.apply {
             action?.execute(data)
 
             addData(::client.name, minecraftVersion, data, UserdevConfig.Runs::client)
         }
+    }
 
     fun server(
         minecraftVersion: Provider<String>,
         action: Action<ForgeRunConfigurationData>? = null,
-    ): Unit =
-        defaults.builder.action {
-            val data =
-                defaults.builder.project.objects
-                    .newInstance(ForgeRunConfigurationData::class.java)
+    ) {
+        val data = defaults.configuration.project.objects.newInstance(ForgeRunConfigurationData::class.java)
 
+        defaults.configuration.apply {
             action?.execute(data)
 
             addData(::server.name, minecraftVersion, data, UserdevConfig.Runs::server)
         }
+    }
 
     fun data(
         minecraftVersion: Provider<String>,
         action: Action<ForgeDatagenRunConfigurationData>,
     ) {
-        defaults.builder.action {
-            val data =
-                defaults.builder.project.objects
-                    .newInstance(ForgeDatagenRunConfigurationData::class.java)
+        val data = defaults.configuration.project.objects.newInstance(ForgeDatagenRunConfigurationData::class.java)
 
+        defaults.configuration.apply {
             action.execute(data)
 
             val outputDirectory = data.getOutputDirectory(this)
 
-            addData(UserdevConfig.Runs::data.name, minecraftVersion, data, UserdevConfig.Runs::data)
+            addData(::data.name, minecraftVersion, data, UserdevConfig.Runs::data)
 
             val resources = sourceSet.map { it.output.resourcesDir!! }
 
@@ -425,14 +456,10 @@ open class ForgeRunsDefaultsContainer(
         minecraftVersion: Provider<String>,
         action: Action<ForgeRunConfigurationData>? = null,
     ) {
-        defaults.builder.setup {
-            sourceSet.convention(project.extension<SourceSetContainer>().named(SourceSet.TEST_SOURCE_SET_NAME))
-        }
+        val data = defaults.configuration.project.objects.newInstance(ForgeRunConfigurationData::class.java)
 
-        defaults.builder.action {
-            val data =
-                defaults.builder.project.objects
-                    .newInstance(ForgeRunConfigurationData::class.java)
+        defaults.configuration.apply {
+            sourceSet.convention(project.extension<SourceSetContainer>().named(SourceSet.TEST_SOURCE_SET_NAME))
 
             action?.execute(data)
 
@@ -451,6 +478,14 @@ interface ForgeRunConfigurationData {
         get
 
     val modId: Property<String>
+        @Input
+        get
+
+    val neoforgeClasspathHandling: Property<Boolean>
+        @Input
+        get
+
+    val additionalIncludedSourceSets: ListProperty<SourceSet>
         @Input
         get
 }
