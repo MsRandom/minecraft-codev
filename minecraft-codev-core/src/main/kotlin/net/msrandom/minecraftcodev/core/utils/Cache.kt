@@ -11,7 +11,6 @@ import org.gradle.api.file.Directory
 import org.gradle.api.provider.Provider
 import java.io.File
 import java.io.InputStream
-import java.nio.file.FileSystemException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
@@ -21,7 +20,11 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 import kotlin.io.path.*
 
-fun <R : Any> RepositoryResourceAccessor.withCachedResource(cacheDirectory: File, relativePath: String, reader: (InputStream) -> R): R? {
+fun <R : Any> RepositoryResourceAccessor.withCachedResource(
+    cacheDirectory: File,
+    relativePath: String,
+    reader: (InputStream) -> R
+): R? {
     val path = cacheDirectory.resolve("metadata-rule-download-cache").resolve(relativePath)
 
     return if (path.exists()) {
@@ -70,21 +73,9 @@ internal fun commonJarPath(
 
 fun Path.tryLink(target: Path) {
     try {
-        createSymbolicLinkPointingTo(target)
-    } catch (exception: SecurityException) {
-        if (exception.message?.let { "symbolic" in it } != true) {
-            throw exception
-        }
-
-        try {
-            createLinkPointingTo(target)
-        } catch (exception: FileSystemException) {
-            if (exception.message?.let { "Invalid cross-device link" in it } != true) {
-                throw exception
-            }
-
-            target.copyTo(this, StandardCopyOption.COPY_ATTRIBUTES)
-        }
+        createLinkPointingTo(target)
+    } catch (_: Exception) {
+        target.copyTo(this, StandardCopyOption.COPY_ATTRIBUTES)
     }
 }
 
@@ -123,22 +114,20 @@ fun cacheExpensiveOperation(
         .resolve(operationName)
         .resolve(directoryName)
 
-    var allCached = true
-
-    for (outputPath in outputPathsList) {
-        val cachedOutput = cachedOperationDirectoryName.resolve(outputPath.fileName)
-
-        if (cachedOutput.exists()) {
-            outputPath.deleteIfExists()
-            outputPath.tryLink(cachedOutput)
-
-            println("Cache hit for $operationName operation for $outputPath")
-        } else {
-            allCached = false
-        }
+    val allCached = outputPathsList.all {
+        cachedOperationDirectoryName.resolve(it.fileName).exists()
     }
 
     if (allCached) {
+        for (outputPath in outputPathsList) {
+            val cachedOutput = cachedOperationDirectoryName.resolve(outputPath.fileName)
+
+            outputPath.deleteIfExists()
+            outputPath.tryLink(cachedOutput)
+        }
+
+        println("Cache hit for $operationName operation for $outputPathsList")
+
         return
     }
 
@@ -150,7 +139,8 @@ fun cacheExpensiveOperation(
 
     lock.withLock {
         val temporaryPaths = outputPathsList.map { outputPath ->
-            val temporaryPath = Files.createTempFile("$operationName-${outputPath.nameWithoutExtension}", ".${outputPath.extension}")
+            val temporaryPath =
+                Files.createTempFile("$operationName-${outputPath.nameWithoutExtension}", ".${outputPath.extension}")
             temporaryPath.deleteExisting()
 
             temporaryPath

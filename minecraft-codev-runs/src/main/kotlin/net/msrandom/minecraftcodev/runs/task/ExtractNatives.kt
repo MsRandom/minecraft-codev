@@ -15,7 +15,7 @@ import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
-import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
 import org.gradle.nativeplatform.OperatingSystemFamily
 import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
@@ -32,7 +32,7 @@ abstract class ExtractNatives : CachedMinecraftTask() {
         @Input get
 
     abstract val destinationDirectory: DirectoryProperty
-        @OutputDirectory get
+        @Internal get
 
     abstract val configurationContainer: ConfigurationContainer
         @Inject get

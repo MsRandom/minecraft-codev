@@ -7,6 +7,7 @@ import org.gradle.api.artifacts.transform.TransformOutputs
 import org.gradle.api.artifacts.transform.TransformParameters
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.FileSystemLocation
+import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.*
@@ -14,9 +15,9 @@ import org.gradle.api.tasks.*
 @CacheableTransform
 abstract class RemapSources : TransformAction<RemapSources.Parameters> {
     abstract class Parameters : TransformParameters {
-        abstract val mappings: ConfigurableFileCollection
-            @InputFiles
-            @PathSensitive(PathSensitivity.RELATIVE)
+        abstract val mappings: RegularFileProperty
+            @InputFile
+            @PathSensitive(PathSensitivity.NONE)
             get
 
         abstract val sourceNamespace: Property<String>

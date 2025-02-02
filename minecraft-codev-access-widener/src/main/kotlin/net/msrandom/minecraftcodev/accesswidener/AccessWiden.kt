@@ -22,6 +22,8 @@ import java.nio.file.StandardCopyOption
 import javax.inject.Inject
 import kotlin.io.path.*
 
+const val ACCESS_WIDEN_OPERATION_VERSION = 1
+
 @CacheableTask
 abstract class AccessWiden : DefaultTask() {
     abstract val inputFile: RegularFileProperty
@@ -110,7 +112,7 @@ abstract class AccessWiden : DefaultTask() {
             from(inputFile)
         }
 
-        cacheExpensiveOperation(cacheDirectory.getAsPath(), "access-widened", cacheKey, outputFile.getAsPath()) { (output) ->
+        cacheExpensiveOperation(cacheDirectory.getAsPath(), "access-widen-$ACCESS_WIDEN_OPERATION_VERSION", cacheKey, outputFile.getAsPath()) { (output) ->
             accessWiden(output)
         }
     }

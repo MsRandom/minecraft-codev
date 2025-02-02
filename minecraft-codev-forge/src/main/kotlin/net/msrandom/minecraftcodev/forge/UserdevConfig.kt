@@ -60,6 +60,8 @@ data class UserdevConfig(
         val server: Run,
         val client: Run,
         val data: Run? = null,
+        val serverData: Run? = null,
+        val clientData: Run? = null,
         val gameTestServer: Run? = null,
     )
 

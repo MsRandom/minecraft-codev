@@ -1,10 +1,24 @@
 package net.msrandom.minecraftcodev.accesswidener
 
+import kotlinx.serialization.InternalSerializationApi
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Serializer
 import kotlinx.serialization.Transient
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.SerialKind
+import kotlinx.serialization.descriptors.buildClassSerialDescriptor
+import kotlinx.serialization.descriptors.buildSerialDescriptor
+import kotlinx.serialization.descriptors.element
+import kotlinx.serialization.descriptors.serialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.encoding.decodeStructure
+import kotlinx.serialization.encoding.encodeStructure
 import net.fabricmc.accesswidener.AccessWidenerReader
 import net.fabricmc.accesswidener.AccessWidenerVisitor
 import org.cadixdev.at.AccessChange
+import org.cadixdev.at.AccessTransform
 import org.cadixdev.at.ModifierChange
 import org.objectweb.asm.Opcodes
 
@@ -23,16 +37,16 @@ data class AccessModifiers(
         visitHeader(modifiers.namespace)
 
         for ((className, classModel) in modifiers.classes) {
-            visitClass(className, classModel.accessChange)
+            visitClass(className, classModel.accessTransform)
 
             for ((methodName, methodModels) in classModel.methods) {
                 for (methodModel in methodModels) {
-                    visitMethod(className, methodName, methodModel.descriptor, methodModel.accessChange, methodModel.extendabilityChange)
+                    visitMethod(className, methodName, methodModel.descriptor, methodModel.accessTransform)
                 }
             }
 
             for ((fieldName, fieldModel) in classModel.fields) {
-                visitField(className, fieldName, fieldModel.descriptor, fieldModel.accessChange, fieldModel.mutabilityChange)
+                visitField(className, fieldName, fieldModel.descriptor, fieldModel.accessTransform)
             }
         }
     }
@@ -56,22 +70,15 @@ data class AccessModifiers(
     ) {
         if (!shouldVisit(transitive)) return
 
-        val accessChange =
-            if (access == AccessWidenerReader.AccessType.ACCESSIBLE) {
-                AccessChange.PUBLIC
-            } else {
-                AccessChange.NONE
+        val accessTransform =
+            when (access) {
+                AccessWidenerReader.AccessType.ACCESSIBLE -> AccessTransform.PUBLIC
+                AccessWidenerReader.AccessType.MUTABLE -> AccessTransform.of(ModifierChange.REMOVE)
+                else -> AccessTransform.EMPTY
             }
 
-        val extendabilityChange =
-            if (access == AccessWidenerReader.AccessType.MUTABLE) {
-                ModifierChange.REMOVE
-            } else {
-                ModifierChange.NONE
-            }
-
-        if (accessChange != AccessChange.NONE || extendabilityChange != ModifierChange.NONE) {
-            visitField(owner, name, descriptor, accessChange, extendabilityChange)
+        if (accessTransform != AccessTransform.EMPTY) {
+            visitField(owner, name, descriptor, accessTransform)
         }
     }
 
@@ -84,22 +91,15 @@ data class AccessModifiers(
     ) {
         if (!shouldVisit(transitive)) return
 
-        val accessChange =
+        val accessTransform =
             when (access) {
-                AccessWidenerReader.AccessType.ACCESSIBLE -> AccessChange.PUBLIC
-                AccessWidenerReader.AccessType.EXTENDABLE -> AccessChange.PROTECTED
-                else -> AccessChange.NONE
+                AccessWidenerReader.AccessType.ACCESSIBLE -> AccessTransform.PUBLIC
+                AccessWidenerReader.AccessType.EXTENDABLE -> AccessTransform.of(AccessChange.PROTECTED, ModifierChange.REMOVE)
+                else -> AccessTransform.EMPTY
             }
 
-        val extendabilityChange =
-            if (access == AccessWidenerReader.AccessType.EXTENDABLE) {
-                ModifierChange.REMOVE
-            } else {
-                ModifierChange.NONE
-            }
-
-        if (accessChange != AccessChange.NONE) {
-            visitMethod(owner, name, descriptor, accessChange, extendabilityChange)
+        if (accessTransform != AccessTransform.EMPTY) {
+            visitMethod(owner, name, descriptor, accessTransform)
         }
     }
 
@@ -110,28 +110,36 @@ data class AccessModifiers(
     ) {
         if (!shouldVisit(transitive)) return
 
-        val accessChange =
+        val accessTransform =
             when (access) {
-                AccessWidenerReader.AccessType.ACCESSIBLE -> AccessChange.PUBLIC
-                AccessWidenerReader.AccessType.EXTENDABLE -> AccessChange.PROTECTED
-                else -> AccessChange.NONE
+                AccessWidenerReader.AccessType.ACCESSIBLE -> AccessTransform.PUBLIC
+                AccessWidenerReader.AccessType.EXTENDABLE -> AccessTransform.of(AccessChange.PROTECTED, ModifierChange.REMOVE)
+                else -> AccessTransform.EMPTY
             }
 
-        if (accessChange != AccessChange.NONE) {
-            visitClass(name, accessChange)
+        if (accessTransform != AccessTransform.EMPTY) {
+            visitClass(name, accessTransform)
         }
     }
 
     fun visitClass(
         name: String,
-        accessChange: AccessChange,
+        accessTransform: AccessTransform,
     ) {
+        var nestedClassSeparatorIndex = name.indexOf('$')
+
+        while (nestedClassSeparatorIndex != -1) {
+            classes.computeIfAbsent(name.substring(0, nestedClassSeparatorIndex)) { ClassModel() }
+
+            nestedClassSeparatorIndex = name.indexOf('$', nestedClassSeparatorIndex + 1)
+        }
+
         classes.compute(name) { _, existing ->
             if (existing == null) {
-                ClassModel(accessChange)
+                ClassModel(accessTransform)
             } else {
                 ClassModel(
-                    accessChange.merge(existing.accessChange),
+                    accessTransform.merge(existing.accessTransform),
                     existing.methods,
                     existing.fields,
                 )
@@ -143,15 +151,14 @@ data class AccessModifiers(
         owner: String,
         name: String,
         descriptor: String,
-        accessChange: AccessChange,
-        extendabilityChange: ModifierChange,
+        accessTransform: AccessTransform,
     ) {
         val classModel = classes.computeIfAbsent(owner) { ClassModel() }
 
         var existingMethod = classModel.method(name, descriptor)
 
         if (existingMethod == null) {
-            existingMethod = ClassModel.MethodModel(descriptor, accessChange, extendabilityChange)
+            existingMethod = ClassModel.MethodModel(descriptor, accessTransform)
 
             classModel.methods.computeIfAbsent(name) { mutableListOf() }.add(existingMethod)
         } else {
@@ -162,8 +169,7 @@ data class AccessModifiers(
             group.add(
                 ClassModel.MethodModel(
                     descriptor,
-                    accessChange.merge(existingMethod.accessChange),
-                    extendabilityChange.merge(existingMethod.extendabilityChange),
+                    accessTransform.merge(existingMethod.accessTransform),
                 ),
             )
         }
@@ -173,8 +179,7 @@ data class AccessModifiers(
         owner: String,
         name: String,
         descriptor: String?,
-        accessChange: AccessChange,
-        mutabilityChange: ModifierChange,
+        accessTransform: AccessTransform,
     ) {
         val classModel = classes.computeIfAbsent(owner) { ClassModel() }
 
@@ -187,8 +192,7 @@ data class AccessModifiers(
 
             ClassModel.FieldModel(
                 descriptor ?: existing?.descriptor,
-                accessChange.merge(existing?.accessChange ?: AccessChange.NONE),
-                mutabilityChange.merge(existing?.mutabilityChange ?: ModifierChange.NONE),
+                accessTransform.merge(existing?.accessTransform ?: AccessTransform.EMPTY),
             )
         }
     }
@@ -199,7 +203,7 @@ data class AccessModifiers(
         access: Int,
         name: String,
     ) = classes[name]?.let {
-        access.applyVisibilityModifiers(it.accessChange)
+        access.applyVisibilityModifiers(it.accessTransform.access).applyFinalModifiers(it.accessTransform.final)
     } ?: access
 
     fun getMethodAccess(
@@ -208,7 +212,7 @@ data class AccessModifiers(
         name: String,
         descriptor: String,
     ) = classes[owner]?.method(name, descriptor)?.let {
-        access.applyVisibilityModifiers(it.accessChange).applyFinalModifiers(it.extendabilityChange)
+        access.applyVisibilityModifiers(it.accessTransform.access).applyFinalModifiers(it.accessTransform.final)
     } ?: access
 
     fun getFieldAccess(
@@ -223,7 +227,7 @@ data class AccessModifiers(
             )
         }
 
-        access.applyVisibilityModifiers(it.accessChange).applyFinalModifiers(it.mutabilityChange)
+        access.applyVisibilityModifiers(it.accessTransform.access).applyFinalModifiers(it.accessTransform.final)
     } ?: access
 
     private fun Int.applyVisibilityModifiers(accessChange: AccessChange) =
@@ -243,7 +247,7 @@ data class AccessModifiers(
 
     @Serializable
     data class ClassModel(
-        val accessChange: AccessChange = AccessChange.NONE,
+        @Serializable(AccessTransformSerializer::class) val accessTransform: AccessTransform = AccessTransform.EMPTY,
         val methods: MutableMap<String, MutableList<MethodModel>> = hashMapOf(),
         val fields: MutableMap<String, FieldModel> = hashMapOf(),
     ) {
@@ -263,15 +267,37 @@ data class AccessModifiers(
         @Serializable
         data class MethodModel(
             val descriptor: String,
-            val accessChange: AccessChange,
-            val extendabilityChange: ModifierChange,
+            @Serializable(AccessTransformSerializer::class) val accessTransform: AccessTransform,
         )
 
         @Serializable
         data class FieldModel(
             val descriptor: String? = null,
-            val accessChange: AccessChange,
-            val mutabilityChange: ModifierChange,
+            @Serializable(AccessTransformSerializer::class) val accessTransform: AccessTransform,
         )
+    }
+
+    class AccessTransformSerializer : KSerializer<AccessTransform> {
+        @OptIn(InternalSerializationApi::class)
+        override val descriptor: SerialDescriptor
+            get() = buildClassSerialDescriptor(AccessTransform::class.qualifiedName!!) {
+                element<AccessChange>("accessChange")
+                element<ModifierChange>("finalChange")
+            }
+
+        override fun serialize(
+            encoder: Encoder,
+            value: AccessTransform
+        ) = encoder.encodeStructure(descriptor) {
+            encodeSerializableElement(serialDescriptor<AccessChange>(), 0, kotlinx.serialization.serializer(), value.access)
+            encodeSerializableElement(serialDescriptor<ModifierChange>(), 1, kotlinx.serialization.serializer(), value.final)
+        }
+
+        override fun deserialize(decoder: Decoder): AccessTransform = decoder.decodeStructure(descriptor) {
+            AccessTransform.of(
+                decodeSerializableElement(serialDescriptor<AccessChange>(), 0, kotlinx.serialization.serializer()),
+                decodeSerializableElement(serialDescriptor<ModifierChange>(), 1, kotlinx.serialization.serializer()),
+            )
+        }
     }
 }

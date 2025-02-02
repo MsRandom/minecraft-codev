@@ -7,6 +7,7 @@ import net.msrandom.minecraftcodev.core.utils.getAsPath
 import net.msrandom.minecraftcodev.core.utils.getGlobalCacheDirectoryProvider
 import net.msrandom.minecraftcodev.remapper.JarRemapper
 import net.msrandom.minecraftcodev.remapper.MinecraftCodevRemapperPlugin
+import net.msrandom.minecraftcodev.remapper.REMAP_OPERATION_VERSION
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
@@ -75,7 +76,7 @@ abstract class RemapTask : DefaultTask() {
         cacheKey.from(mappings)
         cacheKey.from(inputFile.get().asFile)
 
-        cacheExpensiveOperation(cacheDirectory.getAsPath(), "remap", cacheKey, outputFile.getAsPath()) { (output) ->
+        cacheExpensiveOperation(cacheDirectory.getAsPath(), "remap-$REMAP_OPERATION_VERSION", cacheKey, outputFile.getAsPath()) { (output) ->
             val mappings = MemoryMappingTree()
 
             Tiny2Reader.read(this.mappings.asFile.get().reader(), mappings)

@@ -6,8 +6,10 @@ import net.fabricmc.mappingio.tree.MemoryMappingTree
 import net.msrandom.minecraftcodev.core.task.CachedMinecraftParameters
 import net.msrandom.minecraftcodev.core.utils.cacheExpensiveOperation
 import net.msrandom.minecraftcodev.core.utils.getAsPath
+import net.msrandom.minecraftcodev.remapper.task.LOAD_MAPPINGS_OPERATION_VERSION
 import org.gradle.api.artifacts.transform.*
 import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.FileCollection
 import org.gradle.api.file.FileSystemLocation
 import org.gradle.api.file.RegularFileProperty
@@ -24,8 +26,8 @@ import kotlin.io.path.reader
 @CacheableTransform
 abstract class RemapAction : TransformAction<RemapAction.Parameters> {
     abstract class Parameters : TransformParameters {
-        abstract val mappings: ConfigurableFileCollection
-            @InputFiles
+        abstract val mappings: RegularFileProperty
+            @InputFile
             @PathSensitive(PathSensitivity.NONE)
             get
 
@@ -43,10 +45,7 @@ abstract class RemapAction : TransformAction<RemapAction.Parameters> {
         abstract val filterMods: Property<Boolean>
             @Input get
 
-        abstract val cacheParameters: CachedMinecraftParameters
-            @Nested get
-
-        abstract val javaExecutable: RegularFileProperty
+        abstract val cacheDirectory: DirectoryProperty
             @Internal get
 
         init {
@@ -77,7 +76,7 @@ abstract class RemapAction : TransformAction<RemapAction.Parameters> {
     override fun transform(outputs: TransformOutputs) {
         val input = inputFile.get().asFile
 
-        if (parameters.mappings.isEmpty || parameters.filterMods.get() && !isMod(input.toPath())) {
+        if (parameters.filterMods.get() && !isMod(input.toPath())) {
             outputs.file(inputFile)
 
             return
@@ -88,26 +87,18 @@ abstract class RemapAction : TransformAction<RemapAction.Parameters> {
 
         val output = outputs.file("${input.nameWithoutExtension}-$targetNamespace.${input.extension}")
 
-        val mappingsFile = Files.createTempDirectory("mappings").resolve("mappings.tiny")
-
-        cacheExpensiveOperation(parameters.cacheParameters.directory.getAsPath(), "mappings", parameters.mappings, mappingsFile) { (output) ->
-            val mappings = loadMappings(parameters.mappings, parameters.javaExecutable.get(), parameters.cacheParameters, execOperations)
-
-            mappings.accept(Tiny2Writer(output.bufferedWriter(), false))
-        }
-
         val cacheKey = objectFactory.fileCollection()
 
         cacheKey.from(classpath)
         cacheKey.from(parameters.mappings)
         cacheKey.from(inputFile.get().asFile)
 
-        cacheExpensiveOperation(parameters.cacheParameters.directory.getAsPath(), "remap", cacheKey, output.toPath()) { (output) ->
+        cacheExpensiveOperation(parameters.cacheDirectory.getAsPath(), "remap-$REMAP_OPERATION_VERSION", cacheKey, output.toPath()) { (output) ->
             println("Remapping mod $input from $sourceNamespace to $targetNamespace")
 
             val mappings = MemoryMappingTree()
 
-            Tiny2Reader.read(mappingsFile.reader(), mappings)
+            Tiny2Reader.read(parameters.mappings.getAsPath().reader(), mappings)
 
             JarRemapper.remap(
                 mappings,

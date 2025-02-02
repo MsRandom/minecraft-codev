@@ -355,7 +355,7 @@ open class ForgeRunsDefaultsContainer(
                 )
 
                 for (mixinConfig in data.mixinConfigs) {
-                    arguments.add(compileArgument("--mixin.config=", mixinConfig.absolutePath))
+                    arguments.add(compileArgument("--mixin.config=", mixinConfig.name))
                 }
 
                 compileArguments(arguments)
@@ -440,15 +440,20 @@ open class ForgeRunsDefaultsContainer(
 
             val outputDirectory = data.getOutputDirectory(this)
 
-            addData(::data.name, minecraftVersion, data, UserdevConfig.Runs::data)
+            addData(::data.name, minecraftVersion, data, { it.data ?: it.serverData })
 
-            val resources = sourceSet.map { it.output.resourcesDir!! }
+            val additionalExisting = data.additionalIncludedSourceSets.flatMap {
+                compileArguments(it.map {
+                    compileArgument("--existing=", it.output.resourcesDir)
+                })
+            }
 
             arguments.add(compileArgument("--mod=", data.modId))
             arguments.add("--all")
             arguments.add(compileArgument("--output=", outputDirectory))
-            arguments.add(compileArgument("--existing=", outputDirectory))
-            arguments.add(compileArgument("--existing=", resources))
+            arguments.add(compileArgument("--existing=", sourceSet.map { it.output.resourcesDir!! }))
+
+            arguments.addAll(additionalExisting)
         }
     }
 

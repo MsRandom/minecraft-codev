@@ -16,6 +16,8 @@ import java.io.File
 import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
 
+const val REMAP_OPERATION_VERSION = 1
+
 object JarRemapper {
     @Synchronized
     fun remap(

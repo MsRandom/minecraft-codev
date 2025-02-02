@@ -49,7 +49,7 @@ abstract class MinecraftDependenciesOperatingSystemMetadataRule @Inject construc
         }
 
         for ((operatingSystem, file) in classifierOperatingSystems.distinctBy { (operatingSystem, _) -> operatingSystem }) {
-            context.details.addVariant(operatingSystem, "runtime") { variant ->
+            context.details.maybeAddVariant(operatingSystem, "runtime") { variant ->
                 variant.attributes { attribute ->
                     attribute.attribute(
                         OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE,
@@ -58,6 +58,21 @@ abstract class MinecraftDependenciesOperatingSystemMetadataRule @Inject construc
                 }
 
                 variant.withFiles { files ->
+                    files.addFile(file)
+                }
+            }
+
+            context.details.maybeAddVariant(operatingSystem, "runtimeElements") { variant ->
+                variant.attributes { attribute ->
+                    attribute.attribute(
+                        OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE,
+                        objectFactory.named(OperatingSystemFamily::class.java, operatingSystem),
+                    )
+                }
+
+                variant.withFiles { files ->
+                    files.removeAllFiles()
+                    files.addFile("${id.name}-${id.version}.jar")
                     files.addFile(file)
                 }
             }

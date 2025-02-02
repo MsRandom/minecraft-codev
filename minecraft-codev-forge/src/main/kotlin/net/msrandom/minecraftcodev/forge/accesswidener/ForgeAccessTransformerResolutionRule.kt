@@ -64,10 +64,10 @@ class ForgeAccessTransformerResolutionRule : ZipAccessModifierResolutionRule {
             visitor.visitHeader(data.namespace)
 
             for ((name, classValue) in accessTransformer.classes) {
-                visitor.visitClass(name, classValue.get().access)
+                visitor.visitClass(name, classValue.get())
 
                 for ((fieldName, fieldValue) in classValue.fields) {
-                    visitor.visitField(name, fieldName, null, fieldValue.access, fieldValue.final)
+                    visitor.visitField(name, fieldName, null, fieldValue)
                 }
 
                 for ((methodSignature, methodValue) in classValue.methods) {
@@ -75,8 +75,7 @@ class ForgeAccessTransformerResolutionRule : ZipAccessModifierResolutionRule {
                         name,
                         methodSignature.name,
                         methodSignature.descriptor.toString(),
-                        methodValue.access,
-                        methodValue.final,
+                        methodValue
                     )
                 }
             }

@@ -12,6 +12,8 @@ import org.gradle.process.ExecOperations
 import javax.inject.Inject
 import kotlin.io.path.bufferedWriter
 
+const val LOAD_MAPPINGS_OPERATION_VERSION = 1
+
 @CacheableTask
 abstract class LoadMappings : CachedMinecraftTask() {
     abstract val mappings: ConfigurableFileCollection
@@ -37,7 +39,7 @@ abstract class LoadMappings : CachedMinecraftTask() {
 
     @TaskAction
     fun load() {
-        cacheExpensiveOperation(cacheParameters.directory.getAsPath(), "mappings", mappings, output.getAsPath()) { (output) ->
+        cacheExpensiveOperation(cacheParameters.directory.getAsPath(), "mappings-$LOAD_MAPPINGS_OPERATION_VERSION", mappings, output.getAsPath()) { (output) ->
             val mappings = loadMappings(mappings, javaExecutable.get(), cacheParameters, execOperations)
 
             output.bufferedWriter().use { writer ->
