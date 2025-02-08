@@ -25,6 +25,8 @@ import java.nio.file.StandardCopyOption
 import javax.inject.Inject
 import kotlin.io.path.*
 
+const val PATCH_OPERATION_VERSION = 1
+
 abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
     abstract val version: Property<String>
         @Input get
@@ -289,7 +291,7 @@ abstract class ResolvePatchedMinecraft : CachedMinecraftTask() {
     fun resolve() {
         val cacheDirectory = cacheParameters.directory.getAsPath()
 
-        cacheExpensiveOperation(cacheDirectory, "patch", patches, output.getAsPath(), clientExtra.getAsPath()) { (output, clientExtra) ->
+        cacheExpensiveOperation(cacheDirectory, "patch-$PATCH_OPERATION_VERSION", patches, output.getAsPath(), clientExtra.getAsPath()) { (output, clientExtra) ->
             resolve(cacheDirectory, output, clientExtra)
         }
     }

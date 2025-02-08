@@ -97,7 +97,7 @@ fun cacheExpensiveOperation(
 
     val hashes =
         runBlocking {
-            inputFiles.map {
+            inputFiles.sorted().map {
                 async { hashFile(it.toPath()).asBytes().toList() }
             }.awaitAll()
         }
@@ -114,30 +114,30 @@ fun cacheExpensiveOperation(
         .resolve(operationName)
         .resolve(directoryName)
 
-    val allCached = outputPathsList.all {
-        cachedOperationDirectoryName.resolve(it.fileName).exists()
-    }
-
-    if (allCached) {
-        for (outputPath in outputPathsList) {
-            val cachedOutput = cachedOperationDirectoryName.resolve(outputPath.fileName)
-
-            outputPath.deleteIfExists()
-            outputPath.tryLink(cachedOutput)
-        }
-
-        println("Cache hit for $operationName operation for $outputPathsList")
-
-        return
-    }
-
-    println("Cache miss for $operationName operation for $outputPathsList")
-
     val lock = operationLocks.computeIfAbsent(outputPathsList) {
         ReentrantLock()
     }
 
     lock.withLock {
+        val allCached = outputPathsList.all {
+            cachedOperationDirectoryName.resolve(it.fileName).exists()
+        }
+
+        if (allCached) {
+            for (outputPath in outputPathsList) {
+                val cachedOutput = cachedOperationDirectoryName.resolve(outputPath.fileName)
+
+                outputPath.deleteIfExists()
+                outputPath.tryLink(cachedOutput)
+            }
+
+            println("Cache hit for $operationName operation for $outputPathsList")
+
+            return
+        }
+
+        println("Cache miss for $operationName operation for $outputPathsList")
+
         val temporaryPaths = outputPathsList.map { outputPath ->
             val temporaryPath =
                 Files.createTempFile("$operationName-${outputPath.nameWithoutExtension}", ".${outputPath.extension}")
@@ -155,12 +155,12 @@ fun cacheExpensiveOperation(
 
             temporaryPath.copyTo(cachedOutput, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
         }
-    }
 
-    for (outputPath in outputPathsList) {
-        val cachedOutput = cachedOperationDirectoryName.resolve(outputPath.fileName)
+        for (outputPath in outputPathsList) {
+            val cachedOutput = cachedOperationDirectoryName.resolve(outputPath.fileName)
 
-        outputPath.deleteIfExists()
-        outputPath.tryLink(cachedOutput)
+            outputPath.deleteIfExists()
+            outputPath.tryLink(cachedOutput)
+        }
     }
 }
