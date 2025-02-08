@@ -24,11 +24,13 @@ import org.gradle.api.Action
 import org.gradle.api.Task
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.FileCollection
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
@@ -372,16 +374,8 @@ open class ForgeRunsDefaultsContainer(
         }
     }
 
-    fun data(action: Action<ForgeDatagenRunConfigurationData>) {
-        val data = defaults.configuration.project.objects.newInstance(ForgeDatagenRunConfigurationData::class.java)
-
-        action.execute(data)
-
+    private fun data(data: ForgeDatagenRunConfigurationData) {
         defaults.configuration.apply {
-            val outputDirectory = data.getOutputDirectory(this)
-
-            addData(::data.name, data) { it.data ?: it.serverData }
-
             val additionalExisting = data.additionalIncludedSourceSets.flatMap {
                 compileArguments(it.map {
                     compileArgument("--existing=", it.output.resourcesDir)
@@ -390,35 +384,33 @@ open class ForgeRunsDefaultsContainer(
 
             arguments.add(compileArgument("--mod=", data.modId))
             arguments.add("--all")
-            arguments.add(compileArgument("--output=", outputDirectory))
+            arguments.add(compileArgument("--output=", data.outputDirectory))
             arguments.add(compileArgument("--existing=", sourceSet.map { it.output.resourcesDir!! }))
 
             arguments.addAll(additionalExisting)
         }
     }
 
-    fun clientData(action: Action<ForgeDatagenRunConfigurationData>) {
+    fun data(action: Action<ForgeDatagenRunConfigurationData>) {
         val data = defaults.configuration.project.objects.newInstance(ForgeDatagenRunConfigurationData::class.java)
 
         action.execute(data)
 
+        data(data)
+        defaults.configuration.addData("data", data) { it.data ?: it.serverData }
+    }
+
+    fun clientData(action: Action<ForgeClientDatagenRunConfigurationData>) {
+        val data = defaults.configuration.project.objects.newInstance(ForgeClientDatagenRunConfigurationData::class.java)
+
+        action.execute(data)
+
+        data(data)
+
         defaults.configuration.apply {
-            val outputDirectory = data.getOutputDirectory(this)
+            arguments.add(compileArgument("--existing=", data.commonOutputDirectory))
 
             addData(::clientData.name, data, UserdevConfig.Runs::clientData)
-
-            val additionalExisting = data.additionalIncludedSourceSets.flatMap {
-                compileArguments(it.map {
-                    compileArgument("--existing=", it.output.resourcesDir)
-                })
-            }
-
-            arguments.add(compileArgument("--mod=", data.modId))
-            arguments.add("--all")
-            arguments.add(compileArgument("--output=", outputDirectory))
-            arguments.add(compileArgument("--existing=", sourceSet.map { it.output.resourcesDir!! }))
-
-            arguments.addAll(additionalExisting)
         }
     }
 
@@ -469,6 +461,11 @@ interface ForgeRunConfigurationData {
         get
 }
 
-abstract class ForgeDatagenRunConfigurationData :
+interface ForgeDatagenRunConfigurationData :
     ForgeRunConfigurationData,
     DatagenRunConfigurationData
+
+interface ForgeClientDatagenRunConfigurationData : ForgeDatagenRunConfigurationData {
+    val commonOutputDirectory: DirectoryProperty
+        @InputDirectory get
+}

@@ -112,7 +112,7 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
 
         defaults.configuration.apply {
             jvmArguments.add("-Dfabric-api.datagen")
-            jvmArguments.add(compileArgument("-Dfabric-api.datagen.output-dir=", data.getOutputDirectory(this)))
+            jvmArguments.add(compileArgument("-Dfabric-api.datagen.output-dir=", data.outputDirectory))
             jvmArguments.add(compileArgument("-Dfabric-api.datagen.modid=", data.modId))
         }
     }

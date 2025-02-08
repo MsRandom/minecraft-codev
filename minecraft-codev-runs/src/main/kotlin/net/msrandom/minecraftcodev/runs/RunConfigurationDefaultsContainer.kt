@@ -198,17 +198,6 @@ interface DatagenRunConfigurationData {
         get
 
     val outputDirectory: DirectoryProperty
-        @InputDirectory
         @Optional
         get
-
-    fun getOutputDirectory(runConfiguration: MinecraftRunConfiguration): Provider<Directory> {
-        val moduleName = runConfiguration.sourceSet.map(SourceSet::getName)
-
-        return outputDirectory.orElse(
-            runConfiguration.project.layout.buildDirectory
-                .dir("generatedResources")
-                .flatMap { moduleName.map(it::dir) },
-        )
-    }
 }
