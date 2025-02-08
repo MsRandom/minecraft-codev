@@ -44,7 +44,7 @@ abstract class ExtractNatives : CachedMinecraftTask() {
         @Inject get
 
     init {
-        destinationDirectory.convention(project.layout.dir(project.provider { temporaryDir }))
+        destinationDirectory.set(temporaryDir)
     }
 
     @TaskAction

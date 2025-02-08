@@ -52,6 +52,7 @@ class MinecraftCodevRunsPlugin<T : PluginAware> : Plugin<T> {
                 fun taskName(configuration: MinecraftRunConfiguration) =
                     ApplicationPlugin.TASK_RUN_NAME + GUtil.toCamelCase(configuration.name)
 
+                // TODO Create synthetic task(enabled = false) that holds the dependencies of this task, to allow IDE runs to more easily depend on everything
                 tasks.register(taskName(configuration), JavaExec::class.java) { javaExec ->
                     javaExec.doFirst {
                         javaExec.environment.putAll(System.getenv())

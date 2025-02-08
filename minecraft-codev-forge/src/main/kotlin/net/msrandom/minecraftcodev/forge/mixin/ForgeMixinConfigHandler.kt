@@ -7,7 +7,6 @@ import net.msrandom.minecraftcodev.forge.MinecraftCodevForgePlugin.Companion.NEO
 import java.nio.file.Path
 import java.util.jar.JarFile
 import java.util.jar.Manifest
-import kotlin.io.path.deleteExisting
 import kotlin.io.path.inputStream
 import kotlin.io.path.outputStream
 

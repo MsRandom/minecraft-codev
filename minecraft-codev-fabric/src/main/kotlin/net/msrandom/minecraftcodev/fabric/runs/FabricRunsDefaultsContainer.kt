@@ -5,18 +5,20 @@ import net.msrandom.minecraftcodev.core.task.versionList
 import net.msrandom.minecraftcodev.core.utils.toPath
 import net.msrandom.minecraftcodev.fabric.FabricInstaller
 import net.msrandom.minecraftcodev.fabric.loadFabricInstaller
-import net.msrandom.minecraftcodev.runs.*
+import net.msrandom.minecraftcodev.runs.DatagenRunConfigurationData
+import net.msrandom.minecraftcodev.runs.RunConfigurationDefaultsContainer
 import net.msrandom.minecraftcodev.runs.task.DownloadAssets
 import net.msrandom.minecraftcodev.runs.task.ExtractNatives
 import org.gradle.api.Action
-import org.gradle.api.provider.Provider
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
 import java.io.File
 import kotlin.io.path.createDirectories
 
 open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDefaultsContainer) {
     private fun defaults(sidedMain: FabricInstaller.MainClass.() -> String) {
         defaults.configuration.jvmArguments("-Dfabric.development=true")
-        // defaults.configuration.jvmArguments("-Dmixin.env.remapRefMap=true")
+        defaults.configuration.jvmArguments("-Dmixin.env.remapRefMap=true")
 
         defaults.configuration.apply {
             val remapClasspathDirectory = project.layout.buildDirectory.dir("fabricRemapClasspath")
@@ -43,37 +45,44 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
         }
     }
 
-    fun client(version: Provider<String>) {
-        defaults(FabricInstaller.MainClass::client)
+    fun client(action: Action<FabricRunConfigurationData>) {
+        val data = defaults.configuration.project.objects.newInstance(FabricRunConfigurationData::class.java)
 
+        action.execute(data)
+
+        client(data)
+    }
+
+    private fun addAssets(data: FabricRunConfigurationData) {
         defaults.configuration.apply {
             val assetIndex =
-                version.map {
+                data.minecraftVersion.map {
                     cacheParameters
                         .versionList()
                         .version(it)
                         .assetIndex
                 }
 
-            val downloadAssetsTask = sourceSet.flatMap {
-                project.tasks.named(it.downloadAssetsTaskName, DownloadAssets::class.java)
-            }
-
-            val extractNativesTask = sourceSet.flatMap {
-                project.tasks.named(it.extractNativesTaskName, ExtractNatives::class.java)
-            }
-
-            val assetsDirectory = downloadAssetsTask.flatMap(DownloadAssets::assetsDirectory)
-            val nativesDirectory = extractNativesTask.flatMap(ExtractNatives::destinationDirectory)
+            val assetsDirectory = data.downloadAssetsTask.flatMap(DownloadAssets::assetsDirectory)
 
             arguments.add(compileArgument("--assetsDir=", assetsDirectory))
             arguments.add(compileArgument("--assetIndex=", assetIndex.map(MinecraftVersionMetadata.AssetIndex::id)))
 
+            beforeRun.add(data.downloadAssetsTask)
+        }
+    }
+
+    private fun client(data: FabricRunConfigurationData) {
+        defaults(FabricInstaller.MainClass::client)
+        addAssets(data)
+
+        defaults.configuration.apply {
+            val nativesDirectory = data.extractNativesTask.flatMap(ExtractNatives::destinationDirectory)
+
             jvmArguments.add(compileArgument("-Djava.library.path=", nativesDirectory))
             jvmArguments.add(compileArgument("-Dorg.lwjgl.librarypath=", nativesDirectory))
 
-            beforeRun.add(extractNativesTask)
-            beforeRun.add(downloadAssetsTask)
+            beforeRun.add(data.extractNativesTask)
         }
     }
 
@@ -83,17 +92,25 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
         defaults.configuration.arguments("nogui")
     }
 
-    fun data(
-        version: Provider<String>,
-        action: Action<FabricDatagenRunConfigurationData>,
-    ) {
-        client(version)
+    fun data(action: Action<FabricDatagenRunConfigurationData>) {
+        defaults(FabricInstaller.MainClass::server)
+
+        val data = defaults.configuration.project.objects.newInstance(FabricDatagenRunConfigurationData::class.java)
+
+        action.execute(data)
+
+        data(data)
+    }
+
+    fun clientData(action: Action<FabricDatagenRunConfigurationData>) {
+        // Fabric doesn't have a dedicated client data entrypoint or properties
+        data(action)
+    }
+
+    private fun data(data: FabricDatagenRunConfigurationData) {
+        addAssets(data)
 
         defaults.configuration.apply {
-            val data = project.objects.newInstance(FabricDatagenRunConfigurationData::class.java)
-
-            action.execute(data)
-
             jvmArguments.add("-Dfabric-api.datagen")
             jvmArguments.add(compileArgument("-Dfabric-api.datagen.output-dir=", data.getOutputDirectory(this)))
             jvmArguments.add(compileArgument("-Dfabric-api.datagen.modid=", data.modId))
@@ -113,20 +130,25 @@ open class FabricRunsDefaultsContainer(private val defaults: RunConfigurationDef
         gameTest()
     }
 
-    fun gameTestClient(version: Provider<String>) {
-        client(version)
-
-        gameTest()
-    }
-
-    fun gameTestData(
-        version: Provider<String>,
-        action: Action<FabricDatagenRunConfigurationData>,
-    ) {
-        data(version, action)
+    fun gameTestClient(action: Action<FabricRunConfigurationData>) {
+        client(action)
 
         gameTest()
     }
 }
 
-abstract class FabricDatagenRunConfigurationData : DatagenRunConfigurationData
+interface FabricRunConfigurationData {
+    val minecraftVersion: Property<String>
+        @Input
+        get
+
+    val extractNativesTask: Property<ExtractNatives>
+        @Input
+        get
+
+    val downloadAssetsTask: Property<DownloadAssets>
+        @Input
+        get
+}
+
+abstract class FabricDatagenRunConfigurationData : DatagenRunConfigurationData, FabricRunConfigurationData
