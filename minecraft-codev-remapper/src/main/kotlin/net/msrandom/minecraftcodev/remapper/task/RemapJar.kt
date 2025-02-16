@@ -12,7 +12,7 @@ import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.*
-import org.gradle.api.tasks.bundling.Jar
+import org.gradle.jvm.tasks.Jar
 import org.gradle.language.base.plugins.LifecycleBasePlugin
 
 abstract class RemapJar : Jar() {
@@ -37,32 +37,35 @@ abstract class RemapJar : Jar() {
         @CompileClasspath
         get
 
+    abstract val remappedClasses: DirectoryProperty
+        @Internal get
+
     abstract val cacheDirectory: DirectoryProperty
         @Internal get
 
     init {
-        run {
-            group = LifecycleBasePlugin.BUILD_GROUP
+        group = LifecycleBasePlugin.BUILD_GROUP
 
-            sourceNamespace.convention(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
+        sourceNamespace.convention(MinecraftCodevRemapperPlugin.NAMED_MAPPINGS_NAMESPACE)
 
-            cacheDirectory.set(getGlobalCacheDirectoryProvider(project))
+        cacheDirectory.set(getGlobalCacheDirectoryProvider(project))
+        remappedClasses.set(temporaryDir)
+
+        from(remappedClasses)
+
+        doFirst {
+            val mappings = MemoryMappingTree()
+
+            Tiny2Reader.read(this.mappings.asFile.get().reader(), mappings)
+
+            JarRemapper.remap(
+                mappings,
+                sourceNamespace.get(),
+                targetNamespace.get(),
+                input.getAsPath(),
+                archiveFile.get().toPath(),
+                classpath,
+            )
         }
-    }
-
-    @TaskAction
-    fun remap() {
-        val mappings = MemoryMappingTree()
-
-        Tiny2Reader.read(this.mappings.asFile.get().reader(), mappings)
-
-        JarRemapper.remap(
-            mappings,
-            sourceNamespace.get(),
-            targetNamespace.get(),
-            input.getAsPath(),
-            archiveFile.get().toPath(),
-            classpath,
-        )
     }
 }
