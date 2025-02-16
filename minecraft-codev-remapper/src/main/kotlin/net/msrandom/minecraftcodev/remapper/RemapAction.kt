@@ -46,7 +46,7 @@ abstract class RemapAction : TransformAction<RemapAction.Parameters> {
             @Input get
 
         abstract val modFiles: ConfigurableFileCollection
-            @PathSensitive(PathSensitivity.ABSOLUTE)
+            @PathSensitive(PathSensitivity.NONE)
             @InputFiles
             get
 

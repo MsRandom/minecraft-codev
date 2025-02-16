@@ -7,6 +7,8 @@ import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.*
+import kotlin.io.path.bufferedWriter
+import kotlin.io.path.deleteIfExists
 
 @CacheableTask
 abstract class MergeAccessWideners : DefaultTask() {
@@ -37,7 +39,14 @@ abstract class MergeAccessWideners : DefaultTask() {
 
     @TaskAction
     fun generate() {
-        output.get().asFile.bufferedWriter().use {
+        val output = output.get().asFile.toPath()
+
+        if (input.isEmpty) {
+            output.deleteIfExists()
+            return
+        }
+
+        output.bufferedWriter().use {
             val writer = AccessWidenerWriter()
             val reader = AccessWidenerReader(writer)
 

@@ -10,7 +10,7 @@ import org.gradle.api.plugins.ApplicationPlugin
 import org.gradle.api.plugins.PluginAware
 import org.gradle.api.tasks.JavaExec
 import org.gradle.api.tasks.SourceSet
-import org.gradle.configurationcache.extensions.serviceOf
+import org.gradle.internal.extensions.core.serviceOf
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.util.internal.GUtil
