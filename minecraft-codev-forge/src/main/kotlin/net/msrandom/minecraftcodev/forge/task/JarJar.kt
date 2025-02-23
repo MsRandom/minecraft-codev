@@ -3,6 +3,7 @@ package net.msrandom.minecraftcodev.forge.task
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import net.msrandom.minecraftcodev.core.utils.getAsPath
 import net.msrandom.minecraftcodev.forge.isComponentFromDependency
 import org.gradle.api.artifacts.Configuration
 import org.gradle.api.artifacts.ExternalDependency
@@ -12,14 +13,15 @@ import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.*
 import org.gradle.jvm.tasks.Jar
+import org.gradle.language.base.plugins.LifecycleBasePlugin
+import kotlin.io.path.deleteIfExists
 
 abstract class JarJar : Jar() {
-    abstract val includes: Property<Configuration>
-        @Input
+    abstract val includesConfiguration: Property<Configuration>
+        @Internal
         get
 
     abstract val input: RegularFileProperty
-        @PathSensitive(PathSensitivity.RELATIVE)
         @InputFile
         get
 
@@ -27,13 +29,15 @@ abstract class JarJar : Jar() {
         @Internal get
 
     init {
+        group = LifecycleBasePlugin.BUILD_GROUP
+
         metadata.set(temporaryDir.resolve("metadata.json"))
 
         from(metadata) {
             it.into("META-INF/jarjar")
         }
 
-        from(includes) {
+        from(includesConfiguration) {
             it.into("META-INF/jars")
         }
 
@@ -43,7 +47,13 @@ abstract class JarJar : Jar() {
     }
 
     private fun generateMetadata() {
-        val includes = includes.get()
+        val includes = includesConfiguration.get()
+
+        if (includes.incoming.artifacts.artifacts.isEmpty()) {
+            metadata.getAsPath().deleteIfExists()
+
+            return
+        }
 
         val dependencies = includes.incoming.resolutionResult.allComponents.map(ResolvedComponentResult::getId).associateWith { componentId ->
             val dependency = includes.allDependencies.firstOrNull { dependency ->
@@ -52,8 +62,6 @@ abstract class JarJar : Jar() {
 
             dependency
         }
-
-        includes.incoming.artifacts
 
         JsonObject(
             mapOf(

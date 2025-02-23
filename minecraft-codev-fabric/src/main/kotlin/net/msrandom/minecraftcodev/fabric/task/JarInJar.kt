@@ -1,27 +1,27 @@
 package net.msrandom.minecraftcodev.fabric.task
 
+import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.InputFiles
-import org.gradle.api.tasks.PathSensitive
-import org.gradle.api.tasks.PathSensitivity
 import org.gradle.jvm.tasks.Jar
+import org.gradle.language.base.plugins.LifecycleBasePlugin
 
 abstract class JarInJar : Jar() {
-    abstract val includes: RegularFileProperty
-        @PathSensitive(PathSensitivity.ABSOLUTE)
+    abstract val includeFiles: ConfigurableFileCollection
         @InputFiles
         get
 
     abstract val input: RegularFileProperty
-        @PathSensitive(PathSensitivity.RELATIVE)
         @InputFile
         get
 
     init {
+        group = LifecycleBasePlugin.BUILD_GROUP
+
         from(project.zipTree(input))
 
-        from(includes) {
+        from(includeFiles) {
             it.into("META-INF/jars")
         }
     }

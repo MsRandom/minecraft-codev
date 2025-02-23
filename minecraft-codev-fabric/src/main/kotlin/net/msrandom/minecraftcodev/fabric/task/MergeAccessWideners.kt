@@ -39,6 +39,11 @@ abstract class MergeAccessWideners : DefaultTask() {
 
     @TaskAction
     fun generate() {
+        val input = input.filter {
+            // Different extensions imply that this is supposed to have specific handling, for example mod Jars to enable transitive Access Wideners in
+            it.extension.lowercase() == "accesswidener"
+        }
+
         val output = output.get().asFile.toPath()
 
         if (input.isEmpty) {
@@ -51,11 +56,6 @@ abstract class MergeAccessWideners : DefaultTask() {
             val reader = AccessWidenerReader(writer)
 
             for (accessWidener in input) {
-                if (accessWidener.extension.lowercase() != "accesswidener") {
-                    // Implies that this is supposed to have specific handling, for example mod Jars to enable transitive Access Wideners in
-                    continue
-                }
-
                 accessWidener.bufferedReader().use(reader::read)
             }
 

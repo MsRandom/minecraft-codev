@@ -15,6 +15,7 @@ import org.objectweb.asm.commons.Remapper
 import java.io.File
 import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
+import kotlin.io.path.exists
 
 const val REMAP_OPERATION_VERSION = 1
 
@@ -191,7 +192,7 @@ object JarRemapper {
                 it.addNonClassFiles(input, NonClassCopyMode.FIX_META_INF, remapper)
 
                 CompletableFuture.allOf(
-                    remapper.readClassPathAsync(*classpath.map(File::toPath).toTypedArray()),
+                    remapper.readClassPathAsync(*classpath.map(File::toPath).filter(Path::exists).toTypedArray()),
                     remapper.readInputsAsync(input),
                 ).join()
 

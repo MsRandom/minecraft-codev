@@ -1,6 +1,7 @@
 package net.msrandom.minecraftcodev.includes
 
 import kotlinx.coroutines.*
+import net.msrandom.minecraftcodev.core.ListedFileHandler
 import net.msrandom.minecraftcodev.core.utils.*
 import org.gradle.api.artifacts.transform.CacheableTransform
 import org.gradle.api.artifacts.transform.InputArtifact
@@ -30,57 +31,54 @@ abstract class ExtractIncludes : TransformAction<TransformParameters.None> {
     override fun transform(outputs: TransformOutputs) {
         val input = inputFile.get().toPath()
 
-        val handler = runBlocking {
-            zipFileSystem(input).use {
-                val root = it.getPath("/")
+        val fileSystem = zipFileSystem(input)
 
-                val handler =
-                    includedJarListingRules.firstNotNullOfOrNull { rule ->
-                        rule.load(root)
-                    }
+        val handler: ListedFileHandler?
 
-                if (handler == null) {
-                    return@use null
+        try {
+            val root = fileSystem.getPath("/")
+
+            handler =
+                includedJarListingRules.firstNotNullOfOrNull { rule ->
+                    rule.load(root)
                 }
 
-                val inputHashes =
-                    classpath
-                        .map {
-                            async {
-                                hashFileSuspend(it.toPath())
-                            }
-                        }.awaitAll()
-                        .toHashSet()
+            if (handler == null) {
+                outputs.file(inputFile)
 
-                handler
-                    .list(root)
-                    .map { includedJar ->
+                return
+            }
+
+            val inputHashes = runBlocking {
+                classpath
+                    .map {
                         async {
-                            withContext(Dispatchers.IO) {
-                                val path = it.getPath(includedJar)
-                                val hash = hashFileSuspend(path)
-
-                                if (hash !in inputHashes) {
-                                    println("Extracting $path from $input")
-
-                                    val includeOutput = outputs.file(path.fileName.toString()).toPath()
-
-                                    path.copyTo(includeOutput, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
-                                } else {
-                                    println("Skipping extracting $path from $input because hash $hash is in dependencies")
-                                }
-                            }
+                            hashFileSuspend(it.toPath())
                         }
                     }.awaitAll()
-
-                handler
+                    .toHashSet()
             }
-        }
 
-        if (handler == null) {
-            outputs.file(inputFile)
+            for (includedJar in handler.list(root)) {
+                val path = fileSystem.getPath(includedJar)
+                val hash = hashFile(path)
 
-            return
+                if (hash !in inputHashes) {
+                    println("Extracting $path from $input")
+
+                    val includeOutput = outputs.file(path.fileName.toString()).toPath()
+
+                    path.copyTo(
+                        includeOutput,
+                        StandardCopyOption.COPY_ATTRIBUTES,
+                        StandardCopyOption.REPLACE_EXISTING
+                    )
+                } else {
+                    println("Skipping extracting $path from $input because hash $hash is in dependencies")
+                }
+            }
+        } finally {
+            fileSystem.close()
         }
 
         val output = outputs.file(input.fileName.toString()).toPath()

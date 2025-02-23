@@ -18,7 +18,6 @@ import org.gradle.language.base.plugins.LifecycleBasePlugin
 abstract class RemapJar : Jar() {
     abstract val input: RegularFileProperty
         @InputFile
-        @PathSensitive(PathSensitivity.RELATIVE)
         get
 
     abstract val sourceNamespace: Property<String>
@@ -29,12 +28,10 @@ abstract class RemapJar : Jar() {
 
     abstract val mappings: RegularFileProperty
         @InputFile
-        @PathSensitive(PathSensitivity.NONE)
         get
 
     abstract val classpath: ConfigurableFileCollection
         @InputFiles
-        @CompileClasspath
         get
 
     abstract val remappedClasses: DirectoryProperty
